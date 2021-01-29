@@ -43,5 +43,13 @@ public:
 private:
     RefPtr<PopupMenuJava> m_popup;
 };
+bool EventHandler::passMouseMoveEventToSubframe(MouseEventWithHitTestResults& mouseEventAndResult, Frame& subframe, HitTestResult* hitTestResult)
+{
+    if (m_mouseDownMayStartDrag && !m_mouseDownWasInSubframe)
+        return false;
+
+    subframe.eventHandler().handleMouseMoveEvent(mouseEventAndResult.event(), hitTestResult);
+    return true;
+}
 
 }  // namespace WebCore

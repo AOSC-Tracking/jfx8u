@@ -25,6 +25,9 @@
 
 package com.sun.webkit.graphics;
 
+import com.sun.javafx.logging.PlatformLogger;
+import com.sun.prism.paint.Color;
+
 import java.lang.annotation.Native;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -111,7 +114,7 @@ public final class GraphicsDecoder  {
                         buf.getFloat(),
                         buf.getFloat(),
                         buf.getFloat(),
-                        buf.getInt());
+                        getColor(buf));
                     break;
                 case FILL_ROUNDED_RECT:
                     gc.fillRoundedRect(
@@ -121,7 +124,7 @@ public final class GraphicsDecoder  {
                         buf.getFloat(), buf.getFloat(), buf.getFloat(), buf.getFloat(),
                         // bottom corners w/h
                         buf.getFloat(), buf.getFloat(), buf.getFloat(), buf.getFloat(),
-                        buf.getInt());
+                        getColor(buf));
                     break;
                 case CLEARRECT_FFFF:
                     gc.clearRect(
@@ -139,7 +142,7 @@ public final class GraphicsDecoder  {
                         buf.getFloat());
                     break;
                 case SETFILLCOLOR:
-                    gc.setFillColor(buf.getInt());
+                    gc.setFillColor(getColor(buf));
                     break;
                 case SET_TEXT_MODE:
                     gc.setTextMode(getBoolean(buf), getBoolean(buf), getBoolean(buf));
@@ -148,7 +151,7 @@ public final class GraphicsDecoder  {
                     gc.setStrokeStyle(buf.getInt());
                     break;
                 case SETSTROKECOLOR:
-                    gc.setStrokeColor(buf.getInt());
+                    gc.setStrokeColor(getColor(buf));
                     break;
                 case SETSTROKEWIDTH:
                     gc.setStrokeWidth(buf.getFloat());
@@ -264,7 +267,7 @@ public final class GraphicsDecoder  {
                         buf.getInt(),
                         buf.getInt(),
                         buf.getInt(),
-                        buf.getInt());
+                        getColor(buf));
                     break;
                 case SETALPHA:
                     gc.setAlpha(buf.getFloat());
@@ -286,7 +289,7 @@ public final class GraphicsDecoder  {
                         buf.getFloat(),
                         buf.getFloat(),
                         buf.getFloat(),
-                        buf.getInt());
+                        getColor(buf));
                     break;
                 case DRAWSTRING:
                     gc.drawString(
@@ -472,6 +475,13 @@ public final class GraphicsDecoder  {
                                buf.getFloat());
     }
 
+    private static Color getColor(ByteBuffer buf) {
+        return new Color(buf.getFloat(),
+                         buf.getFloat(),
+                         buf.getFloat(),
+                         buf.getFloat());
+    }
+
     private static WCGradient getGradient(WCGraphicsContext gc, ByteBuffer buf) {
         WCPoint p1 = getPoint(buf);
         WCPoint p2 = getPoint(buf);
@@ -487,7 +497,7 @@ public final class GraphicsDecoder  {
         }
         int count = buf.getInt();
         for (int i = 0; i < count; i++) {
-            int color = buf.getInt();
+            Color color = getColor(buf);
             float offset = buf.getFloat();
             if (gradient != null) {
                 gradient.addStop(color, offset);
