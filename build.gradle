@@ -1307,9 +1307,9 @@ project(":graphics") {
         compile name: SWT_FILE_NAME
         stubCompile group: "junit", name: "junit", version: "4.8.2",
         project(":base").sourceSets.test.output, sourceSets.main.output
-        antlr3 group: "org.antlr", name: "antlr", version: "3.1.3"
-        antlr3 group: "org.antlr", name: "antlr-runtime",  version: "3.1.3"
-        antlr3 group: "org.antlr", name: "stringtemplate", version: "3.2"
+        antlr3 group: "org.antlr", name: "antlr", version: "3.5.2"
+        antlr3 group: "org.antlr", name: "antlr-runtime",  version: "3.5.2"
+        antlr3 group: "org.antlr", name: "stringtemplate", version: "3.2.1"
     }
 
     // Create a single "native" task which will depend on all the individual native tasks for graphics
