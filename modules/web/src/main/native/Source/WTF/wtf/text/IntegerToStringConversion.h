@@ -22,6 +22,7 @@
 #ifndef IntegerToStringConversion_h
 #define IntegerToStringConversion_h
 
+#include <iterator>
 #include <wtf/text/LChar.h>
 
 namespace WTF {
