@@ -33,6 +33,7 @@
 #include "Mutex.h"
 #include "PerHeapKind.h"
 #include "Scavenger.h"
+#include <cstdio>
 
 namespace bmalloc {
 namespace api {
