@@ -454,11 +454,11 @@ inline Optional<MacroAssemblerCodePtr<PlatformRegistersPCPtrTag>> instructionPoi
     void* value = instructionPointerImpl(const_cast<PlatformRegisters&>(regs));
 #endif
     if (!value)
-        return makeOptional(MacroAssemblerCodePtr<PlatformRegistersPCPtrTag>(nullptr));
+        return MacroAssemblerCodePtr<PlatformRegistersPCPtrTag>(nullptr);
     if (!usesPointerTagging())
-        return makeOptional(MacroAssemblerCodePtr<PlatformRegistersPCPtrTag>(value));
+        return MacroAssemblerCodePtr<PlatformRegistersPCPtrTag>(value);
     if (isTaggedWith(value, PlatformRegistersPCPtrTag))
-        return makeOptional(MacroAssemblerCodePtr<PlatformRegistersPCPtrTag>(value));
+        return MacroAssemblerCodePtr<PlatformRegistersPCPtrTag>(value);
     return WTF::nullopt;
 }
 

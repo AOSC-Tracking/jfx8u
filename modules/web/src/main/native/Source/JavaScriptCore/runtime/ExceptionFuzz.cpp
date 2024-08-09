@@ -27,8 +27,7 @@
 #include "ExceptionFuzz.h"
 
 #include "Error.h"
-#include "HeapInlines.h"
-#include "JSCJSValueInlines.h"
+#include "JSCInlines.h"
 #include "TestRunnerUtils.h"
 
 namespace JSC {

@@ -72,7 +72,7 @@ bool HTMLFrameElementBase::canLoadURL(const String& relativeURL) const
 // Note that unlike HTMLPlugInImageElement::canLoadURL this uses ScriptController::canAccessFromCurrentOrigin.
 bool HTMLFrameElementBase::canLoadURL(const URL& completeURL) const
 {
-    if (completeURL.protocolIsJavaScript()) {
+    if (WTF::protocolIsJavaScript(completeURL)) {
         RefPtr<Document> contentDocument = this->contentDocument();
         if (contentDocument && !ScriptController::canAccessFromCurrentOrigin(contentDocument->frame(), document()))
             return false;
@@ -87,7 +87,7 @@ void HTMLFrameElementBase::openURL(LockHistory lockHistory, LockBackForwardList 
         return;
 
     if (m_URL.isEmpty())
-        m_URL = aboutBlankURL().string();
+        m_URL = WTF::blankURL().string();
 
     RefPtr<Frame> parentFrame = document().frame();
     if (!parentFrame)
@@ -153,7 +153,7 @@ void HTMLFrameElementBase::didAttachRenderers()
 URL HTMLFrameElementBase::location() const
 {
     if (hasAttributeWithoutSynchronization(srcdocAttr))
-        return aboutSrcDocURL();
+        return URL({ }, "about:srcdoc");
     return document().completeURL(attributeWithoutSynchronization(srcAttr));
 }
 
@@ -222,10 +222,7 @@ int HTMLFrameElementBase::height()
 
 ScrollbarMode HTMLFrameElementBase::scrollingMode() const
 {
-    auto scrollingAttribute = attributeWithoutSynchronization(scrollingAttr);
-    return equalLettersIgnoringASCIICase(scrollingAttribute, "no")
-        || equalLettersIgnoringASCIICase(scrollingAttribute, "noscroll")
-        || equalLettersIgnoringASCIICase(scrollingAttribute, "off")
+    return equalLettersIgnoringASCIICase(attributeWithoutSynchronization(scrollingAttr), "no")
         ? ScrollbarAlwaysOff : ScrollbarAuto;
 }
 

@@ -25,24 +25,19 @@
 #pragma once
 
 #include "AudioBus.h"
-#include "ChannelCountMode.h"
-#include "ChannelInterpretation.h"
 #include "EventTarget.h"
 #include "ExceptionOr.h"
 #include <wtf/Forward.h>
 #include <wtf/LoggerHelper.h>
-#include <wtf/Variant.h>
 
 #define DEBUG_AUDIONODE_REFERENCES 0
 
 namespace WebCore {
 
+class AudioContext;
 class AudioNodeInput;
-struct AudioNodeOptions;
 class AudioNodeOutput;
 class AudioParam;
-class BaseAudioContext;
-class WebKitAudioContext;
 
 // An AudioNode is the basic building block for handling audio within an AudioContext.
 // It may be an audio source, an intermediate processing module, or an audio destination.
@@ -61,13 +56,11 @@ class AudioNode
 public:
     enum { ProcessingSizeInFrames = 128 };
 
-    explicit AudioNode(BaseAudioContext&);
+    AudioNode(AudioContext&, float sampleRate);
     virtual ~AudioNode();
 
-    BaseAudioContext& context() { return m_context.get(); }
-    const BaseAudioContext& context() const { return m_context.get(); }
-
-    Variant<RefPtr<BaseAudioContext>, RefPtr<WebKitAudioContext>> contextForBindings() const;
+    AudioContext& context() { return m_context.get(); }
+    const AudioContext& context() const { return m_context.get(); }
 
     enum NodeType {
         NodeTypeUnknown,
@@ -90,6 +83,12 @@ public:
         NodeTypeWaveShaper,
         NodeTypeBasicInspector,
         NodeTypeEnd
+    };
+
+    enum ChannelCountMode {
+        Max,
+        ClampedMax,
+        Explicit
     };
 
     NodeType nodeType() const { return m_nodeType; }
@@ -136,7 +135,7 @@ public:
     ExceptionOr<void> connect(AudioParam&, unsigned outputIndex);
     virtual ExceptionOr<void> disconnect(unsigned outputIndex);
 
-    virtual float sampleRate() const;
+    virtual float sampleRate() const { return m_sampleRate; }
 
     // processIfNecessary() is called by our output(s) when the rendering graph needs this AudioNode to process.
     // This method ensures that the AudioNode will only process once per rendering time quantum even if it's called repeatedly.
@@ -171,27 +170,22 @@ public:
     void enableOutputsIfNecessary();
     void disableOutputsIfNecessary();
 
-    unsigned channelCount() const { return m_channelCount; }
+    unsigned channelCount();
     virtual ExceptionOr<void> setChannelCount(unsigned);
 
-    ChannelCountMode channelCountMode() const { return m_channelCountMode; }
-    virtual ExceptionOr<void> setChannelCountMode(ChannelCountMode);
+    String channelCountMode();
+    ExceptionOr<void> setChannelCountMode(const String&);
 
-    ChannelInterpretation channelInterpretation() const { return m_channelInterpretation; }
-    virtual ExceptionOr<void> setChannelInterpretation(ChannelInterpretation);
+    String channelInterpretation();
+    ExceptionOr<void> setChannelInterpretation(const String&);
+
+    ChannelCountMode internalChannelCountMode() const { return m_channelCountMode; }
+    AudioBus::ChannelInterpretation internalChannelInterpretation() const { return m_channelInterpretation; }
 
 protected:
     // Inputs and outputs must be created before the AudioNode is initialized.
     void addInput(std::unique_ptr<AudioNodeInput>);
     void addOutput(std::unique_ptr<AudioNodeOutput>);
-
-    struct DefaultAudioNodeOptions {
-        unsigned channelCount;
-        ChannelCountMode channelCountMode;
-        ChannelInterpretation channelInterpretation;
-    };
-
-    ExceptionOr<void> handleAudioNodeOptions(const AudioNodeOptions&, const DefaultAudioNodeOptions&);
 
     // Called by processIfNecessary() to cause all parts of the rendering graph connected to us to process.
     // Each rendering quantum, the audio data for each of the AudioNode's inputs will be available after this method is called.
@@ -208,30 +202,27 @@ protected:
     WTFLogChannel& logChannel() const final;
 #endif
 
-    void initializeDefaultNodeOptions(unsigned count, ChannelCountMode, ChannelInterpretation);
-
 private:
     // EventTarget
     EventTargetInterface eventTargetInterface() const override;
     ScriptExecutionContext* scriptExecutionContext() const final;
 
-    volatile bool m_isInitialized { false };
-    NodeType m_nodeType { NodeTypeUnknown };
-    Ref<BaseAudioContext> m_context;
-
+    volatile bool m_isInitialized;
+    NodeType m_nodeType;
+    Ref<AudioContext> m_context;
+    float m_sampleRate;
     Vector<std::unique_ptr<AudioNodeInput>> m_inputs;
     Vector<std::unique_ptr<AudioNodeOutput>> m_outputs;
 
-    double m_lastProcessingTime { -1 };
-    double m_lastNonSilentTime { -1 };
+    double m_lastProcessingTime;
+    double m_lastNonSilentTime;
 
     // Ref-counting
-    // start out with normal refCount == 1 (like WTF::RefCounted class).
-    std::atomic<int> m_normalRefCount { 1 };
-    std::atomic<int> m_connectionRefCount { 0 };
+    std::atomic<int> m_normalRefCount;
+    std::atomic<int> m_connectionRefCount;
 
-    bool m_isMarkedForDeletion { false };
-    bool m_isDisabled { false };
+    bool m_isMarkedForDeletion;
+    bool m_isDisabled;
 
 #if DEBUG_AUDIONODE_REFERENCES
     static bool s_isNodeCountInitialized;
@@ -246,9 +237,10 @@ private:
     const void* m_logIdentifier;
 #endif
 
-    unsigned m_channelCount { 2 };
-    ChannelCountMode m_channelCountMode { ChannelCountMode::Max };
-    ChannelInterpretation m_channelInterpretation { ChannelInterpretation::Speakers };
+protected:
+    unsigned m_channelCount;
+    ChannelCountMode m_channelCountMode;
+    AudioBus::ChannelInterpretation m_channelInterpretation;
 };
 
 String convertEnumerationToString(AudioNode::NodeType);

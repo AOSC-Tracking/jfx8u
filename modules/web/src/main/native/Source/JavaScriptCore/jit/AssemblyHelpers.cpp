@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2011-2019 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -29,16 +29,15 @@
 #if ENABLE(JIT)
 
 #include "JITOperations.h"
-#include "JSArrayBufferView.h"
-#include "JSCJSValueInlines.h"
+#include "JSCInlines.h"
 #include "LinkBuffer.h"
 #include "MaxFrameExtentForSlowPathCall.h"
 #include "SuperSampler.h"
 #include "ThunkGenerators.h"
 
 #if ENABLE(WEBASSEMBLY)
-#include "WasmMemoryInformation.h"
 #include "WasmContextInlines.h"
+#include "WasmMemoryInformation.h"
 #endif
 
 namespace JSC {
@@ -251,8 +250,8 @@ void AssemblyHelpers::callExceptionFuzz(VM& vm)
     }
 
     // Set up one argument.
-    move(TrustedImmPtr(&vm), GPRInfo::argumentGPR0);
-    move(TrustedImmPtr(tagCFunction<OperationPtrTag>(operationExceptionFuzzWithCallFrame)), GPRInfo::nonPreservedNonReturnGPR);
+    move(GPRInfo::callFrameRegister, GPRInfo::argumentGPR0);
+    move(TrustedImmPtr(tagCFunctionPtr<OperationPtrTag>(operationExceptionFuzz)), GPRInfo::nonPreservedNonReturnGPR);
     prepareCallOperation(vm);
     call(GPRInfo::nonPreservedNonReturnGPR, OperationPtrTag);
 
@@ -382,7 +381,7 @@ void AssemblyHelpers::emitLoadStructure(VM& vm, RegisterID source, RegisterID de
     load32(MacroAssembler::Address(source, JSCell::structureIDOffset()), scratch2);
     loadPtr(vm.heap.structureIDTable().base(), scratch);
     rshift32(scratch2, TrustedImm32(StructureIDTable::s_numberOfEntropyBits), dest);
-    loadPtr(MacroAssembler::BaseIndex(scratch, dest, MacroAssembler::ScalePtr), dest);
+    loadPtr(MacroAssembler::BaseIndex(scratch, dest, MacroAssembler::TimesEight), dest);
     lshiftPtr(TrustedImm32(StructureIDTable::s_entropyBitsShiftForStructurePointer), scratch2);
     xorPtr(scratch2, dest);
 #else // not USE(JSVALUE64)
@@ -390,24 +389,6 @@ void AssemblyHelpers::emitLoadStructure(VM& vm, RegisterID source, RegisterID de
     UNUSED_PARAM(vm);
     loadPtr(MacroAssembler::Address(source, JSCell::structureIDOffset()), dest);
 #endif // not USE(JSVALUE64)
-}
-
-void AssemblyHelpers::emitLoadPrototype(VM& vm, GPRReg objectGPR, JSValueRegs resultRegs, GPRReg scratchGPR, JumpList& slowPath)
-{
-    ASSERT(resultRegs.payloadGPR() != objectGPR);
-    ASSERT(resultRegs.payloadGPR() != scratchGPR);
-    ASSERT(objectGPR != scratchGPR);
-
-    emitLoadStructure(vm, objectGPR, resultRegs.payloadGPR(), scratchGPR);
-
-    load16(MacroAssembler::Address(resultRegs.payloadGPR(), Structure::outOfLineTypeFlagsOffset()), scratchGPR);
-    auto overridesGetPrototype = branchTest32(MacroAssembler::NonZero, scratchGPR, TrustedImm32(OverridesGetPrototypeOutOfLine));
-    slowPath.append(overridesGetPrototype);
-
-    loadValue(MacroAssembler::Address(resultRegs.payloadGPR(), Structure::prototypeOffset()), resultRegs);
-    auto hasMonoProto = branchIfNotEmpty(resultRegs);
-    loadValue(MacroAssembler::Address(objectGPR, offsetRelativeToBase(knownPolyProtoOffset)), resultRegs);
-    hasMonoProto.link(this);
 }
 
 void AssemblyHelpers::makeSpaceOnStackForCCall()
@@ -590,7 +571,7 @@ void AssemblyHelpers::emitAllocateVariableSized(GPRReg resultGPR, CompleteSubspa
     urshift32(TrustedImm32(stepShift), scratchGPR1);
     slowPath.append(branch32(Above, scratchGPR1, TrustedImm32(MarkedSpace::largeCutoff >> stepShift)));
     move(TrustedImmPtr(subspace.allocatorForSizeStep()), scratchGPR2);
-    loadPtr(BaseIndex(scratchGPR2, scratchGPR1, ScalePtr), scratchGPR1);
+    loadPtr(BaseIndex(scratchGPR2, scratchGPR1, timesPtr()), scratchGPR1);
 
     emitAllocate(resultGPR, JITAllocator::variable(), scratchGPR1, scratchGPR2, slowPath);
 }
@@ -626,9 +607,11 @@ void AssemblyHelpers::restoreCalleeSavesFromEntryFrameCalleeSavesBuffer(EntryFra
         RegisterAtOffset entry = allCalleeSaves->at(i);
         if (dontRestoreRegisters.get(entry.reg()))
             continue;
-        if (i == scratchGPREntryIndex)
-            continue;
-        loadReg(Address(scratch, entry.offset()), entry.reg());
+        if (entry.reg().isGPR()) {
+            if (i != scratchGPREntryIndex)
+                loadPtr(Address(scratch, entry.offset()), entry.reg().gpr());
+        } else
+            loadDouble(Address(scratch, entry.offset()), entry.reg().fpr());
     }
 
     // Restore the callee save value of the scratch.
@@ -636,7 +619,7 @@ void AssemblyHelpers::restoreCalleeSavesFromEntryFrameCalleeSavesBuffer(EntryFra
     ASSERT(!dontRestoreRegisters.get(entry.reg()));
     ASSERT(entry.reg().isGPR());
     ASSERT(scratch == entry.reg().gpr());
-    loadReg(Address(scratch, entry.offset()), scratch);
+    loadPtr(Address(scratch, entry.offset()), scratch);
 #else
     UNUSED_PARAM(topEntryFrame);
 #endif
@@ -705,7 +688,7 @@ void AssemblyHelpers::emitConvertValueToBoolean(VM& vm, JSValueRegs value, GPRRe
 {
     // Implements the following control flow structure:
     // if (value is cell) {
-    //     if (value is string or value is HeapBigInt)
+    //     if (value is string or value is BigInt)
     //         result = !!value->length
     //     else {
     //         do evil things for masquerades-as-undefined
@@ -715,8 +698,6 @@ void AssemblyHelpers::emitConvertValueToBoolean(VM& vm, JSValueRegs value, GPRRe
     //     result = !!unboxInt32(value)
     // } else if (value is number) {
     //     result = !!unboxDouble(value)
-    // } else if (value is BigInt32) {
-    //     result = !!unboxBigInt32(value)
     // } else {
     //     result = value == jsTrue
     // }
@@ -725,7 +706,7 @@ void AssemblyHelpers::emitConvertValueToBoolean(VM& vm, JSValueRegs value, GPRRe
 
     auto notCell = branchIfNotCell(value);
     auto isString = branchIfString(value.payloadGPR());
-    auto isHeapBigInt = branchIfHeapBigInt(value.payloadGPR());
+    auto isBigInt = branchIfBigInt(value.payloadGPR());
 
     if (shouldCheckMasqueradesAsUndefined) {
         ASSERT(scratchIfShouldCheckMasqueradesAsUndefined != InvalidGPRReg);
@@ -748,7 +729,7 @@ void AssemblyHelpers::emitConvertValueToBoolean(VM& vm, JSValueRegs value, GPRRe
     comparePtr(invert ? Equal : NotEqual, value.payloadGPR(), result, result);
     done.append(jump());
 
-    isHeapBigInt.link(this);
+    isBigInt.link(this);
     load32(Address(value.payloadGPR(), JSBigInt::offsetOfLength()), result);
     compare32(invert ? Equal : NotEqual, result, TrustedImm32(0), result);
     done.append(jump());
@@ -771,15 +752,6 @@ void AssemblyHelpers::emitConvertValueToBoolean(VM& vm, JSValueRegs value, GPRRe
     done.append(jump());
 
     notDouble.link(this);
-#if USE(BIGINT32)
-    auto isNotBigInt32 = branchIfNotBigInt32(value.gpr(), result);
-    move(value.gpr(), result);
-    urshift64(TrustedImm32(16), result);
-    compare32(invert ? Equal : NotEqual, result, TrustedImm32(0), result);
-    done.append(jump());
-
-    isNotBigInt32.link(this);
-#endif // USE(BIGINT32)
 #if USE(JSVALUE64)
     compare64(invert ? NotEqual : Equal, value.gpr(), TrustedImm32(JSValue::ValueTrue), result);
 #else
@@ -795,7 +767,7 @@ AssemblyHelpers::JumpList AssemblyHelpers::branchIfValue(VM& vm, JSValueRegs val
 {
     // Implements the following control flow structure:
     // if (value is cell) {
-    //     if (value is string or value is HeapBigInt)
+    //     if (value is string or value is BigInt)
     //         result = !!value->length
     //     else {
     //         do evil things for masquerades-as-undefined
@@ -805,8 +777,6 @@ AssemblyHelpers::JumpList AssemblyHelpers::branchIfValue(VM& vm, JSValueRegs val
     //     result = !!unboxInt32(value)
     // } else if (value is number) {
     //     result = !!unboxDouble(value)
-    // } else if (value is BigInt32) {
-    //     result = !!unboxBigInt32(value)
     // } else {
     //     result = value == jsTrue
     // }
@@ -816,7 +786,7 @@ AssemblyHelpers::JumpList AssemblyHelpers::branchIfValue(VM& vm, JSValueRegs val
 
     auto notCell = branchIfNotCell(value);
     auto isString = branchIfString(value.payloadGPR());
-    auto isHeapBigInt = branchIfHeapBigInt(value.payloadGPR());
+    auto isBigInt = branchIfBigInt(value.payloadGPR());
 
     if (shouldCheckMasqueradesAsUndefined) {
         ASSERT(scratchIfShouldCheckMasqueradesAsUndefined != InvalidGPRReg);
@@ -847,7 +817,7 @@ AssemblyHelpers::JumpList AssemblyHelpers::branchIfValue(VM& vm, JSValueRegs val
     truthy.append(branchPtr(invert ? Equal : NotEqual, value.payloadGPR(), TrustedImmPtr(jsEmptyString(vm))));
     done.append(jump());
 
-    isHeapBigInt.link(this);
+    isBigInt.link(this);
     truthy.append(branchTest32(invert ? Zero : NonZero, Address(value.payloadGPR(), JSBigInt::offsetOfLength())));
     done.append(jump());
 
@@ -872,15 +842,6 @@ AssemblyHelpers::JumpList AssemblyHelpers::branchIfValue(VM& vm, JSValueRegs val
     }
 
     notDouble.link(this);
-#if USE(BIGINT32)
-    auto isNotBigInt32 = branchIfNotBigInt32(value.gpr(), scratch);
-    move(value.gpr(), scratch);
-    urshift64(TrustedImm32(16), scratch);
-    truthy.append(branchTest32(invert ? Zero : NonZero, scratch));
-    done.append(jump());
-
-    isNotBigInt32.link(this);
-#endif // USE(BIGINT32)
 #if USE(JSVALUE64)
     truthy.append(branch64(invert ? NotEqual : Equal, value.gpr(), TrustedImm64(JSValue::encode(jsBoolean(true)))));
 #else
@@ -1004,7 +965,10 @@ void AssemblyHelpers::copyCalleeSavesToEntryFrameCalleeSavesBufferImpl(GPRReg ca
         RegisterAtOffset entry = allCalleeSaves->at(i);
         if (dontCopyRegisters.get(entry.reg()))
             continue;
-        storeReg(entry.reg(), Address(calleeSavesBuffer, entry.offset()));
+        if (entry.reg().isGPR())
+            storePtr(entry.reg().gpr(), Address(calleeSavesBuffer, entry.offset()));
+        else
+            storeDouble(entry.reg().fpr(), Address(calleeSavesBuffer, entry.offset()));
     }
 #else
     UNUSED_PARAM(calleeSavesBuffer);

@@ -27,25 +27,11 @@
 
 #if ENABLE(ENCRYPTED_MEDIA)
 
-#include <wtf/Forward.h>
-
 namespace WebCore {
 
-enum class CDMEncryptionScheme : uint8_t {
+enum class CDMEncryptionScheme {
     cenc,
     cbcs,
-};
-
-}
-
-namespace WTF {
-
-template<> struct EnumTraits<WebCore::CDMEncryptionScheme> {
-    using values = EnumValues<
-        WebCore::CDMEncryptionScheme,
-        WebCore::CDMEncryptionScheme::cenc,
-        WebCore::CDMEncryptionScheme::cbcs
-    >;
 };
 
 }

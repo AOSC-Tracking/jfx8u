@@ -37,17 +37,27 @@
 #include <wtf/NeverDestroyed.h>
 #include <wtf/RunLoop.h>
 #include <wtf/StdLibExtras.h>
+#include <wtf/ThreadSpecific.h>
 #include <wtf/Threading.h>
 
 namespace WTF {
 
+static bool callbacksPaused; // This global variable is only accessed from main thread.
+static Lock mainThreadFunctionQueueMutex;
+
+static Deque<Function<void ()>>& functionQueue()
+{
+    static NeverDestroyed<Deque<Function<void ()>>> functionQueue;
+    return functionQueue;
+}
+
+// Share this initializeKey with initializeMainThread and initializeMainThreadToProcessMainThread.
+static std::once_flag initializeKey;
 void initializeMainThread()
 {
-    static std::once_flag initializeKey;
     std::call_once(initializeKey, [] {
-        initialize();
+        initializeThreading();
         initializeMainThreadPlatform();
-        RunLoop::initializeMain();
     });
 }
 
@@ -57,6 +67,45 @@ bool canCurrentThreadAccessThreadLocalData(Thread& thread)
     return &thread == &Thread::current();
 }
 #endif
+
+// 0.1 sec delays in UI is approximate threshold when they become noticeable. Have a limit that's half of that.
+static constexpr auto maxRunLoopSuspensionTime = 50_ms;
+
+void dispatchFunctionsFromMainThread()
+{
+    ASSERT(isMainThread());
+
+    if (callbacksPaused)
+        return;
+
+    auto startTime = MonotonicTime::now();
+
+    Function<void ()> function;
+
+    while (true) {
+        {
+            std::lock_guard<Lock> lock(mainThreadFunctionQueueMutex);
+            if (!functionQueue().size())
+                break;
+
+            function = functionQueue().takeFirst();
+        }
+
+        function();
+
+        // Clearing the function can have side effects, so do so outside of the lock above.
+        function = nullptr;
+
+        // If we are running accumulated functions for too long so UI may become unresponsive, we need to
+        // yield so the user input can be processed. Otherwise user may not be able to even close the window.
+        // This code has effect only in case the scheduleDispatchFunctionsOnMainThread() is implemented in a way that
+        // allows input events to be processed before we are back here.
+        if (MonotonicTime::now() - startTime > maxRunLoopSuspensionTime) {
+            scheduleDispatchFunctionsOnMainThread();
+            break;
+        }
+    }
+}
 
 bool isMainRunLoop()
 {
@@ -70,14 +119,31 @@ void callOnMainRunLoop(Function<void()>&& function)
 
 void callOnMainThread(Function<void()>&& function)
 {
-#if USE(WEB_THREAD)
-    if (auto* webRunLoop = RunLoop::webIfExists()) {
-        webRunLoop->dispatch(WTFMove(function));
-        return;
-    }
-#endif
+    ASSERT(function);
 
-    RunLoop::main().dispatch(WTFMove(function));
+    bool needToSchedule = false;
+
+    {
+        std::lock_guard<Lock> lock(mainThreadFunctionQueueMutex);
+        needToSchedule = functionQueue().size() == 0;
+        functionQueue().append(WTFMove(function));
+    }
+
+    if (needToSchedule)
+        scheduleDispatchFunctionsOnMainThread();
+}
+
+void setMainThreadCallbacksPaused(bool paused)
+{
+    ASSERT(isMainThread());
+
+    if (callbacksPaused == paused)
+        return;
+
+    callbacksPaused = paused;
+
+    if (!callbacksPaused)
+        scheduleDispatchFunctionsOnMainThread();
 }
 
 bool isMainThreadOrGCThread()
@@ -109,7 +175,7 @@ static void callOnMainAndWait(WTF::Function<void()>&& function, MainStyle mainSt
     auto functionImpl = [&, function = WTFMove(function)] {
         function();
 
-        auto locker = holdLock(mutex);
+        std::lock_guard<Lock> lock(mutex);
         isFinished = true;
         conditionVariable.notifyOne();
     };

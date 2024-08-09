@@ -25,8 +25,6 @@
 #include "HTMLAnchorElement.h"
 
 #include "AdClickAttribution.h"
-#include "Chrome.h"
-#include "ChromeClient.h"
 #include "DOMTokenList.h"
 #include "ElementIterator.h"
 #include "EventHandler.h"
@@ -53,15 +51,12 @@
 #include "SecurityOrigin.h"
 #include "SecurityPolicy.h"
 #include "Settings.h"
+#include "URLUtils.h"
 #include "UserGestureIndicator.h"
 #include <wtf/IsoMallocInlines.h>
 #include <wtf/Optional.h>
 #include <wtf/text/StringBuilder.h>
 #include <wtf/text/StringConcatenateNumbers.h>
-
-#if PLATFORM(COCOA)
-#include "DataDetection.h"
-#endif
 
 namespace WebCore {
 
@@ -71,6 +66,8 @@ using namespace HTMLNames;
 
 HTMLAnchorElement::HTMLAnchorElement(const QualifiedName& tagName, Document& document)
     : HTMLElement(tagName, document)
+    , m_hasRootEditableElementForSelectionOnMouseDown(false)
+    , m_wasShiftKeyDownOnMouseDown(false)
 {
 }
 
@@ -259,9 +256,9 @@ void HTMLAnchorElement::parseAttribute(const QualifiedName& name, const AtomStri
         // Do nothing.
     } else if (name == relAttr) {
         // Update HTMLAnchorElement::relList() if more rel attributes values are supported.
-        static MainThreadNeverDestroyed<const AtomString> noReferrer("noreferrer", AtomString::ConstructFromLiteral);
-        static MainThreadNeverDestroyed<const AtomString> noOpener("noopener", AtomString::ConstructFromLiteral);
-        static MainThreadNeverDestroyed<const AtomString> opener("opener", AtomString::ConstructFromLiteral);
+        static NeverDestroyed<AtomString> noReferrer("noreferrer", AtomString::ConstructFromLiteral);
+        static NeverDestroyed<AtomString> noOpener("noopener", AtomString::ConstructFromLiteral);
+        static NeverDestroyed<AtomString> opener("opener", AtomString::ConstructFromLiteral);
         const bool shouldFoldCase = true;
         SpaceSplitString relValue(value, shouldFoldCase);
         if (relValue.contains(noReferrer))
@@ -277,9 +274,9 @@ void HTMLAnchorElement::parseAttribute(const QualifiedName& name, const AtomStri
         HTMLElement::parseAttribute(name, value);
 }
 
-bool HTMLAnchorElement::accessKeyAction(bool sendMouseEvents)
+void HTMLAnchorElement::accessKeyAction(bool sendMouseEvents)
 {
-    return dispatchSimulatedClick(0, sendMouseEvents ? SendMouseUpDownEvents : SendNoEvents);
+    dispatchSimulatedClick(0, sendMouseEvents ? SendMouseUpDownEvents : SendNoEvents);
 }
 
 bool HTMLAnchorElement::isURLAttribute(const Attribute& attribute) const
@@ -319,15 +316,15 @@ bool HTMLAnchorElement::hasRel(Relation relation) const
     return m_linkRelations.contains(relation);
 }
 
-DOMTokenList& HTMLAnchorElement::relList()
+DOMTokenList& HTMLAnchorElement::relList() const
 {
     if (!m_relList) {
-        m_relList = makeUnique<DOMTokenList>(*this, HTMLNames::relAttr, [](Document&, StringView token) {
+        m_relList = makeUnique<DOMTokenList>(const_cast<HTMLAnchorElement&>(*this), HTMLNames::relAttr, [](Document&, StringView token) {
 #if USE(SYSTEM_PREVIEW)
-            if (equalIgnoringASCIICase(token, "ar"))
-                return true;
-#endif
+            return equalIgnoringASCIICase(token, "noreferrer") || equalIgnoringASCIICase(token, "noopener") || equalIgnoringASCIICase(token, "ar");
+#else
             return equalIgnoringASCIICase(token, "noreferrer") || equalIgnoringASCIICase(token, "noopener");
+#endif
         });
     }
     return *m_relList;
@@ -382,12 +379,12 @@ void HTMLAnchorElement::sendPings(const URL& destinationURL)
 }
 
 #if USE(SYSTEM_PREVIEW)
-bool HTMLAnchorElement::isSystemPreviewLink()
+bool HTMLAnchorElement::isSystemPreviewLink() const
 {
     if (!RuntimeEnabledFeatures::sharedFeatures().systemPreviewEnabled())
         return false;
 
-    static MainThreadNeverDestroyed<const AtomString> systemPreviewRelValue("ar", AtomString::ConstructFromLiteral);
+    static NeverDestroyed<AtomString> systemPreviewRelValue("ar", AtomString::ConstructFromLiteral);
 
     if (!relList().contains(systemPreviewRelValue))
         return false;
@@ -467,22 +464,10 @@ void HTMLAnchorElement::handleClick(Event& event)
     if (!frame)
         return;
 
-    if (!hasTagName(aTag) && !isConnected())
-        return;
-
     StringBuilder url;
     url.append(stripLeadingAndTrailingHTMLSpaces(attributeWithoutSynchronization(hrefAttr)));
     appendServerMapMousePosition(url, event);
     URL completedURL = document().completeURL(url.toString());
-
-#if ENABLE(DATA_DETECTION) && PLATFORM(IOS_FAMILY)
-    if (DataDetection::isDataDetectorLink(*this) && DataDetection::canPresentDataDetectorsUIForElement(*this)) {
-        if (auto* page = document().page()) {
-            if (page->chrome().client().showDataDetectorsUIForElement(*this, event))
-                return;
-        }
-    }
-#endif
 
     String downloadAttribute;
 #if ENABLE(DOWNLOAD_ATTRIBUTE)
@@ -503,13 +488,13 @@ void HTMLAnchorElement::handleClick(Event& event)
     if (systemPreviewInfo.isPreview) {
         systemPreviewInfo.element.elementIdentifier = document().identifierForElement(*this);
         systemPreviewInfo.element.documentIdentifier = document().identifier();
-        systemPreviewInfo.element.webPageIdentifier = document().frame()->loader().pageID().valueOr(PageIdentifier { });
+        systemPreviewInfo.element.webPageIdentifier = document().frame()->loader().client().pageID().valueOr(PageIdentifier { });
         if (auto* child = firstElementChild())
             systemPreviewInfo.previewRect = child->boundsInRootViewSpace();
     }
 #endif
 
-    auto referrerPolicy = hasRel(Relation::NoReferrer) ? ReferrerPolicy::NoReferrer : this->referrerPolicy();
+    ShouldSendReferrer shouldSendReferrer = hasRel(Relation::NoReferrer) ? NeverSendReferrer : MaybeSendReferrer;
 
     auto effectiveTarget = this->effectiveTarget();
     Optional<NewFrameOpenerPolicy> newFrameOpenerPolicy;
@@ -523,7 +508,7 @@ void HTMLAnchorElement::handleClick(Event& event)
     // created. Thus, it should be empty for now.
     ASSERT(!adClickAttribution || adClickAttribution->url().isNull());
 
-    frame->loader().changeLocation(completedURL, effectiveTarget, &event, LockHistory::No, LockBackForwardList::No, referrerPolicy, document().shouldOpenExternalURLsPolicyToPropagate(), newFrameOpenerPolicy, downloadAttribute, systemPreviewInfo, WTFMove(adClickAttribution));
+    frame->loader().urlSelected(completedURL, effectiveTarget, &event, LockHistory::No, LockBackForwardList::No, shouldSendReferrer, document().shouldOpenExternalURLsPolicyToPropagate(), newFrameOpenerPolicy, downloadAttribute, systemPreviewInfo, WTFMove(adClickAttribution));
 
     sendPings(completedURL);
 }
@@ -617,23 +602,6 @@ void HTMLAnchorElement::setRootEditableElementForSelectionOnMouseDown(Element* e
 
     rootEditableElementMap().set(this, element);
     m_hasRootEditableElementForSelectionOnMouseDown = true;
-}
-
-void HTMLAnchorElement::setReferrerPolicyForBindings(const AtomString& value)
-{
-    setAttributeWithoutSynchronization(referrerpolicyAttr, value);
-}
-
-String HTMLAnchorElement::referrerPolicyForBindings() const
-{
-    return referrerPolicyToString(referrerPolicy());
-}
-
-ReferrerPolicy HTMLAnchorElement::referrerPolicy() const
-{
-    if (RuntimeEnabledFeatures::sharedFeatures().referrerPolicyAttributeEnabled())
-        return parseReferrerPolicy(attributeWithoutSynchronization(referrerpolicyAttr), ReferrerPolicySource::ReferrerPolicyAttribute).valueOr(ReferrerPolicy::EmptyString);
-    return ReferrerPolicy::EmptyString;
 }
 
 }

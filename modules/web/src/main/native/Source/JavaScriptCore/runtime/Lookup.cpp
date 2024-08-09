@@ -21,7 +21,8 @@
 #include "Lookup.h"
 
 #include "GetterSetter.h"
-#include "StructureInlines.h"
+#include "JSFunction.h"
+#include "JSCInlines.h"
 
 namespace JSC {
 

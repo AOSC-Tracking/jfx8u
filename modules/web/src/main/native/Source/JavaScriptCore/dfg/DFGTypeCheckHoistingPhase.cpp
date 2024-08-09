@@ -32,7 +32,8 @@
 #include "DFGGraph.h"
 #include "DFGInsertionSet.h"
 #include "DFGPhase.h"
-#include "JSCJSValueInlines.h"
+#include "DFGVariableAccessDataDump.h"
+#include "JSCInlines.h"
 #include <wtf/HashMap.h>
 
 namespace JSC { namespace DFG {
@@ -49,7 +50,7 @@ struct CheckData {
     bool m_arrayModeHoistingOkay;
 
     CheckData()
-        : m_structure(nullptr)
+        : m_structure(0)
         , m_arrayModeIsValid(false)
         , m_arrayModeHoistingOkay(false)
     {
@@ -63,7 +64,7 @@ struct CheckData {
     }
 
     CheckData(ArrayMode arrayMode)
-        : m_structure(nullptr)
+        : m_structure(0)
         , m_arrayMode(arrayMode)
         , m_arrayModeIsValid(true)
         , m_arrayModeHoistingOkay(true)
@@ -286,7 +287,6 @@ private:
                 case MovHint:
                 case MultiGetByOffset:
                 case MultiPutByOffset:
-                case MultiDeleteByOffset:
                     // Don't count these uses.
                     break;
 
@@ -362,7 +362,6 @@ private:
                 case MovHint:
                 case MultiGetByOffset:
                 case MultiPutByOffset:
-                case MultiDeleteByOffset:
                     // Don't count these uses.
                     break;
 
@@ -502,7 +501,7 @@ private:
             return;
         if (result.iterator->value.m_structure == structure.get())
             return;
-        result.iterator->value.m_structure = nullptr;
+        result.iterator->value.m_structure = 0;
     }
 
     void noticeStructureCheck(VariableAccessData* variable, RegisteredStructureSet set)
@@ -593,7 +592,7 @@ struct StructureTypeCheck {
 
     static void disableHoisting(CheckData& checkData)
     {
-        checkData.m_structure = nullptr;
+        checkData.m_structure = 0;
     }
 
     static bool isContravenedByValue(CheckData& checkData, JSValue value)

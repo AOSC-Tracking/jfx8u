@@ -64,7 +64,6 @@ public:
     void getDOMStorageItems(ErrorString&, const JSON::Object& storageId, RefPtr<JSON::ArrayOf<JSON::ArrayOf<String>>>& items) override;
     void setDOMStorageItem(ErrorString&, const JSON::Object& storageId, const String& key, const String& value) override;
     void removeDOMStorageItem(ErrorString&, const JSON::Object& storageId, const String& key) override;
-    void clearDOMStorageItems(ErrorString&, const JSON::Object& storageId) override;
 
     // InspectorInstrumentation
     void didDispatchDOMStorageEvent(const String& key, const String& oldValue, const String& newValue, StorageType, SecurityOrigin*);

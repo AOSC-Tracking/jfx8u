@@ -66,11 +66,11 @@ struct EncodedResourceCryptographicDigest {
     String digest;
 };
 
-Optional<ResourceCryptographicDigest> parseCryptographicDigest(StringParsingBuffer<UChar>&);
-Optional<ResourceCryptographicDigest> parseCryptographicDigest(StringParsingBuffer<LChar>&);
+Optional<ResourceCryptographicDigest> parseCryptographicDigest(const UChar*& begin, const UChar* end);
+Optional<ResourceCryptographicDigest> parseCryptographicDigest(const LChar*& begin, const LChar* end);
 
-Optional<EncodedResourceCryptographicDigest> parseEncodedCryptographicDigest(StringParsingBuffer<UChar>&);
-Optional<EncodedResourceCryptographicDigest> parseEncodedCryptographicDigest(StringParsingBuffer<LChar>&);
+Optional<EncodedResourceCryptographicDigest> parseEncodedCryptographicDigest(const UChar*& begin, const UChar* end);
+Optional<EncodedResourceCryptographicDigest> parseEncodedCryptographicDigest(const LChar*& begin, const LChar* end);
 
 Optional<ResourceCryptographicDigest> decodeEncodedResourceCryptographicDigest(const EncodedResourceCryptographicDigest&);
 
@@ -81,15 +81,17 @@ ResourceCryptographicDigest cryptographicDigestForBytes(ResourceCryptographicDig
 namespace WTF {
 
 template<> struct DefaultHash<WebCore::ResourceCryptographicDigest> {
-    static unsigned hash(const WebCore::ResourceCryptographicDigest& digest)
-    {
-        return pairIntHash(intHash(static_cast<unsigned>(digest.algorithm)), StringHasher::computeHash(digest.value.data(), digest.value.size()));
-    }
-    static bool equal(const WebCore::ResourceCryptographicDigest& a, const WebCore::ResourceCryptographicDigest& b)
-    {
-        return a == b;
-    }
-    static const bool safeToCompareToEmptyOrDeleted = true;
+    struct Hash {
+        static unsigned hash(const WebCore::ResourceCryptographicDigest& digest)
+        {
+            return pairIntHash(intHash(static_cast<unsigned>(digest.algorithm)), StringHasher::computeHash(digest.value.data(), digest.value.size()));
+        }
+        static bool equal(const WebCore::ResourceCryptographicDigest& a, const WebCore::ResourceCryptographicDigest& b)
+        {
+            return a == b;
+        }
+        static const bool safeToCompareToEmptyOrDeleted = true;
+    };
 };
 
 template<> struct HashTraits<WebCore::ResourceCryptographicDigest> : GenericHashTraits<WebCore::ResourceCryptographicDigest> {

@@ -1,5 +1,3 @@
-// © 2016 and later: Unicode, Inc. and others.
-// License & terms of use: http://www.unicode.org/copyright.html
 /*
 **********************************************************************
 * Copyright (c) 2004-2014, International Business Machines
@@ -28,7 +26,7 @@ U_NAMESPACE_BEGIN
 
 /**
  * A unit of currency, such as USD (U.S. dollars) or JPY (Japanese
- * yen).  This class is a thin wrapper over a char16_t string that
+ * yen).  This class is a thin wrapper over a UChar string that
  * subclasses MeasureUnit, for use with Measure and MeasureFormat.
  *
  * @author Alan Liu
@@ -37,39 +35,20 @@ U_NAMESPACE_BEGIN
 class U_I18N_API CurrencyUnit: public MeasureUnit {
  public:
     /**
-     * Default constructor.  Initializes currency code to "XXX" (no currency).
-     * @draft ICU 60
-     */
-    CurrencyUnit();
-
-    /**
      * Construct an object with the given ISO currency code.
-     * @param isoCode the 3-letter ISO 4217 currency code; must have
-     * length 3 and need not be NUL-terminated. If NULL, the currency
-     * is initialized to the unknown currency XXX.
+     * @param isoCode the 3-letter ISO 4217 currency code; must not be
+     * NULL and must have length 3
      * @param ec input-output error code. If the isoCode is invalid,
      * then this will be set to a failing value.
      * @stable ICU 3.0
      */
-    CurrencyUnit(ConstChar16Ptr isoCode, UErrorCode &ec);
+    CurrencyUnit(const UChar* isoCode, UErrorCode &ec);
 
     /**
      * Copy constructor
      * @stable ICU 3.0
      */
     CurrencyUnit(const CurrencyUnit& other);
-
-#ifndef U_HIDE_DRAFT_API
-    /**
-     * Copy constructor from MeasureUnit. This constructor allows you to
-     * restore a CurrencyUnit that was sliced to MeasureUnit.
-     *
-     * @param measureUnit The MeasureUnit to copy from.
-     * @param ec Set to a failing value if the MeasureUnit is not a currency.
-     * @draft ICU 60
-     */
-    CurrencyUnit(const MeasureUnit& measureUnit, UErrorCode &ec);
-#endif  /* U_HIDE_DRAFT_API */
 
     /**
      * Assignment operator
@@ -112,16 +91,16 @@ class U_I18N_API CurrencyUnit: public MeasureUnit {
      * Return the ISO currency code of this object.
      * @stable ICU 3.0
      */
-    inline const char16_t* getISOCurrency() const;
+    inline const UChar* getISOCurrency() const;
 
  private:
     /**
      * The ISO 4217 code of this object.
      */
-    char16_t isoCode[4];
+    UChar isoCode[4];
 };
 
-inline const char16_t* CurrencyUnit::getISOCurrency() const {
+inline const UChar* CurrencyUnit::getISOCurrency() const {
     return isoCode;
 }
 

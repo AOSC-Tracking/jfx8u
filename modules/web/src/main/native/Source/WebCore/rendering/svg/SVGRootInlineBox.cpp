@@ -55,7 +55,7 @@ void SVGRootInlineBox::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffse
     ASSERT(!paintInfo.context().paintingDisabled());
 
     bool isPrinting = renderSVGText().document().printing();
-    bool hasSelection = !isPrinting && selectionState() != RenderObject::HighlightState::None;
+    bool hasSelection = !isPrinting && selectionState() != RenderObject::SelectionNone;
     bool shouldPaintSelectionHighlight = !(paintInfo.paintBehavior.contains(PaintBehavior::SkipSelectionHighlight));
 
     PaintInfo childPaintInfo(paintInfo);

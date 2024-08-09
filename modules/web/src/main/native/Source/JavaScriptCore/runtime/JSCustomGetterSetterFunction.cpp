@@ -27,7 +27,9 @@
 #include "JSCustomGetterSetterFunction.h"
 
 #include "CustomGetterSetter.h"
-#include "JSCJSValueInlines.h"
+#include "GetterSetter.h"
+#include "JSCInlines.h"
+#include "JSGlobalObject.h"
 
 namespace JSC {
 

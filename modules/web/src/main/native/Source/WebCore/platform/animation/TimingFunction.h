@@ -2,7 +2,7 @@
  * Copyright (C) 2000 Lars Knoll (knoll@kde.org)
  *           (C) 2000 Antti Koivisto (koivisto@kde.org)
  *           (C) 2000 Dirk Mueller (mueller@kde.org)
- * Copyright (C) 2003-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2003, 2005, 2006, 2007, 2008 Apple Inc. All rights reserved.
  * Copyright (C) 2006 Graham Dennis (graham.dennis@gmail.com)
  *
  * This library is free software; you can redistribute it and/or
@@ -26,7 +26,6 @@
 
 #include "CSSValue.h"
 #include "ExceptionOr.h"
-#include <wtf/EnumTraits.h>
 #include <wtf/Ref.h>
 #include <wtf/RefCounted.h>
 
@@ -78,12 +77,6 @@ public:
     bool operator==(const TimingFunction& other) const final
     {
         return is<LinearTimingFunction>(other);
-    }
-
-    static const LinearTimingFunction& sharedLinearTimingFunction()
-    {
-        static const LinearTimingFunction& function = create().leakRef();
-        return function;
     }
 
 private:
@@ -199,22 +192,13 @@ private:
 
 class StepsTimingFunction final : public TimingFunction {
 public:
-    enum class StepPosition {
-        JumpStart,
-        JumpEnd,
-        JumpNone,
-        JumpBoth,
-        Start,
-        End,
-    };
-
-    static Ref<StepsTimingFunction> create(int steps, Optional<StepPosition> stepPosition)
+    static Ref<StepsTimingFunction> create(int steps, bool stepAtStart)
     {
-        return adoptRef(*new StepsTimingFunction(steps, stepPosition));
+        return adoptRef(*new StepsTimingFunction(steps, stepAtStart));
     }
     static Ref<StepsTimingFunction> create()
     {
-        return adoptRef(*new StepsTimingFunction(1, StepPosition::End));
+        return adoptRef(*new StepsTimingFunction(1, true));
     }
 
     bool operator==(const TimingFunction& other) const final
@@ -222,30 +206,30 @@ public:
         if (!is<StepsTimingFunction>(other))
             return false;
         auto& otherSteps = downcast<StepsTimingFunction>(other);
-        return m_steps == otherSteps.m_steps && m_stepPosition == otherSteps.m_stepPosition;
+        return m_steps == otherSteps.m_steps && m_stepAtStart == otherSteps.m_stepAtStart;
     }
 
     int numberOfSteps() const { return m_steps; }
     void setNumberOfSteps(int steps) { m_steps = steps; }
 
-    Optional<StepPosition> stepPosition() const { return m_stepPosition; }
-    void setStepPosition(Optional<StepPosition> stepPosition) { m_stepPosition = stepPosition; }
+    bool stepAtStart() const { return m_stepAtStart; }
+    void setStepAtStart(bool stepAtStart) { m_stepAtStart = stepAtStart; }
 
 private:
-    StepsTimingFunction(int steps, Optional<StepPosition> stepPosition)
+    StepsTimingFunction(int steps, bool stepAtStart)
         : TimingFunction(StepsFunction)
         , m_steps(steps)
-        , m_stepPosition(stepPosition)
+        , m_stepAtStart(stepAtStart)
     {
     }
 
     Ref<TimingFunction> clone() const final
     {
-        return adoptRef(*new StepsTimingFunction(m_steps, m_stepPosition));
+        return adoptRef(*new StepsTimingFunction(m_steps, m_stepAtStart));
     }
 
     int m_steps;
-    Optional<StepPosition> m_stepPosition;
+    bool m_stepAtStart;
 };
 
 class SpringTimingFunction final : public TimingFunction {
@@ -317,40 +301,3 @@ SPECIALIZE_TYPE_TRAITS_TIMINGFUNCTION(WebCore::LinearTimingFunction, isLinearTim
 SPECIALIZE_TYPE_TRAITS_TIMINGFUNCTION(WebCore::CubicBezierTimingFunction, isCubicBezierTimingFunction())
 SPECIALIZE_TYPE_TRAITS_TIMINGFUNCTION(WebCore::StepsTimingFunction, isStepsTimingFunction())
 SPECIALIZE_TYPE_TRAITS_TIMINGFUNCTION(WebCore::SpringTimingFunction, isSpringTimingFunction())
-
-namespace WTF {
-
-template<> struct EnumTraits<WebCore::CubicBezierTimingFunction::TimingFunctionPreset> {
-    using values = EnumValues<
-        WebCore::CubicBezierTimingFunction::TimingFunctionPreset,
-        WebCore::CubicBezierTimingFunction::TimingFunctionPreset::Ease,
-        WebCore::CubicBezierTimingFunction::TimingFunctionPreset::EaseIn,
-        WebCore::CubicBezierTimingFunction::TimingFunctionPreset::EaseOut,
-        WebCore::CubicBezierTimingFunction::TimingFunctionPreset::EaseInOut,
-        WebCore::CubicBezierTimingFunction::TimingFunctionPreset::Custom
-    >;
-};
-
-template<> struct EnumTraits<WebCore::StepsTimingFunction::StepPosition> {
-    using values = EnumValues<
-        WebCore::StepsTimingFunction::StepPosition,
-        WebCore::StepsTimingFunction::StepPosition::JumpStart,
-        WebCore::StepsTimingFunction::StepPosition::JumpEnd,
-        WebCore::StepsTimingFunction::StepPosition::JumpNone,
-        WebCore::StepsTimingFunction::StepPosition::JumpBoth,
-        WebCore::StepsTimingFunction::StepPosition::Start,
-        WebCore::StepsTimingFunction::StepPosition::End
-    >;
-};
-
-template<> struct EnumTraits<WebCore::TimingFunction::TimingFunctionType> {
-    using values = EnumValues<
-        WebCore::TimingFunction::TimingFunctionType,
-        WebCore::TimingFunction::TimingFunctionType::LinearFunction,
-        WebCore::TimingFunction::TimingFunctionType::CubicBezierFunction,
-        WebCore::TimingFunction::TimingFunctionType::StepsFunction,
-        WebCore::TimingFunction::TimingFunctionType::SpringFunction
-    >;
-};
-
-} // namespace WTF

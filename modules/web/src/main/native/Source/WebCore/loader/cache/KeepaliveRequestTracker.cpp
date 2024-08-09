@@ -76,7 +76,7 @@ void KeepaliveRequestTracker::responseReceived(CachedResource& resource, const R
         completionHandler();
 }
 
-void KeepaliveRequestTracker::notifyFinished(CachedResource& resource, const NetworkLoadMetrics&)
+void KeepaliveRequestTracker::notifyFinished(CachedResource& resource)
 {
     unregisterRequest(resource);
 }

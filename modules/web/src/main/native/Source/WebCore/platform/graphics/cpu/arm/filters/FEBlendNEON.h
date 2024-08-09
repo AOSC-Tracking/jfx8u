@@ -31,7 +31,6 @@
 #if HAVE(ARM_NEON_INTRINSICS)
 
 #include "FEBlend.h"
-#include "ImageData.h"
 #include <arm_neon.h>
 
 namespace WebCore {
@@ -112,8 +111,7 @@ void FEBlend::platformApplySoftware()
     FilterEffect* in = inputEffect(0);
     FilterEffect* in2 = inputEffect(1);
 
-    auto* imageResult = createPremultipliedImageResult();
-    auto* dstPixelArray = imageResult ? imageResult->data() : nullptr;
+    Uint8ClampedArray* dstPixelArray = createPremultipliedImageResult();
     if (!dstPixelArray)
         return;
 

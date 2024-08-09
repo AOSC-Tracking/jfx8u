@@ -25,13 +25,12 @@
 
 [
     Conditional=PAYMENT_REQUEST,
+    Constructor(DOMString type, optional PaymentMethodChangeEventInit eventInitDict),
     EnabledBySetting=PaymentRequest,
     Exposed=Window,
     JSCustomMarkFunction,
     SecureContext,
 ] interface PaymentMethodChangeEvent : PaymentRequestUpdateEvent {
-    constructor(DOMString type, optional PaymentMethodChangeEventInit eventInitDict);
-
     readonly attribute DOMString methodName;
     [CustomGetter] readonly attribute object? methodDetails;
 };

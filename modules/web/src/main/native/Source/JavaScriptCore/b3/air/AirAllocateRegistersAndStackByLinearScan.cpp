@@ -39,11 +39,10 @@
 #include "AirPhaseScope.h"
 #include "AirRegLiveness.h"
 #include "AirStackAllocation.h"
+#include "AirTmpInlines.h"
 #include "AirTmpMap.h"
 #include <wtf/ListDump.h>
 #include <wtf/Range.h>
-
-using WTF::Range;
 
 namespace JSC { namespace B3 { namespace Air {
 
@@ -183,49 +182,15 @@ private:
         return indexOfHead(block) + block->size() * 2;
     }
 
-    static Interval earlyInterval(size_t indexOfEarly)
-    {
-        return Interval(indexOfEarly);
-    }
-
-    static Interval lateInterval(size_t indexOfEarly)
-    {
-        return Interval(indexOfEarly + 1);
-    }
-
-    static Interval earlyAndLateInterval(size_t indexOfEarly)
-    {
-        return earlyInterval(indexOfEarly) | lateInterval(indexOfEarly);
-    }
-
-    static Interval interval(size_t indexOfEarly, Arg::Timing timing)
+    Interval interval(size_t indexOfEarly, Arg::Timing timing)
     {
         switch (timing) {
         case Arg::OnlyEarly:
-            return earlyInterval(indexOfEarly);
+            return Interval(indexOfEarly);
         case Arg::OnlyLate:
-            return lateInterval(indexOfEarly);
+            return Interval(indexOfEarly + 1);
         case Arg::EarlyAndLate:
-            return earlyAndLateInterval(indexOfEarly);
-        }
-        ASSERT_NOT_REACHED();
-        return Interval();
-    }
-
-    static Interval intervalForSpill(size_t indexOfEarly, Arg::Role role)
-    {
-        Arg::Timing timing = Arg::timing(role);
-        switch (timing) {
-        case Arg::OnlyEarly:
-            if (Arg::isAnyDef(role))
-                return earlyAndLateInterval(indexOfEarly); // We have a spill store after this insn.
-            return earlyInterval(indexOfEarly);
-        case Arg::OnlyLate:
-            if (Arg::isAnyUse(role))
-                return earlyAndLateInterval(indexOfEarly); // We had a spill load before this insn.
-            return lateInterval(indexOfEarly);
-        case Arg::EarlyAndLate:
-            return earlyAndLateInterval(indexOfEarly);
+            return Interval(indexOfEarly, indexOfEarly + 2);
         }
         ASSERT_NOT_REACHED();
         return Interval();
@@ -583,7 +548,7 @@ private:
                         if (!spilled)
                             return;
                         Opcode move = bank == GP ? Move : MoveDouble;
-                        tmp = addSpillTmpWithInterval(bank, intervalForSpill(indexOfEarly, role));
+                        tmp = addSpillTmpWithInterval(bank, interval(indexOfEarly, Arg::timing(role)));
                         if (role == Arg::Scratch)
                             return;
                         if (Arg::isAnyUse(role))

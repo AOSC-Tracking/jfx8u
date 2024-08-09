@@ -30,29 +30,14 @@
 
 #if ENABLE(ENCRYPTED_MEDIA)
 
-#include <wtf/Forward.h>
-
 namespace WebCore {
 
-enum class CDMSessionType : uint8_t {
+enum class CDMSessionType {
     Temporary,
     PersistentUsageRecord,
     PersistentLicense
 };
 
 } // namespace WebCore
-
-namespace WTF {
-
-template<> struct EnumTraits<WebCore::CDMSessionType> {
-    using values = EnumValues<
-        WebCore::CDMSessionType,
-        WebCore::CDMSessionType::Temporary,
-        WebCore::CDMSessionType::PersistentUsageRecord,
-        WebCore::CDMSessionType::PersistentLicense
-    >;
-};
-
-}
 
 #endif // ENABLE(ENCRYPTED_MEDIA)

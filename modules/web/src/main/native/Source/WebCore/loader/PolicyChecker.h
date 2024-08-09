@@ -29,7 +29,7 @@
 
 #pragma once
 
-#include "FrameLoader.h"
+#include "FrameLoaderTypes.h"
 #include "ResourceRequest.h"
 #include <wtf/WeakPtr.h>
 #include <wtf/text/WTFString.h>
@@ -60,14 +60,19 @@ enum class NavigationPolicyDecision : uint8_t {
 
 enum class PolicyDecisionMode { Synchronous, Asynchronous };
 
-class FrameLoader::PolicyChecker {
+class PolicyChecker {
     WTF_MAKE_NONCOPYABLE(PolicyChecker);
     WTF_MAKE_FAST_ALLOCATED;
 public:
     explicit PolicyChecker(Frame&);
 
+    enum class ShouldContinue {
+        Yes,
+        No
+    };
+
     using NavigationPolicyDecisionFunction = CompletionHandler<void(ResourceRequest&&, WeakPtr<FormState>&&, NavigationPolicyDecision)>;
-    using NewWindowPolicyDecisionFunction = CompletionHandler<void(const ResourceRequest&, WeakPtr<FormState>&&, const String& frameName, const NavigationAction&, ShouldContinuePolicyCheck)>;
+    using NewWindowPolicyDecisionFunction = CompletionHandler<void(const ResourceRequest&, WeakPtr<FormState>&&, const String& frameName, const NavigationAction&, ShouldContinue)>;
 
     void checkNavigationPolicy(ResourceRequest&&, const ResourceResponse& redirectResponse, DocumentLoader*, RefPtr<FormState>&&, NavigationPolicyDecisionFunction&&, PolicyDecisionMode = PolicyDecisionMode::Asynchronous);
     void checkNavigationPolicy(ResourceRequest&&, const ResourceResponse& redirectResponse, NavigationPolicyDecisionFunction&&);
@@ -89,7 +94,7 @@ public:
 
 private:
     void handleUnimplementablePolicy(const ResourceError&);
-    WTF::CompletionHandlerCallingScope extendBlobURLLifetimeIfNecessary(ResourceRequest&, DocumentLoader*) const;
+    WTF::CompletionHandlerCallingScope extendBlobURLLifetimeIfNecessary(ResourceRequest&) const;
 
     Frame& m_frame;
 
@@ -107,3 +112,16 @@ private:
 };
 
 } // namespace WebCore
+
+// To support encoding WebCore::PolicyChecker::ShouldContinue in XPC messages
+namespace WTF {
+
+template<> struct EnumTraits<WebCore::PolicyChecker::ShouldContinue> {
+    using values = EnumValues<
+        WebCore::PolicyChecker::ShouldContinue,
+        WebCore::PolicyChecker::ShouldContinue::No,
+        WebCore::PolicyChecker::ShouldContinue::Yes
+    >;
+};
+
+}

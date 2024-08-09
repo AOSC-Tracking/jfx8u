@@ -51,7 +51,9 @@ public:
     void text(FetchBodyOwner&, Ref<DeferredPromise>&&);
     void formData(FetchBodyOwner&, Ref<DeferredPromise>&&);
 
+#if ENABLE(STREAMS_API)
     void consumeAsStream(FetchBodyOwner&, FetchBodySource&);
+#endif
 
     using Init = Variant<RefPtr<Blob>, RefPtr<ArrayBufferView>, RefPtr<ArrayBuffer>, RefPtr<DOMFormData>, RefPtr<URLSearchParams>, RefPtr<ReadableStream>, String>;
     static ExceptionOr<FetchBody> extract(Init&&, String&);

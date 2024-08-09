@@ -25,8 +25,6 @@
 
 #pragma once
 
-#include <wtf/EnumTraits.h>
-
 namespace WebCore {
 
 struct Pagination {
@@ -49,18 +47,3 @@ struct Pagination {
 };
 
 } // namespace WebCore
-
-namespace WTF {
-
-template<> struct EnumTraits<WebCore::Pagination::Mode> {
-    using values = EnumValues<
-        WebCore::Pagination::Mode,
-        WebCore::Pagination::Mode::Unpaginated,
-        WebCore::Pagination::Mode::LeftToRightPaginated,
-        WebCore::Pagination::Mode::RightToLeftPaginated,
-        WebCore::Pagination::Mode::TopToBottomPaginated,
-        WebCore::Pagination::Mode::BottomToTopPaginated
-    >;
-};
-
-} // namespace WTF

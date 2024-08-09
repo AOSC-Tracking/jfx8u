@@ -55,7 +55,6 @@ public:
 
     enum class Type {
         Automation,
-        ITML,
         JavaScript,
         Page,
         ServiceWorker,

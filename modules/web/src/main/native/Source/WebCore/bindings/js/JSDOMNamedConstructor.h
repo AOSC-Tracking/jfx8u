@@ -43,7 +43,7 @@ private:
     }
 
     void finishCreation(JSC::VM&, JSDOMGlobalObject&);
-    static JSC::CallData getConstructData(JSC::JSCell*);
+    static JSC::ConstructType getConstructData(JSC::JSCell*, JSC::ConstructData&);
 
     // Usually defined for each specialization class.
     void initializeProperties(JSC::VM&, JSDOMGlobalObject&) { }
@@ -70,12 +70,10 @@ template<typename JSClass> inline void JSDOMNamedConstructor<JSClass>::finishCre
     initializeProperties(vm, globalObject);
 }
 
-template<typename JSClass> inline JSC::CallData JSDOMNamedConstructor<JSClass>::getConstructData(JSC::JSCell*)
+template<typename JSClass> inline JSC::ConstructType JSDOMNamedConstructor<JSClass>::getConstructData(JSC::JSCell*, JSC::ConstructData& constructData)
 {
-    JSC::CallData constructData;
-    constructData.type = JSC::CallData::Type::Native;
     constructData.native.function = construct;
-    return constructData;
+    return JSC::ConstructType::Host;
 }
 
 } // namespace WebCore

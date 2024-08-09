@@ -28,7 +28,6 @@
 
 #if ENABLE(SERVICE_WORKER)
 
-#include "Logging.h"
 #include "SWServer.h"
 #include "SWServerRegistration.h"
 #include "SWServerToContextConnection.h"
@@ -49,18 +48,16 @@ SWServerWorker* SWServerWorker::existingWorkerForIdentifier(ServiceWorkerIdentif
 }
 
 // FIXME: Use r-value references for script and contentSecurityPolicy
-SWServerWorker::SWServerWorker(SWServer& server, SWServerRegistration& registration, const URL& scriptURL, const String& script, const CertificateInfo& certificateInfo, const ContentSecurityPolicyResponseHeaders& contentSecurityPolicy, String&& referrerPolicy, WorkerType type, ServiceWorkerIdentifier identifier, HashMap<URL, ServiceWorkerContextData::ImportedScript>&& scriptResourceMap)
+SWServerWorker::SWServerWorker(SWServer& server, SWServerRegistration& registration, const URL& scriptURL, const String& script, const ContentSecurityPolicyResponseHeaders& contentSecurityPolicy, String&& referrerPolicy, WorkerType type, ServiceWorkerIdentifier identifier, HashMap<URL, ServiceWorkerContextData::ImportedScript>&& scriptResourceMap)
     : m_server(makeWeakPtr(server))
     , m_registrationKey(registration.key())
     , m_registration(makeWeakPtr(registration))
     , m_data { identifier, scriptURL, ServiceWorkerState::Redundant, type, registration.identifier() }
     , m_script(script)
-    , m_certificateInfo(certificateInfo)
     , m_contentSecurityPolicy(contentSecurityPolicy)
     , m_referrerPolicy(WTFMove(referrerPolicy))
     , m_registrableDomain(m_data.scriptURL)
     , m_scriptResourceMap(WTFMove(scriptResourceMap))
-    , m_terminationTimer(*this, &SWServerWorker::terminationTimerFired)
 {
     m_data.scriptURL.removeFragmentIdentifier();
 
@@ -77,77 +74,19 @@ SWServerWorker::~SWServerWorker()
 
     auto taken = allWorkers().take(identifier());
     ASSERT_UNUSED(taken, taken == this);
-
-    callTerminationCallbacks();
 }
 
 ServiceWorkerContextData SWServerWorker::contextData() const
 {
     ASSERT(m_registration);
 
-    return { WTF::nullopt, m_registration->data(), m_data.identifier, m_script, m_certificateInfo, m_contentSecurityPolicy, m_referrerPolicy, m_data.scriptURL, m_data.type, false, m_scriptResourceMap };
+    return { WTF::nullopt, m_registration->data(), m_data.identifier, m_script, m_contentSecurityPolicy, m_referrerPolicy, m_data.scriptURL, m_data.type, false, m_scriptResourceMap };
 }
 
-void SWServerWorker::terminate(CompletionHandler<void()>&& callback)
+void SWServerWorker::terminate()
 {
-    if (!m_server)
-        return callback();
-
-    switch (m_state) {
-    case State::Running:
-        startTermination(WTFMove(callback));
-        return;
-    case State::Terminating:
-        m_terminationCallbacks.append(WTFMove(callback));
-        return;
-    case State::NotRunning:
-        return callback();
-    }
-}
-
-void SWServerWorker::whenTerminated(CompletionHandler<void()>&& callback)
-{
-    ASSERT(isRunning() || isTerminating());
-    m_terminationCallbacks.append(WTFMove(callback));
-}
-
-void SWServerWorker::startTermination(CompletionHandler<void()>&& callback)
-{
-    auto* contextConnection = this->contextConnection();
-    ASSERT(contextConnection);
-    if (!contextConnection) {
-        RELEASE_LOG_ERROR(ServiceWorker, "Request to terminate a worker %llu whose context connection does not exist", identifier().toUInt64());
-        setState(State::NotRunning);
-        callback();
-        m_server->workerContextTerminated(*this);
-        return;
-    }
-
-    setState(State::Terminating);
-
-    m_terminationCallbacks.append(WTFMove(callback));
-    m_terminationTimer.startOneShot(SWServer::defaultTerminationDelay);
-
-    contextConnection->terminateWorker(identifier());
-}
-
-void SWServerWorker::terminationCompleted()
-{
-    m_terminationTimer.stop();
-    callTerminationCallbacks();
-}
-
-void SWServerWorker::callTerminationCallbacks()
-{
-    auto callbacks = WTFMove(m_terminationCallbacks);
-    for (auto& callback : callbacks)
-        callback();
-}
-
-void SWServerWorker::terminationTimerFired()
-{
-    ASSERT(isTerminating());
-    contextConnection()->terminateDueToUnresponsiveness();
+    if (isRunning())
+        m_server->terminateWorker(*this);
 }
 
 const ClientOrigin& SWServerWorker::origin() const
@@ -233,6 +172,13 @@ String SWServerWorker::userAgent() const
     return m_server->serviceWorkerClientUserAgent(origin());
 }
 
+void SWServerWorker::claim()
+{
+    ASSERT(m_server);
+    if (m_server)
+        m_server->claim(*this);
+}
+
 void SWServerWorker::setScriptResource(URL&& url, ServiceWorkerContextData::ImportedScript&& script)
 {
     m_scriptResourceMap.set(WTFMove(url), WTFMove(script));
@@ -267,12 +213,12 @@ void SWServerWorker::setHasPendingEvents(bool hasPendingEvents)
 
 void SWServerWorker::whenActivated(CompletionHandler<void(bool)>&& handler)
 {
-    if (state() == ServiceWorkerState::Activating) {
-        m_whenActivatedHandlers.append(WTFMove(handler));
+    if (state() == ServiceWorkerState::Activated) {
+        handler(true);
         return;
     }
-    ASSERT(state() == ServiceWorkerState::Activated);
-    handler(state() == ServiceWorkerState::Activated);
+    ASSERT(state() == ServiceWorkerState::Activating);
+    m_whenActivatedHandlers.append(WTFMove(handler));
 }
 
 void SWServerWorker::setState(ServiceWorkerState state)
@@ -303,7 +249,6 @@ void SWServerWorker::callWhenActivatedHandler(bool success)
 void SWServerWorker::setState(State state)
 {
     ASSERT(state != State::Running || m_registration);
-    ASSERT(state != State::Running || m_state != State::Terminating);
     m_state = state;
 
     switch (state) {
@@ -311,15 +256,8 @@ void SWServerWorker::setState(State state)
         m_shouldSkipHandleFetch = false;
         break;
     case State::Terminating:
-        callWhenActivatedHandler(false);
-        break;
     case State::NotRunning:
-        terminationCompleted();
-
         callWhenActivatedHandler(false);
-        // As per https://w3c.github.io/ServiceWorker/#activate, a worker goes to activated even if activating fails.
-        if (m_data.state == ServiceWorkerState::Activating)
-            didFinishActivation();
         break;
     }
 }
@@ -331,7 +269,8 @@ SWServerRegistration* SWServerWorker::registration() const
 
 void SWServerWorker::didFailHeartBeatCheck()
 {
-    terminate();
+    if (m_server && isRunning())
+        m_server->terminateWorker(*this);
 }
 
 } // namespace WebCore

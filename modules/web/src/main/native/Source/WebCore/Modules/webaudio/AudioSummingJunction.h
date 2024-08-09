@@ -30,18 +30,18 @@
 
 namespace WebCore {
 
-class BaseAudioContext;
+class AudioContext;
 class AudioNodeOutput;
 
 // An AudioSummingJunction represents a point where zero, one, or more AudioNodeOutputs connect.
 
 class AudioSummingJunction {
 public:
-    explicit AudioSummingJunction(BaseAudioContext&);
+    explicit AudioSummingJunction(AudioContext&);
     virtual ~AudioSummingJunction();
 
     // Can be called from any thread.
-    BaseAudioContext& context() { return m_context; }
+    AudioContext& context() { return m_context.get(); }
 
     // This must be called whenever we modify m_outputs.
     void changedOutputs();
@@ -60,7 +60,7 @@ public:
     virtual void didUpdate() = 0;
 
 protected:
-    Ref<BaseAudioContext> m_context;
+    Ref<AudioContext> m_context;
 
     // m_outputs contains the AudioNodeOutputs representing current connections which are not disabled.
     // The rendering code should never use this directly, but instead uses m_renderingOutputs.

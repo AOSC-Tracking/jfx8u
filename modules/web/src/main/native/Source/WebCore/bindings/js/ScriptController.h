@@ -109,10 +109,12 @@ public:
 
     Expected<void, ExceptionDetails> shouldAllowUserAgentScripts(Document&) const;
 
-    // This asserts that URL argument is a JavaScript URL.
-    void executeJavaScriptURL(const URL&, RefPtr<SecurityOrigin> = nullptr, ShouldReplaceDocumentIfJavaScriptURL = ReplaceDocumentIfJavaScriptURL);
+    // Returns true if argument is a JavaScript URL.
+    bool executeIfJavaScriptURL(const URL&, RefPtr<SecurityOrigin> = nullptr, ShouldReplaceDocumentIfJavaScriptURL = ReplaceDocumentIfJavaScriptURL);
 
-    static void initializeMainThread();
+    // This function must be called from the main thread. It is safe to call it repeatedly.
+    // Darwin is an exception to this rule: it is OK to call this function from any thread, even reentrantly.
+    static void initializeThreading();
 
     void loadModuleScriptInWorld(LoadableModuleScript&, const String& moduleName, Ref<ModuleFetchParameters>&&, DOMWrapperWorld&);
     void loadModuleScript(LoadableModuleScript&, const String& moduleName, Ref<ModuleFetchParameters>&&);
@@ -138,7 +140,7 @@ public:
     void setPaused(bool b) { m_paused = b; }
     bool isPaused() const { return m_paused; }
 
-    const URL* sourceURL() const { return m_sourceURL; } // nullptr if we are not evaluating any script
+    const String* sourceURL() const { return m_sourceURL; } // 0 if we are not evaluating any script
 
     void updateDocument();
 
@@ -188,7 +190,7 @@ private:
     WEBCORE_EXPORT JSWindowProxy& jsWindowProxy(DOMWrapperWorld&);
 
     Frame& m_frame;
-    const URL* m_sourceURL { nullptr };
+    const String* m_sourceURL;
 
     bool m_paused;
     bool m_willReplaceWithResultOfExecutingJavascriptURL { false };

@@ -10984,7 +10984,7 @@ void benchmark()
 
 int main(int, char**)
 {
-    WTF::initialize();
+    WTF::initializeThreading();
 
     WallTime before = WallTime::now();
 

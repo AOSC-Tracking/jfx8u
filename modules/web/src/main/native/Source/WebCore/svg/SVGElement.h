@@ -141,8 +141,6 @@ public:
     RefPtr<SVGAttributeAnimator> createAnimator(const QualifiedName&, AnimationMode, CalcMode, bool isAccumulated, bool isAdditive);
     void animatorWillBeDeleted(const QualifiedName&);
 
-    const RenderStyle* computedStyle(PseudoId = PseudoId::None) final;
-
     // These are needed for the RenderTree, animation and DOM.
     String className() const { return m_className->currentValue(); }
     SVGAnimatedString& classNameAnimated() { return m_className; }
@@ -166,7 +164,6 @@ protected:
     bool isPresentationAttribute(const QualifiedName&) const override;
     void collectStyleForPresentationAttribute(const QualifiedName&, const AtomString&, MutableStyleProperties&) override;
     InsertedIntoAncestorResult insertedIntoAncestor(InsertionType, ContainerNode&) override;
-    void didFinishInsertingNode() override;
     void removedFromAncestor(RemovalType, ContainerNode&) override;
     void childrenChanged(const ChildChange&) override;
     virtual bool selfHasRelativeLengths() const { return false; }
@@ -176,10 +173,12 @@ protected:
     void willRecalcStyle(Style::Change) override;
 
 private:
+    const RenderStyle* computedStyle(PseudoId = PseudoId::None) final;
+
     virtual void clearTarget() { }
 
     void buildPendingResourcesIfNeeded();
-    bool accessKeyAction(bool sendMouseEvents) override;
+    void accessKeyAction(bool sendMouseEvents) override;
 
 #ifndef NDEBUG
     virtual bool filterOutAnimatableAttribute(const QualifiedName&) const;
@@ -220,7 +219,7 @@ struct SVGAttributeHashTranslator {
             QualifiedNameComponents components = { nullAtom().impl(), key.localName().impl(), key.namespaceURI().impl() };
             return hashComponents(components);
         }
-        return DefaultHash<QualifiedName>::hash(key);
+        return DefaultHash<QualifiedName>::Hash::hash(key);
     }
     static bool equal(const QualifiedName& a, const QualifiedName& b) { return a.matches(b); }
 };

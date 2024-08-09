@@ -30,7 +30,6 @@
 
 #pragma once
 
-#include "ExceptionCode.h"
 #include "FileReaderLoaderClient.h"
 #include "SocketStreamHandleClient.h"
 #include "ThreadableWebSocketChannel.h"
@@ -114,7 +113,7 @@ public:
     void didStartLoading() override;
     void didReceiveData() override;
     void didFinishLoading() override;
-    void didFail(ExceptionCode errorCode) override;
+    void didFail(int errorCode) override;
 
     unsigned identifier() const { return m_identifier; }
     bool hasCreatedHandshake() { return !!m_handshake; }
@@ -127,11 +126,12 @@ public:
 
     Document* document();
 
-private:
-    WEBCORE_EXPORT WebSocketChannel(Document&, WebSocketChannelClient&, SocketProvider&);
-
+protected:
     void refThreadableWebSocketChannel() override { ref(); }
     void derefThreadableWebSocketChannel() override { deref(); }
+
+private:
+    WEBCORE_EXPORT WebSocketChannel(Document&, WebSocketChannelClient&, SocketProvider&);
 
     bool appendToBuffer(const char* data, size_t len);
     void skipBuffer(size_t len);

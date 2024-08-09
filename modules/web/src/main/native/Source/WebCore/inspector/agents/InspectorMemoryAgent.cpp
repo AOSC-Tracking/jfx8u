@@ -49,35 +49,32 @@ InspectorMemoryAgent::~InspectorMemoryAgent() = default;
 
 void InspectorMemoryAgent::didCreateFrontendAndBackend(FrontendRouter*, BackendDispatcher*)
 {
-    m_instrumentingAgents.setPersistentMemoryAgent(this);
 }
 
 void InspectorMemoryAgent::willDestroyFrontendAndBackend(DisconnectReason)
 {
     ErrorString ignored;
     disable(ignored);
-
-    m_instrumentingAgents.setPersistentMemoryAgent(nullptr);
 }
 
 void InspectorMemoryAgent::enable(ErrorString& errorString)
 {
-    if (m_instrumentingAgents.enabledMemoryAgent() == this) {
+    if (m_instrumentingAgents.inspectorMemoryAgent() == this) {
         errorString = "Memory domain already enabled"_s;
         return;
     }
 
-    m_instrumentingAgents.setEnabledMemoryAgent(this);
+    m_instrumentingAgents.setInspectorMemoryAgent(this);
 }
 
 void InspectorMemoryAgent::disable(ErrorString& errorString)
 {
-    if (m_instrumentingAgents.enabledMemoryAgent() != this) {
+    if (m_instrumentingAgents.inspectorMemoryAgent() != this) {
         errorString = "Memory domain already disabled"_s;
         return;
     }
 
-    m_instrumentingAgents.setEnabledMemoryAgent(nullptr);
+    m_instrumentingAgents.setInspectorMemoryAgent(nullptr);
 
     m_tracking = false;
 
@@ -95,7 +92,7 @@ void InspectorMemoryAgent::startTracking(ErrorString&)
 
     m_tracking = true;
 
-    m_frontendDispatcher->trackingStart(m_environment.executionStopwatch().elapsedTime().seconds());
+    m_frontendDispatcher->trackingStart(m_environment.executionStopwatch()->elapsedTime().seconds());
 }
 
 void InspectorMemoryAgent::stopTracking(ErrorString&)
@@ -107,13 +104,13 @@ void InspectorMemoryAgent::stopTracking(ErrorString&)
 
     m_tracking = false;
 
-    m_frontendDispatcher->trackingComplete(m_environment.executionStopwatch().elapsedTime().seconds());
+    m_frontendDispatcher->trackingComplete(m_environment.executionStopwatch()->elapsedTime().seconds());
 }
 
 void InspectorMemoryAgent::didHandleMemoryPressure(Critical critical)
 {
     MemoryFrontendDispatcher::Severity severity = critical == Critical::Yes ? MemoryFrontendDispatcher::Severity::Critical : MemoryFrontendDispatcher::Severity::NonCritical;
-    m_frontendDispatcher->memoryPressure(m_environment.executionStopwatch().elapsedTime().seconds(), severity);
+    m_frontendDispatcher->memoryPressure(m_environment.executionStopwatch()->elapsedTime().seconds(), severity);
 }
 
 void InspectorMemoryAgent::collectSample(const ResourceUsageData& data)
@@ -157,7 +154,7 @@ void InspectorMemoryAgent::collectSample(const ResourceUsageData& data)
     categories->addItem(WTFMove(otherCategory));
 
     auto event = Protocol::Memory::Event::create()
-        .setTimestamp(m_environment.executionStopwatch().elapsedTimeSince(data.timestamp).seconds())
+        .setTimestamp(m_environment.executionStopwatch()->elapsedTimeSince(data.timestamp).seconds())
         .setCategories(WTFMove(categories))
         .release();
 

@@ -31,7 +31,7 @@
 
 #pragma once
 
-#if ENABLE(VIDEO)
+#if ENABLE(VIDEO_TRACK)
 
 #include "ContextDestructionObserver.h"
 #include "FloatPoint.h"

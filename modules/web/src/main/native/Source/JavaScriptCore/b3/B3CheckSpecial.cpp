@@ -28,6 +28,7 @@
 
 #if ENABLE(B3_JIT)
 
+#include "AirCode.h"
 #include "AirGenerationContext.h"
 #include "AirInstInlines.h"
 #include "B3StackmapGenerationParams.h"

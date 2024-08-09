@@ -34,7 +34,7 @@
 
 #if USE(CFURLCONNECTION)
 #include "ResourceHandleCFURLConnectionDelegate.h"
-#include <pal/spi/win/CFNetworkSPIWin.h>
+#include <pal/spi/cf/CFNetworkSPI.h>
 #endif
 
 #if USE(CURL)
@@ -84,7 +84,7 @@ public:
     {
         const URL& url = m_firstRequest.url();
         m_user = url.user();
-        m_password = url.password();
+        m_pass = url.pass();
         m_firstRequest.removeCredentials();
     }
 
@@ -100,7 +100,7 @@ public:
 
     // Suggested credentials for the current redirection step.
     String m_user;
-    String m_password;
+    String m_pass;
 
     Credential m_initialCredential;
 

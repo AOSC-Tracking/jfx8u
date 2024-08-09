@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2011-2020 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -25,15 +25,12 @@
 
 #pragma once
 
-namespace WTF {
-
-#if HAVE(CPU_TRANSLATION_CAPABILITY)
-WTF_EXPORT_PRIVATE bool isX86BinaryRunningOnARM();
-#else
-inline bool isX86BinaryRunningOnARM()
-{
-    return false;
-}
+#if USE(CG)
+#include "ImageBufferDataCG.h"
+#elif USE(DIRECT2D)
+#include "ImageBufferDataDirect2D.h"
+#elif USE(CAIRO)
+#include "ImageBufferDataCairo.h"
+#elif PLATFORM(JAVA)
+#include "ImageBufferDataJava.h"
 #endif
-
-}

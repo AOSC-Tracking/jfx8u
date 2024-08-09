@@ -19,24 +19,22 @@
 
 #pragma once
 
-#include "PluginData.h"
+#include "FrameDestructionObserver.h"
+#include "DOMMimeType.h"
 #include "ScriptWrappable.h"
 #include <wtf/RefCounted.h>
 #include <wtf/RefPtr.h>
-#include <wtf/WeakPtr.h>
 
 namespace WebCore {
 
-class DOMMimeType;
-class Navigator;
+class Plugin;
+class PluginData;
 
-class DOMPlugin final : public ScriptWrappable, public RefCounted<DOMPlugin>, public CanMakeWeakPtr<DOMPlugin> {
+class DOMPlugin final : public ScriptWrappable, public RefCounted<DOMPlugin>, public FrameDestructionObserver {
     WTF_MAKE_ISO_ALLOCATED(DOMPlugin);
 public:
-    static Ref<DOMPlugin> create(Navigator&, const PluginInfo&);
+    static Ref<DOMPlugin> create(PluginData* pluginData, Frame* frame, PluginInfo pluginInfo) { return adoptRef(*new DOMPlugin(pluginData, frame, WTFMove(pluginInfo))); }
     ~DOMPlugin();
-
-    const PluginInfo& info() const { return m_info; }
 
     String name() const;
     String filename() const;
@@ -48,16 +46,10 @@ public:
     RefPtr<DOMMimeType> namedItem(const AtomString& propertyName);
     Vector<AtomString> supportedPropertyNames();
 
-    const Vector<Ref<DOMMimeType>>& mimeTypes() const { return m_mimeTypes; }
-
-    Navigator* navigator() { return m_navigator.get(); }
-
 private:
-    DOMPlugin(Navigator&, const PluginInfo&);
-
-    WeakPtr<Navigator> m_navigator;
-    PluginInfo m_info;
-    Vector<Ref<DOMMimeType>> m_mimeTypes;
+    DOMPlugin(PluginData*, Frame*, PluginInfo);
+    RefPtr<PluginData> m_pluginData;
+    PluginInfo m_pluginInfo;
 };
 
 } // namespace WebCore

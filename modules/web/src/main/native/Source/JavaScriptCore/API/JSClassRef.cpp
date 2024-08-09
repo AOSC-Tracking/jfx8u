@@ -27,17 +27,22 @@
 #include "JSClassRef.h"
 
 #include "APICast.h"
+#include "Identifier.h"
 #include "InitializeThreading.h"
-#include "JSCInlines.h"
 #include "JSCallbackObject.h"
+#include "JSGlobalObject.h"
+#include "JSObjectRef.h"
+#include "ObjectPrototype.h"
+#include "JSCInlines.h"
+#include <wtf/text/StringHash.h>
 
 using namespace JSC;
 
-const JSClassDefinition kJSClassDefinitionEmpty = { 0, 0, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr };
+const JSClassDefinition kJSClassDefinitionEmpty = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 
 OpaqueJSClass::OpaqueJSClass(const JSClassDefinition* definition, OpaqueJSClass* protoClass)
     : parentClass(definition->parentClass)
-    , prototypeClass(nullptr)
+    , prototypeClass(0)
     , initialize(definition->initialize)
     , finalize(definition->finalize)
     , hasProperty(definition->hasProperty)
@@ -51,7 +56,7 @@ OpaqueJSClass::OpaqueJSClass(const JSClassDefinition* definition, OpaqueJSClass*
     , convertToType(definition->convertToType)
     , m_className(String::fromUTF8(definition->className))
 {
-    JSC::initialize();
+    initializeThreading();
 
     if (const JSStaticValue* staticValue = definition->staticValues) {
         m_staticValues = makeUnique<OpaqueJSClassStaticValuesTable>();
@@ -102,7 +107,7 @@ OpaqueJSClass::~OpaqueJSClass()
 
 Ref<OpaqueJSClass> OpaqueJSClass::createNoAutomaticPrototype(const JSClassDefinition* definition)
 {
-    return adoptRef(*new OpaqueJSClass(definition, nullptr));
+    return adoptRef(*new OpaqueJSClass(definition, 0));
 }
 
 Ref<OpaqueJSClass> OpaqueJSClass::create(const JSClassDefinition* clientDefinition)
@@ -110,12 +115,12 @@ Ref<OpaqueJSClass> OpaqueJSClass::create(const JSClassDefinition* clientDefiniti
     JSClassDefinition definition = *clientDefinition; // Avoid modifying client copy.
 
     JSClassDefinition protoDefinition = kJSClassDefinitionEmpty;
-    protoDefinition.finalize = nullptr;
+    protoDefinition.finalize = 0;
     std::swap(definition.staticFunctions, protoDefinition.staticFunctions); // Move static functions to the prototype.
 
     // We are supposed to use JSClassRetain/Release but since we know that we currently have
     // the only reference to this class object we cheat and use a RefPtr instead.
-    RefPtr<OpaqueJSClass> protoClass = adoptRef(new OpaqueJSClass(&protoDefinition, nullptr));
+    RefPtr<OpaqueJSClass> protoClass = adoptRef(new OpaqueJSClass(&protoDefinition, 0));
     return adoptRef(*new OpaqueJSClass(&definition, protoClass.get()));
 }
 
@@ -177,7 +182,7 @@ JSObject* OpaqueJSClass::prototype(JSGlobalObject* globalObject)
      */
 
     if (!prototypeClass)
-        return nullptr;
+        return 0;
 
     OpaqueJSClassContextData& jsClassData = contextData(globalObject);
 

@@ -188,16 +188,8 @@ unsigned FrameTree::scopedChildCount() const
 unsigned FrameTree::childCount() const
 {
     unsigned count = 0;
-    for (auto* child = firstChild(); child; child = child->tree().nextSibling())
+    for (Frame* result = firstChild(); result; result = result->tree().nextSibling())
         ++count;
-    return count;
-}
-
-unsigned FrameTree::descendantCount() const
-{
-    unsigned count = 0;
-    for (auto* child = firstChild(); child; child = child->tree().nextSibling())
-        count += 1 + child->tree().descendantCount();
     return count;
 }
 

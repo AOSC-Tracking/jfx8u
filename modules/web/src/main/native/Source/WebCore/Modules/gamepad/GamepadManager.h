@@ -44,9 +44,9 @@ class GamepadManager : public GamepadProviderClient {
 public:
     static GamepadManager& singleton();
 
-    void platformGamepadConnected(PlatformGamepad&, EventMakesGamepadsVisible) final;
+    void platformGamepadConnected(PlatformGamepad&) final;
     void platformGamepadDisconnected(PlatformGamepad&) final;
-    void platformGamepadInputActivity(EventMakesGamepadsVisible) final;
+    void platformGamepadInputActivity(bool shouldMakeGamepadVisible) final;
 
     void registerNavigator(NavigatorGamepad*);
     void unregisterNavigator(NavigatorGamepad*);

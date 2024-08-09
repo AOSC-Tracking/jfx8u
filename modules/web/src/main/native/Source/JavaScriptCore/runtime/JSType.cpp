@@ -30,6 +30,8 @@
 
 namespace WTF {
 
+class PrintStream;
+
 #define CASE(__type) \
     case JSC::__type: \
         out.print(#__type); \
@@ -41,7 +43,7 @@ void printInternal(PrintStream& out, JSC::JSType type)
     CASE(CellType)
     CASE(StringType)
     CASE(SymbolType)
-    CASE(HeapBigIntType)
+    CASE(BigIntType)
     CASE(CustomGetterSetterType)
     CASE(APIValueWrapperType)
     CASE(NativeExecutableType)
@@ -64,7 +66,6 @@ void printInternal(PrintStream& out, JSC::JSType type)
     CASE(JSCalleeType)
     CASE(JSFunctionType)
     CASE(InternalFunctionType)
-    CASE(NullSetterFunctionType)
     CASE(NumberObjectType)
     CASE(ErrorInstanceType)
     CASE(PureForwardingProxyType)
@@ -99,8 +100,6 @@ void printInternal(PrintStream& out, JSC::JSType type)
     CASE(JSGeneratorType)
     CASE(JSAsyncGeneratorType)
     CASE(JSArrayIteratorType)
-    CASE(JSMapIteratorType)
-    CASE(JSSetIteratorType)
     CASE(JSStringIteratorType)
     CASE(JSPromiseType)
     CASE(JSMapType)

@@ -27,8 +27,7 @@ enum TextTrackMode { "disabled", "hidden", "showing" };
 enum TextTrackKind { "subtitles", "captions", "descriptions", "chapters", "metadata", "forced" };
 
 [
-    Conditional=VIDEO,
-    ExportToWrappedFunction,
+    Conditional=VIDEO_TRACK,
     GenerateIsReachable=ImplElementRoot,
     JSCustomMarkFunction,
     SkipVTableValidation,
@@ -50,6 +49,7 @@ enum TextTrackKind { "subtitles", "captions", "descriptions", "chapters", "metad
     attribute EventHandler oncuechange;
 
     readonly attribute VTTRegionList regions;
-    void addRegion(VTTRegion region);
-    [MayThrowException] void removeRegion(VTTRegion region);
+    // FIXME: region parameter should not be nullable in addRegion and removeRegion.
+    void addRegion(VTTRegion? region);
+    [MayThrowException] void removeRegion(VTTRegion? region);
 };

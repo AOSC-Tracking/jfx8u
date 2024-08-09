@@ -49,7 +49,7 @@ public:
     template<typename Type>
     static void ensureHeap(api::IsoHeap<Type>&);
 
-    BEXPORT static void scavenge();
+    static void scavenge();
 
     template<typename Type>
     static void scavenge(api::IsoHeap<Type>&);

@@ -67,15 +67,20 @@ public:
     static void appendCharactersReplacingEntities(StringBuilder&, const String&, unsigned, unsigned, EntityMask);
 
 protected:
-    unsigned length() const { return m_markup.length(); }
-    bool isAllASCII() const { return m_markup.isAllASCII(); }
+    static size_t totalLength(const Vector<String>&);
+    size_t length() const { return m_markup.length(); }
 
-    StringBuilder takeMarkup();
+    void concatenateMarkup(StringBuilder&);
 
-    template<typename ...StringTypes> void append(StringTypes&&... strings) { m_markup.append(std::forward<StringTypes>(strings)...); }
+    void appendString(const String&);
+    void appendStringView(StringView);
 
     void startAppendingNode(const Node&, Namespaces* = nullptr);
-    void endAppendingNode(const Node&);
+    void endAppendingNode(const Node& node)
+    {
+        if (is<Element>(node))
+            appendEndTag(m_markup, downcast<Element>(node));
+    }
 
     virtual void appendStartTag(StringBuilder&, const Element&, Namespaces*);
     virtual void appendEndTag(StringBuilder&, const Element&);
@@ -86,16 +91,23 @@ protected:
     void appendCloseTag(StringBuilder&, const Element&);
 
     void appendNonElementNode(StringBuilder&, const Node&, Namespaces*);
+    void appendEndMarkup(StringBuilder&, const Element&);
 
-    static void appendAttributeValue(StringBuilder&, const String&, bool isSerializingHTML);
+    void appendAttributeValue(StringBuilder&, const String&, bool isSerializingHTML);
+    void appendNamespace(StringBuilder&, const AtomString& prefix, const AtomString& namespaceURI, Namespaces&, bool allowEmptyDefaultNS = false);
+    void appendXMLDeclaration(StringBuilder&, const Document&);
+    void appendDocumentType(StringBuilder&, const DocumentType&);
+    void appendProcessingInstruction(StringBuilder&, const String& target, const String& data);
     void appendAttribute(StringBuilder&, const Element&, const Attribute&, Namespaces*);
+    void appendCDATASection(StringBuilder&, const String&);
 
+    bool shouldAddNamespaceElement(const Element&);
+    bool shouldAddNamespaceAttribute(const Attribute&, Namespaces&);
     EntityMask entityMaskForText(const Text&) const;
 
     Vector<Node*>* const m_nodes;
 
 private:
-    void appendNamespace(StringBuilder&, const AtomString& prefix, const AtomString& namespaceURI, Namespaces&, bool allowEmptyDefaultNS = false);
     String resolveURLIfNeeded(const Element&, const String&) const;
     void appendQuotedURLAttributeValue(StringBuilder&, const Element&, const Attribute&);
     void serializeNodesWithNamespaces(Node& targetNode, SerializedNodes, const Namespaces*, Vector<QualifiedName>* tagNamesToSkip);
@@ -105,14 +117,8 @@ private:
 
     StringBuilder m_markup;
     const ResolveURLs m_resolveURLs;
-    const SerializationSyntax m_serializationSyntax;
+    SerializationSyntax m_serializationSyntax;
     unsigned m_prefixLevel { 0 };
 };
-
-inline void MarkupAccumulator::endAppendingNode(const Node& node)
-{
-    if (is<Element>(node))
-        appendEndTag(m_markup, downcast<Element>(node));
-}
 
 } // namespace WebCore

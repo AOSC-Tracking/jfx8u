@@ -27,7 +27,6 @@
 
 #include "AuthenticationClient.h"
 #include "StoredCredentialsPolicy.h"
-#include <wtf/Box.h>
 #include <wtf/MonotonicTime.h>
 #include <wtf/RefCounted.h>
 #include <wtf/RefPtr.h>
@@ -52,6 +51,9 @@ OBJC_CLASS NSDictionary;
 OBJC_CLASS NSError;
 OBJC_CLASS NSURLConnection;
 OBJC_CLASS NSURLRequest;
+#ifndef __OBJC__
+typedef struct objc_object *id;
+#endif
 #endif
 
 #if USE(CFURLCONNECTION)
@@ -129,9 +131,9 @@ public:
 
 #if PLATFORM(COCOA)
 #if USE(CFURLCONNECTION)
-    static Box<NetworkLoadMetrics> getConnectionTimingData(CFURLConnectionRef);
+    static void getConnectionTimingData(CFURLConnectionRef, NetworkLoadMetrics&);
 #else
-    static Box<NetworkLoadMetrics> getConnectionTimingData(NSURLConnection *);
+    static void getConnectionTimingData(NSURLConnection *, NetworkLoadMetrics&);
 #endif
 #endif
 

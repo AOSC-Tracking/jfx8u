@@ -68,7 +68,7 @@ html
 i interfaceName=HTMLElement
 iframe interfaceName=HTMLIFrameElement
 image interfaceName=HTMLUnknownElement
-img interfaceName=HTMLImageElement, constructorNeedsFormElement
+img interfaceName=HTMLImageElement, constructorNeedsFormElement, constructorNeedsCreatedByParser
 input constructorNeedsFormElement, constructorNeedsCreatedByParser
 ins interfaceName=HTMLModElement
 kbd interfaceName=HTMLElement
@@ -135,7 +135,7 @@ thead interfaceName=HTMLTableSectionElement
 time
 title
 tr interfaceName=HTMLTableRowElement
-track wrapperOnlyIfMediaIsAvailable, conditional=VIDEO
+track wrapperOnlyIfMediaIsAvailable, conditional=VIDEO_TRACK
 tt interfaceName=HTMLElement
 u interfaceName=HTMLElement
 ul interfaceName=HTMLUListElement

@@ -71,7 +71,7 @@ public:
         return OBJECT_OFFSETOF(Symbol, m_privateName);
     }
 
-private:
+protected:
     static void destroy(JSCell*);
 
     Symbol(VM&);

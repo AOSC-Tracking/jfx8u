@@ -92,73 +92,6 @@ namespace JSC {
         unsigned m_padding;
     };
 
-    class Variable {
-    public:
-        enum VariableKind { NormalVariable, SpecialVariable };
-
-        Variable() = default;
-
-        Variable(const Identifier& ident)
-            : m_ident(ident)
-            , m_local(nullptr)
-            , m_attributes(0)
-            , m_kind(NormalVariable) // This is somewhat meaningless here for this kind of Variable.
-            , m_symbolTableConstantIndex(0) // This is meaningless here for this kind of Variable.
-            , m_isLexicallyScoped(false)
-        {
-        }
-
-        Variable(const Identifier& ident, VarOffset offset, RegisterID* local, unsigned attributes, VariableKind kind, int symbolTableConstantIndex, bool isLexicallyScoped)
-            : m_ident(ident)
-            , m_offset(offset)
-            , m_local(local)
-            , m_attributes(attributes)
-            , m_kind(kind)
-            , m_symbolTableConstantIndex(symbolTableConstantIndex)
-            , m_isLexicallyScoped(isLexicallyScoped)
-        {
-        }
-
-        // If it's unset, then it is a non-locally-scoped variable. If it is set, then it could be
-        // a stack variable, a scoped variable in a local scope, or a variable captured in the
-        // direct arguments object.
-        bool isResolved() const { return !!m_offset; }
-        int symbolTableConstantIndex() const { ASSERT(isResolved() && !isSpecial()); return m_symbolTableConstantIndex; }
-
-        const Identifier& ident() const { return m_ident; }
-
-        VarOffset offset() const { return m_offset; }
-        bool isLocal() const { return m_offset.isStack(); }
-        RegisterID* local() const { return m_local; }
-
-        bool isReadOnly() const { return m_attributes & PropertyAttribute::ReadOnly; }
-        bool isSpecial() const { return m_kind != NormalVariable; }
-        bool isConst() const { return isReadOnly() && m_isLexicallyScoped; }
-        void setIsReadOnly() { m_attributes |= PropertyAttribute::ReadOnly; }
-
-        void dump(PrintStream&) const;
-
-        bool operator==(const Variable& other) const
-        {
-            return m_ident == other.m_ident
-                && m_offset == other.m_offset
-                && m_local == other.m_local
-                && m_attributes == other.m_attributes
-                && m_kind == other.m_kind
-                && m_symbolTableConstantIndex == other.m_symbolTableConstantIndex
-                && m_isLexicallyScoped == other.m_isLexicallyScoped;
-        }
-
-    private:
-        Identifier m_ident;
-        VarOffset m_offset { };
-        RegisterID* m_local { nullptr };
-        unsigned m_attributes { 0 };
-        VariableKind m_kind { NormalVariable };
-        int m_symbolTableConstantIndex { 0 }; // This is meaningless here for this default NormalVariable kind of Variable.
-        bool m_isLexicallyScoped { false };
-    };
-
     // https://tc39.github.io/ecma262/#sec-completion-record-specification-type
     //
     // For the Break and Continue cases, instead of using the Break and Continue enum values
@@ -305,36 +238,22 @@ namespace JSC {
         using Base = ForInContext;
     public:
         using GetInst = std::tuple<unsigned, int>;
-        using InInst = GetInst;
-        using HasOwnPropertyJumpInst = std::tuple<unsigned, unsigned>;
 
-        StructureForInContext(RegisterID* localRegister, RegisterID* indexRegister, RegisterID* propertyRegister, RegisterID* enumeratorRegister, Optional<Variable> baseVariable, unsigned bodyBytecodeStartOffset)
+        StructureForInContext(RegisterID* localRegister, RegisterID* indexRegister, RegisterID* propertyRegister, RegisterID* enumeratorRegister, unsigned bodyBytecodeStartOffset)
             : ForInContext(localRegister, Type::StructureForIn, bodyBytecodeStartOffset)
             , m_indexRegister(indexRegister)
             , m_propertyRegister(propertyRegister)
             , m_enumeratorRegister(enumeratorRegister)
-            , m_baseVariable(baseVariable)
         {
         }
 
         RegisterID* index() const { return m_indexRegister.get(); }
         RegisterID* property() const { return m_propertyRegister.get(); }
         RegisterID* enumerator() const { return m_enumeratorRegister.get(); }
-        const Optional<Variable>& baseVariable() const { return m_baseVariable; }
 
         void addGetInst(unsigned instIndex, int propertyRegIndex)
         {
             m_getInsts.append(GetInst { instIndex, propertyRegIndex });
-        }
-
-        void addInInst(unsigned instIndex, int propertyRegIndex)
-        {
-            m_inInsts.append(InInst { instIndex, propertyRegIndex });
-        }
-
-        void addHasOwnPropertyJump(unsigned branchInstIndex, unsigned genericPathTarget)
-        {
-            m_hasOwnPropertyJumpInsts.append(HasOwnPropertyJumpInst { branchInstIndex, genericPathTarget });
         }
 
         void finalize(BytecodeGenerator&, UnlinkedCodeBlockGenerator*, unsigned bodyBytecodeEndOffset);
@@ -343,10 +262,7 @@ namespace JSC {
         RefPtr<RegisterID> m_indexRegister;
         RefPtr<RegisterID> m_propertyRegister;
         RefPtr<RegisterID> m_enumeratorRegister;
-        Optional<Variable> m_baseVariable;
         Vector<GetInst> m_getInsts;
-        Vector<InInst> m_inInsts;
-        Vector<HasOwnPropertyJumpInst> m_hasOwnPropertyJumpInsts;
     };
 
     class IndexedForInContext : public ForInContext {
@@ -378,6 +294,70 @@ namespace JSC {
         TryData* tryData;
     };
 
+    class Variable {
+    public:
+        enum VariableKind { NormalVariable, SpecialVariable };
+
+        Variable()
+            : m_offset()
+            , m_local(nullptr)
+            , m_attributes(0)
+            , m_kind(NormalVariable)
+            , m_symbolTableConstantIndex(0) // This is meaningless here for this kind of Variable.
+            , m_isLexicallyScoped(false)
+        {
+        }
+
+        Variable(const Identifier& ident)
+            : m_ident(ident)
+            , m_local(nullptr)
+            , m_attributes(0)
+            , m_kind(NormalVariable) // This is somewhat meaningless here for this kind of Variable.
+            , m_symbolTableConstantIndex(0) // This is meaningless here for this kind of Variable.
+            , m_isLexicallyScoped(false)
+        {
+        }
+
+        Variable(const Identifier& ident, VarOffset offset, RegisterID* local, unsigned attributes, VariableKind kind, int symbolTableConstantIndex, bool isLexicallyScoped)
+            : m_ident(ident)
+            , m_offset(offset)
+            , m_local(local)
+            , m_attributes(attributes)
+            , m_kind(kind)
+            , m_symbolTableConstantIndex(symbolTableConstantIndex)
+            , m_isLexicallyScoped(isLexicallyScoped)
+        {
+        }
+
+        // If it's unset, then it is a non-locally-scoped variable. If it is set, then it could be
+        // a stack variable, a scoped variable in a local scope, or a variable captured in the
+        // direct arguments object.
+        bool isResolved() const { return !!m_offset; }
+        int symbolTableConstantIndex() const { ASSERT(isResolved() && !isSpecial()); return m_symbolTableConstantIndex; }
+
+        const Identifier& ident() const { return m_ident; }
+
+        VarOffset offset() const { return m_offset; }
+        bool isLocal() const { return m_offset.isStack(); }
+        RegisterID* local() const { return m_local; }
+
+        bool isReadOnly() const { return m_attributes & PropertyAttribute::ReadOnly; }
+        bool isSpecial() const { return m_kind != NormalVariable; }
+        bool isConst() const { return isReadOnly() && m_isLexicallyScoped; }
+        void setIsReadOnly() { m_attributes |= PropertyAttribute::ReadOnly; }
+
+        void dump(PrintStream&) const;
+
+    private:
+        Identifier m_ident;
+        VarOffset m_offset;
+        RegisterID* m_local;
+        unsigned m_attributes;
+        VariableKind m_kind;
+        int m_symbolTableConstantIndex;
+        bool m_isLexicallyScoped;
+    };
+
     struct TryRange {
         Ref<Label> start;
         Ref<Label> end;
@@ -400,18 +380,13 @@ namespace JSC {
         friend class FinallyContext;
         friend class IndexedForInContext;
         friend class StructureForInContext;
-        friend class StrictModeScope;
-
-        template <typename OldOpType, typename TupleType>
-        friend void rewriteOp(BytecodeGenerator&, TupleType&);
-
     public:
         typedef DeclarationStacks::FunctionStack FunctionStack;
 
-        BytecodeGenerator(VM&, ProgramNode*, UnlinkedProgramCodeBlock*, OptionSet<CodeGenerationMode>, const VariableEnvironment*, ECMAMode);
-        BytecodeGenerator(VM&, FunctionNode*, UnlinkedFunctionCodeBlock*, OptionSet<CodeGenerationMode>, const VariableEnvironment*, ECMAMode);
-        BytecodeGenerator(VM&, EvalNode*, UnlinkedEvalCodeBlock*, OptionSet<CodeGenerationMode>, const VariableEnvironment*, ECMAMode);
-        BytecodeGenerator(VM&, ModuleProgramNode*, UnlinkedModuleProgramCodeBlock*, OptionSet<CodeGenerationMode>, const VariableEnvironment*, ECMAMode);
+        BytecodeGenerator(VM&, ProgramNode*, UnlinkedProgramCodeBlock*, OptionSet<CodeGenerationMode>, const VariableEnvironment*);
+        BytecodeGenerator(VM&, FunctionNode*, UnlinkedFunctionCodeBlock*, OptionSet<CodeGenerationMode>, const VariableEnvironment*);
+        BytecodeGenerator(VM&, EvalNode*, UnlinkedEvalCodeBlock*, OptionSet<CodeGenerationMode>, const VariableEnvironment*);
+        BytecodeGenerator(VM&, ModuleProgramNode*, UnlinkedModuleProgramCodeBlock*, OptionSet<CodeGenerationMode>, const VariableEnvironment*);
 
         ~BytecodeGenerator();
 
@@ -431,14 +406,14 @@ namespace JSC {
         NeedsClassFieldInitializer needsClassFieldInitializer() const { return m_codeBlock->needsClassFieldInitializer(); }
 
         template<typename Node, typename UnlinkedCodeBlock>
-        static ParserError generate(VM& vm, Node* node, const SourceCode& sourceCode, UnlinkedCodeBlock* unlinkedCodeBlock, OptionSet<CodeGenerationMode> codeGenerationMode, const VariableEnvironment* environment, ECMAMode ecmaMode)
+        static ParserError generate(VM& vm, Node* node, const SourceCode& sourceCode, UnlinkedCodeBlock* unlinkedCodeBlock, OptionSet<CodeGenerationMode> codeGenerationMode, const VariableEnvironment* environment)
         {
             MonotonicTime before;
             if (UNLIKELY(Options::reportBytecodeCompileTimes()))
                 before = MonotonicTime::now();
 
             DeferGC deferGC(vm.heap);
-            auto bytecodeGenerator = makeUnique<BytecodeGenerator>(vm, node, unlinkedCodeBlock, codeGenerationMode, environment, ecmaMode);
+            auto bytecodeGenerator = makeUnique<BytecodeGenerator>(vm, node, unlinkedCodeBlock, codeGenerationMode, environment);
             auto result = bytecodeGenerator->generate();
 
             if (UNLIKELY(Options::reportBytecodeCompileTimes())) {
@@ -495,7 +470,7 @@ namespace JSC {
         }
 
         // Returns the place to write the final output of an operation.
-        RegisterID* finalDestination(RegisterID* originalDst, RegisterID* tempDst = nullptr)
+        RegisterID* finalDestination(RegisterID* originalDst, RegisterID* tempDst = 0)
         {
             if (originalDst && originalDst != ignoredResult())
                 return originalDst;
@@ -509,7 +484,7 @@ namespace JSC {
         {
             if (dst && dst != ignoredResult())
                 return dst->isTemporary() ? dst : newTemporary();
-            return nullptr;
+            return 0;
         }
 
         // Moves src to dst if dst is not null and is different from src, otherwise just returns src.
@@ -518,7 +493,7 @@ namespace JSC {
             return dst == ignoredResult() ? nullptr : (dst && dst != src) ? emitMove(dst, src) : src;
         }
 
-        Ref<LabelScope> newLabelScope(LabelScope::Type, const Identifier* = nullptr);
+        Ref<LabelScope> newLabelScope(LabelScope::Type, const Identifier* = 0);
 
         void emitNode(RegisterID* dst, StatementNode* n)
         {
@@ -678,8 +653,6 @@ namespace JSC {
 
         void hoistSloppyModeFunctionIfNecessary(const Identifier& functionName);
 
-        StructureForInContext* findStructureForInContext(RegisterID* property);
-
     private:
         void emitTypeProfilerExpressionInfo(const JSTextPosition& startDivot, const JSTextPosition& endDivot);
     public:
@@ -780,9 +753,8 @@ namespace JSC {
         RegisterID* emitNewMethodDefinition(RegisterID* dst, MethodDefinitionNode*);
         RegisterID* emitNewRegExp(RegisterID* dst, RegExp*);
 
-        bool shouldSetFunctionName(ExpressionNode*);
-        void emitSetFunctionName(RegisterID* value, RegisterID* name);
-        void emitSetFunctionName(RegisterID* value, const Identifier&);
+        void emitSetFunctionNameIfNeeded(ExpressionNode* valueNode, RegisterID* value, RegisterID* name);
+        void emitSetFunctionNameIfNeeded(ExpressionNode* valueNode, RegisterID* value, const Identifier&);
 
         RegisterID* moveLinkTimeConstant(RegisterID* dst, LinkTimeConstant);
         RegisterID* moveEmptyValue(RegisterID* dst);
@@ -811,17 +783,13 @@ namespace JSC {
         RegisterID* emitDeleteById(RegisterID* dst, RegisterID* base, const Identifier&);
         RegisterID* emitGetByVal(RegisterID* dst, RegisterID* base, RegisterID* property);
         RegisterID* emitGetByVal(RegisterID* dst, RegisterID* base, RegisterID* thisValue, RegisterID* property);
-        RegisterID* emitGetPrototypeOf(RegisterID* dst, RegisterID* value);
         RegisterID* emitPutByVal(RegisterID* base, RegisterID* property, RegisterID* value);
         RegisterID* emitPutByVal(RegisterID* base, RegisterID* thisValue, RegisterID* property, RegisterID* value);
-        RegisterID* emitDirectGetByVal(RegisterID* dst, RegisterID* base, RegisterID* property);
         RegisterID* emitDirectPutByVal(RegisterID* base, RegisterID* property, RegisterID* value);
         RegisterID* emitDeleteByVal(RegisterID* dst, RegisterID* base, RegisterID* property);
 
         RegisterID* emitGetInternalField(RegisterID* dst, RegisterID* base, unsigned index);
         RegisterID* emitPutInternalField(RegisterID* base, unsigned index, RegisterID* value);
-        RegisterID* emitDefinePrivateField(RegisterID* base, RegisterID* property, RegisterID* value);
-        RegisterID* emitPrivateFieldPut(RegisterID* base, RegisterID* property, RegisterID* value);
 
         void emitSuperSamplerBegin();
         void emitSuperSamplerEnd();
@@ -858,7 +826,6 @@ namespace JSC {
         void emitCallDefineProperty(RegisterID* newObj, RegisterID* propertyNameRegister,
             RegisterID* valueRegister, RegisterID* getterRegister, RegisterID* setterRegister, unsigned options, const JSTextPosition&);
 
-        void emitGenericEnumeration(ThrowableExpressionData* enumerationNode, ExpressionNode* subjectNode, const ScopedLambda<void(BytecodeGenerator&, RegisterID*)>& callBack, ForOfNode* = nullptr, RegisterID* forLoopSymbolTable = nullptr);
         void emitEnumeration(ThrowableExpressionData* enumerationNode, ExpressionNode* subjectNode, const ScopedLambda<void(BytecodeGenerator&, RegisterID*)>& callBack, ForOfNode* = nullptr, RegisterID* forLoopSymbolTable = nullptr);
 
         RegisterID* emitGetTemplateObject(RegisterID* dst, TaggedTemplateNode*);
@@ -889,8 +856,6 @@ namespace JSC {
         void emitJumpIfFalse(RegisterID* cond, Label& target);
         void emitJumpIfNotFunctionCall(RegisterID* cond, Label& target);
         void emitJumpIfNotFunctionApply(RegisterID* cond, Label& target);
-        unsigned emitWideJumpIfNotFunctionHasOwnProperty(RegisterID* cond, Label& target);
-        void recordHasOwnStructurePropertyInForInLoop(StructureForInContext&, unsigned branchOffset, Label& genericPath);
 
         template<typename BinOp, typename JmpOp>
         bool fuseCompareAndJump(RegisterID* cond, Label& target, bool swapOperands = false);
@@ -903,7 +868,6 @@ namespace JSC {
 
         RegisterID* emitHasIndexedProperty(RegisterID* dst, RegisterID* base, RegisterID* propertyName);
         RegisterID* emitHasStructureProperty(RegisterID* dst, RegisterID* base, RegisterID* propertyName, RegisterID* enumerator);
-        RegisterID* emitHasOwnStructureProperty(RegisterID* dst, RegisterID* base, RegisterID* propertyName, RegisterID* enumerator);
         RegisterID* emitHasGenericProperty(RegisterID* dst, RegisterID* base, RegisterID* propertyName);
         RegisterID* emitGetPropertyEnumerator(RegisterID* dst, RegisterID* base);
         RegisterID* emitGetEnumerableLength(RegisterID* dst, RegisterID* base);
@@ -924,27 +888,17 @@ namespace JSC {
         RegisterID* emitIsSet(RegisterID* dst, RegisterID* src) { return emitIsCellWithType(dst, src, JSSetType); }
         RegisterID* emitIsStringIterator(RegisterID* dst, RegisterID* src) { return emitIsCellWithType(dst, src, JSStringIteratorType); }
         RegisterID* emitIsArrayIterator(RegisterID* dst, RegisterID* src) { return emitIsCellWithType(dst, src, JSArrayIteratorType); }
-        RegisterID* emitIsMapIterator(RegisterID* dst, RegisterID* src) { return emitIsCellWithType(dst, src, JSMapIteratorType); }
-        RegisterID* emitIsSetIterator(RegisterID* dst, RegisterID* src) { return emitIsCellWithType(dst, src, JSSetIteratorType); }
         RegisterID* emitIsObject(RegisterID* dst, RegisterID* src);
-        RegisterID* emitIsConstructor(RegisterID* dst, RegisterID* src);
         RegisterID* emitIsNumber(RegisterID* dst, RegisterID* src);
-        RegisterID* emitIsNull(RegisterID* dst, RegisterID* src) { return emitEqualityOp<OpStricteq>(dst, src, emitLoad(nullptr, jsNull())); }
-        RegisterID* emitIsUndefined(RegisterID* dst, RegisterID* src) { return emitEqualityOp<OpStricteq>(dst, src, emitLoad(nullptr, jsUndefined())); }
+        RegisterID* emitIsUndefined(RegisterID* dst, RegisterID* src);
         RegisterID* emitIsUndefinedOrNull(RegisterID* dst, RegisterID* src);
         RegisterID* emitIsEmpty(RegisterID* dst, RegisterID* src);
         RegisterID* emitIsDerivedArray(RegisterID* dst, RegisterID* src) { return emitIsCellWithType(dst, src, DerivedArrayType); }
         void emitRequireObjectCoercible(RegisterID* value, const String& error);
 
-        void emitIteratorOpen(RegisterID* iterator, RegisterID* nextOrIndex, RegisterID* symbolIterator, CallArguments& iterable, const ThrowableExpressionData*);
-        void emitIteratorNext(RegisterID* done, RegisterID* value, RegisterID* iterable, RegisterID* nextOrIndex, CallArguments& iterator, const ThrowableExpressionData*);
-
-        RegisterID* emitGetGenericIterator(RegisterID*, ThrowableExpressionData*);
-        RegisterID* emitGetAsyncIterator(RegisterID*, ThrowableExpressionData*);
-
-        RegisterID* emitIteratorGenericNext(RegisterID* dst, RegisterID* nextMethod, RegisterID* iterator, const ThrowableExpressionData* node, JSC::EmitAwait = JSC::EmitAwait::No);
-        RegisterID* emitIteratorGenericNextWithValue(RegisterID* dst, RegisterID* nextMethod, RegisterID* iterator, RegisterID* value, const ThrowableExpressionData* node);
-        void emitIteratorGenericClose(RegisterID* iterator, const ThrowableExpressionData* node, EmitAwait = EmitAwait::No);
+        RegisterID* emitIteratorNext(RegisterID* dst, RegisterID* nextMethod, RegisterID* iterator, const ThrowableExpressionData* node, JSC::EmitAwait = JSC::EmitAwait::No);
+        RegisterID* emitIteratorNextWithValue(RegisterID* dst, RegisterID* nextMethod, RegisterID* iterator, RegisterID* value, const ThrowableExpressionData* node);
+        void emitIteratorClose(RegisterID* iterator, const ThrowableExpressionData* node, EmitAwait = EmitAwait::No);
 
         RegisterID* emitRestParameter(RegisterID* result, unsigned numParametersToSkip);
 
@@ -983,8 +937,8 @@ namespace JSC {
         void emitThrow(RegisterID*);
         RegisterID* emitArgumentCount(RegisterID*);
 
-        void emitThrowStaticError(ErrorTypeWithExtension, RegisterID*);
-        void emitThrowStaticError(ErrorTypeWithExtension, const Identifier& message);
+        void emitThrowStaticError(ErrorType, RegisterID*);
+        void emitThrowStaticError(ErrorType, const Identifier& message);
         void emitThrowReferenceError(const String& message);
         void emitThrowTypeError(const String& message);
         void emitThrowTypeError(const Identifier& message);
@@ -993,6 +947,9 @@ namespace JSC {
 
         void emitPushCatchScope(VariableEnvironment&);
         void emitPopCatchScope(VariableEnvironment&);
+
+        RegisterID* emitGetIterator(RegisterID*, ThrowableExpressionData*);
+        RegisterID* emitGetAsyncIterator(RegisterID*, ThrowableExpressionData*);
 
         void emitAwait(RegisterID*);
         void emitGetScope();
@@ -1022,6 +979,9 @@ namespace JSC {
         bool emitReturnViaFinallyIfNeeded(RegisterID* returnRegister);
         void emitFinallyCompletion(FinallyContext&, Label& normalCompletionLabel);
 
+        template<typename LazyNameRegisterFn>
+        void emitSetFunctionNameIfNeededImpl(ExpressionNode*, RegisterID*, const LazyNameRegisterFn&);
+
     public:
         void pushFinallyControlFlowScope(FinallyContext&);
         void popFinallyControlFlowScope();
@@ -1033,7 +993,7 @@ namespace JSC {
 
         void pushIndexedForInScope(RegisterID* local, RegisterID* index);
         void popIndexedForInScope(RegisterID* local);
-        void pushStructureForInScope(RegisterID* local, RegisterID* index, RegisterID* property, RegisterID* enumerator, Optional<Variable> base);
+        void pushStructureForInScope(RegisterID* local, RegisterID* index, RegisterID* property, RegisterID* enumerator);
         void popStructureForInScope(RegisterID* local);
 
         LabelScope* breakTarget(const Identifier&);
@@ -1061,7 +1021,7 @@ namespace JSC {
         bool shouldEmitTypeProfilerHooks() const { return m_codeGenerationMode.contains(CodeGenerationMode::TypeProfiler); }
         bool shouldEmitControlFlowProfilerHooks() const { return m_codeGenerationMode.contains(CodeGenerationMode::ControlFlowProfiler); }
 
-        ECMAMode ecmaMode() const { return m_ecmaMode; }
+        bool isStrictMode() const { return m_codeBlock->isStrictMode(); }
         void setUsesCheckpoints() { m_codeBlock->setHasCheckpoints(); }
 
         SourceParseMode parseMode() const { return m_codeBlock->parseMode(); }
@@ -1097,9 +1057,6 @@ namespace JSC {
 
         RegisterID* emitMove(RegisterID* dst, RegisterID* src);
 
-    public:
-        void disablePeepholeOptimization() { m_lastOpcodeID = op_end; }
-    private:
         bool canDoPeepholeOptimization() const { return m_lastOpcodeID != op_end; }
 
     public:
@@ -1134,7 +1091,7 @@ namespace JSC {
 
         using NumberMap = HashMap<double, JSValue>;
         using IdentifierStringMap = HashMap<UniquedStringImpl*, JSString*, IdentifierRepHash>;
-        using IdentifierBigIntMap = HashMap<BigIntMapEntry, JSValue>;
+        using IdentifierBigIntMap = HashMap<BigIntMapEntry, JSBigInt*>;
         using TemplateObjectDescriptorSet = HashSet<Ref<TemplateObjectDescriptor>>;
         using TemplateDescriptorMap = HashMap<uint64_t, JSTemplateObjectDescriptor*, WTF::IntHash<uint64_t>, WTF::UnsignedWithZeroKeyHashTraits<uint64_t>>;
 
@@ -1241,7 +1198,7 @@ namespace JSC {
             auto prevLastOpcodeID = m_lastOpcodeID;
             auto prevLastInstruction = m_lastInstruction;
             m_writer.swap(writer);
-            disablePeepholeOptimization();
+            m_lastOpcodeID = op_end;
             m_lastInstruction = m_writer.ref();
             fn();
             m_writer.swap(writer);
@@ -1342,9 +1299,8 @@ namespace JSC {
         bool m_isBuiltinFunction { false };
         bool m_usesNonStrictEval { false };
         bool m_inTailPosition { false };
+        bool m_needsToUpdateArrowFunctionContext;
         bool m_hasCachedVariablesUnderTDZ { false };
-        bool m_needsToUpdateArrowFunctionContext : 1;
-        ECMAMode m_ecmaMode;
         DerivedContextType m_derivedContextType { DerivedContextType::None };
 
         CompactVariableMap::Handle m_cachedVariablesUnderTDZ;
@@ -1356,19 +1312,6 @@ namespace JSC {
             VirtualRegister completionTypeRegister;
         };
         Vector<CatchEntry> m_exceptionHandlersToEmit;
-
-        struct {
-            JSTextPosition position;
-            DebugHookType type { DidExecuteProgram };
-        } m_lastDebugHook;
-    };
-
-    class StrictModeScope : private SetForScope<ECMAMode> {
-    public:
-        StrictModeScope(BytecodeGenerator& generator)
-            : SetForScope(generator.m_ecmaMode, ECMAMode::strict())
-        {
-        }
     };
 
 } // namespace JSC

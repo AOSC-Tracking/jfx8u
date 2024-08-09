@@ -39,7 +39,7 @@ namespace Wasm {
 class LLIntCallee;
 class EmbedderEntrypointCallee;
 
-using EmbedderEntrypointCalleeMap = HashMap<uint32_t, RefPtr<EmbedderEntrypointCallee>, DefaultHash<uint32_t>, WTF::UnsignedWithZeroKeyHashTraits<uint32_t>>;
+using EmbedderEntrypointCalleeMap = HashMap<uint32_t, RefPtr<EmbedderEntrypointCallee>, typename DefaultHash<uint32_t>::Hash, WTF::UnsignedWithZeroKeyHashTraits<uint32_t>>;
 
 class LLIntPlan final : public EntryPlan {
     using Base = EntryPlan;
@@ -66,20 +66,21 @@ public:
         return WTFMove(m_embedderCallees);
     }
 
-    bool hasWork() const final
+    bool hasWork() const override
     {
         return m_state < State::Compiled;
     }
 
-    void work(CompilationEffort) final;
+    void work(CompilationEffort) override;
 
-    bool didReceiveFunctionData(unsigned, const FunctionData&) final;
+    bool didReceiveFunctionData(unsigned, const FunctionData&) override;
+
+protected:
+    bool prepareImpl() override;
+    void compileFunction(uint32_t functionIndex) override;
+    void didCompleteCompilation(const AbstractLocker&) override;
 
 private:
-    bool prepareImpl() final;
-    void compileFunction(uint32_t functionIndex) final;
-    void didCompleteCompilation(const AbstractLocker&) final;
-
     Vector<std::unique_ptr<FunctionCodeBlock>> m_wasmInternalFunctions;
     const Ref<LLIntCallee>* m_callees { nullptr };
     Vector<Ref<LLIntCallee>> m_calleesVector;

@@ -25,13 +25,20 @@
 
 #pragma once
 
+#if ENABLE(INTL)
+
 #include "JSObject.h"
 #include <unicode/unum.h>
 #include <unicode/upluralrules.h>
+#include <unicode/uvernum.h>
+
+#define HAVE_ICU_PLURALRULES_KEYWORDS (U_ICU_VERSION_MAJOR_NUM >= 59)
+#define HAVE_ICU_PLURALRULES_WITH_FORMAT (U_ICU_VERSION_MAJOR_NUM >= 59)
 
 namespace JSC {
 
-enum class RelevantExtensionKey : uint8_t;
+class IntlPluralRulesConstructor;
+class JSBoundFunction;
 
 class IntlPluralRules final : public JSNonFinalObject {
 public:
@@ -56,18 +63,15 @@ public:
     DECLARE_INFO;
 
     void initializePluralRules(JSGlobalObject*, JSValue locales, JSValue options);
-    JSValue select(JSGlobalObject*, double value) const;
-    JSObject* resolvedOptions(JSGlobalObject*) const;
+    JSValue select(JSGlobalObject*, double value);
+    JSObject* resolvedOptions(JSGlobalObject*);
 
-private:
+protected:
     IntlPluralRules(VM&, Structure*);
     void finishCreation(VM&);
     static void visitChildren(JSCell*, SlotVisitor&);
 
-    static Vector<String> localeData(const String&, RelevantExtensionKey);
-
-    enum class Type : bool { Cardinal, Ordinal };
-
+private:
     struct UPluralRulesDeleter {
         void operator()(UPluralRules*) const;
     };
@@ -75,16 +79,19 @@ private:
         void operator()(UNumberFormat*) const;
     };
 
+    bool m_initializedPluralRules { false };
     std::unique_ptr<UPluralRules, UPluralRulesDeleter> m_pluralRules;
     std::unique_ptr<UNumberFormat, UNumberFormatDeleter> m_numberFormat;
 
     String m_locale;
+    UPluralType m_type { UPLURAL_TYPE_CARDINAL };
     unsigned m_minimumIntegerDigits { 1 };
     unsigned m_minimumFractionDigits { 0 };
     unsigned m_maximumFractionDigits { 3 };
     Optional<unsigned> m_minimumSignificantDigits;
     Optional<unsigned> m_maximumSignificantDigits;
-    Type m_type { Type::Cardinal };
 };
 
 } // namespace JSC
+
+#endif // ENABLE(INTL)

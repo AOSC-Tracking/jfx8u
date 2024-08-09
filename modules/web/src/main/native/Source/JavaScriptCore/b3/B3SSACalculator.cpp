@@ -28,7 +28,9 @@
 
 #if ENABLE(B3_JIT)
 
+#include "B3BasicBlockInlines.h"
 #include <wtf/CommaPrinter.h>
+#include <wtf/ListDump.h>
 
 namespace JSC { namespace B3 {
 

@@ -26,6 +26,7 @@
 #include "config.h"
 #include "RegExpCachedResult.h"
 
+#include "JSCInlines.h"
 #include "RegExpCache.h"
 #include "RegExpMatchesArray.h"
 

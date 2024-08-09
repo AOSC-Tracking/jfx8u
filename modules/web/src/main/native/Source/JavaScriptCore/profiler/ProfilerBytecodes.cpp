@@ -27,8 +27,9 @@
 #include "ProfilerBytecodes.h"
 
 #include "CodeBlock.h"
-#include "JSCInlines.h"
+#include "JSGlobalObject.h"
 #include "ObjectConstructor.h"
+#include "JSCInlines.h"
 #include <wtf/StringPrintStream.h>
 
 namespace JSC { namespace Profiler {

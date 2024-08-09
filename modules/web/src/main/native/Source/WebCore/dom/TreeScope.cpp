@@ -100,7 +100,7 @@ void TreeScope::setParentTreeScope(TreeScope& newParentScope)
 
 Element* TreeScope::getElementById(const AtomString& elementId) const
 {
-    if (elementId.isEmpty())
+    if (elementId.isNull())
         return nullptr;
     if (!m_elementsById)
         return nullptr;
@@ -180,7 +180,7 @@ void TreeScope::removeElementByName(const AtomStringImpl& name, Element& element
 }
 
 
-Ref<Node> TreeScope::retargetToScope(Node& node) const
+Node& TreeScope::retargetToScope(Node& node) const
 {
     auto& scope = node.treeScope();
     if (LIKELY(this == &scope || !node.isInShadowTree()))
@@ -196,8 +196,8 @@ Ref<Node> TreeScope::retargetToScope(Node& node) const
     for (auto* currentScope = this; currentScope; currentScope = currentScope->parentTreeScope())
         ancestorScopes.append(currentScope);
 
-    auto i = nodeTreeScopes.size();
-    auto j = ancestorScopes.size();
+    size_t i = nodeTreeScopes.size();
+    size_t j = ancestorScopes.size();
     while (i > 0 && j > 0 && nodeTreeScopes[i - 1] == ancestorScopes[j - 1]) {
         --i;
         --j;
@@ -207,7 +207,7 @@ Ref<Node> TreeScope::retargetToScope(Node& node) const
     if (nodeIsInOuterTreeScope)
         return node;
 
-    auto& shadowRootInLowestCommonTreeScope = downcast<ShadowRoot>(nodeTreeScopes[i - 1]->rootNode());
+    ShadowRoot& shadowRootInLowestCommonTreeScope = downcast<ShadowRoot>(nodeTreeScopes[i - 1]->rootNode());
     return *shadowRootInLowestCommonTreeScope.host();
 }
 
@@ -349,7 +349,7 @@ static Optional<LayoutPoint> absolutePointIfNotClipped(Document& document, const
     return WTF::nullopt;
 }
 
-RefPtr<Node> TreeScope::nodeFromPoint(const LayoutPoint& clientPoint, LayoutPoint* localPoint)
+Node* TreeScope::nodeFromPoint(const LayoutPoint& clientPoint, LayoutPoint* localPoint)
 {
     auto absolutePoint = absolutePointIfNotClipped(documentScope(), clientPoint);
     if (!absolutePoint)
@@ -368,19 +368,19 @@ RefPtr<Element> TreeScope::elementFromPoint(double clientX, double clientY)
     if (!document.hasLivingRenderTree())
         return nullptr;
 
-    auto node = nodeFromPoint(LayoutPoint { clientX, clientY }, nullptr);
+    Node* node = nodeFromPoint(LayoutPoint(clientX, clientY), nullptr);
     if (!node)
         return nullptr;
 
-    node = retargetToScope(*node);
+    node = &retargetToScope(*node);
     while (!is<Element>(*node)) {
         node = node->parentInComposedTree();
         if (!node)
             break;
-        node = retargetToScope(*node);
+        node = &retargetToScope(*node);
     }
 
-    return static_pointer_cast<Element>(node);
+    return downcast<Element>(node);
 }
 
 Vector<RefPtr<Element>> TreeScope::elementsFromPoint(double clientX, double clientY)
@@ -395,20 +395,23 @@ Vector<RefPtr<Element>> TreeScope::elementsFromPoint(double clientX, double clie
     if (!absolutePoint)
         return elements;
 
-    constexpr OptionSet<HitTestRequest::RequestType> hitType { HitTestRequest::ReadOnly, HitTestRequest::Active, HitTestRequest::DisallowUserAgentShadowContent, HitTestRequest::CollectMultipleElements, HitTestRequest::IncludeAllElementsUnderPoint };
-    HitTestResult result { absolutePoint.value() };
-    documentScope().hitTest(hitType, result);
+    HitTestRequest request(HitTestRequest::ReadOnly
+        | HitTestRequest::Active
+        | HitTestRequest::DisallowUserAgentShadowContent
+        | HitTestRequest::CollectMultipleElements
+        | HitTestRequest::IncludeAllElementsUnderPoint);
+    HitTestResult result(absolutePoint.value());
+    documentScope().hitTest(request, result);
 
-    RefPtr<Node> lastNode;
-    auto& nodeSet = result.listBasedTestResult();
-    elements.reserveInitialCapacity(nodeSet.size());
-    for (auto& listBasedNode : nodeSet) {
-        RefPtr<Node> node = retargetToScope(listBasedNode);
-        while (!is<Element>(node)) {
+    Node* lastNode = nullptr;
+    for (const auto& listBasedNode : result.listBasedTestResult()) {
+        Node* node = listBasedNode.get();
+        node = &retargetToScope(*node);
+        while (!is<Element>(*node)) {
             node = node->parentInComposedTree();
             if (!node)
                 break;
-            node = retargetToScope(*node);
+            node = &retargetToScope(*node);
         }
 
         if (!node)
@@ -422,7 +425,7 @@ Vector<RefPtr<Element>> TreeScope::elementsFromPoint(double clientX, double clie
         if (node == lastNode)
             continue;
 
-        elements.append(static_pointer_cast<Element>(node));
+        elements.append(downcast<Element>(node));
         lastNode = node;
     }
 
@@ -441,8 +444,6 @@ Vector<RefPtr<Element>> TreeScope::elementsFromPoint(const FloatPoint& p)
     return elementsFromPoint(p.x(), p.y());
 }
 
-// FIXME: Would be nice to change this to take a StringView, since that's what callers have
-// and there is no particular advantage to already having a String.
 Element* TreeScope::findAnchor(const String& name)
 {
     if (name.isEmpty())

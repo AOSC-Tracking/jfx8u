@@ -25,7 +25,6 @@
 
 #pragma once
 
-#include "BExport.h"
 #include "BInline.h"
 #include "Mutex.h"
 #include "Sizes.h"
@@ -54,7 +53,7 @@ namespace bmalloc {
 template<typename T> struct StaticPerProcessStorageTraits;
 
 template<typename T>
-class StaticPerProcess {
+class BEXPORT StaticPerProcess {
 public:
     static T* get()
     {
@@ -93,9 +92,9 @@ private:
 template<> struct StaticPerProcessStorageTraits<Type> { \
     using Memory = typename std::aligned_storage<sizeof(Type), std::alignment_of<Type>::value>::type; \
     struct BEXPORT Storage { \
-        static std::atomic<Type*> s_object; \
-        static Mutex s_mutex; \
-        static Memory s_memory; \
+        BEXPORT static std::atomic<Type*> s_object; \
+        BEXPORT static Mutex s_mutex; \
+        BEXPORT static Memory s_memory; \
     }; \
 };
 

@@ -30,10 +30,9 @@
 namespace WebCore {
 
 struct GPUExtent3D {
-    using InnerType = unsigned;
-    InnerType width;
-    InnerType height;
-    InnerType depth;
+    unsigned width;
+    unsigned height;
+    unsigned depth;
 };
 
 } // namespace WebCore

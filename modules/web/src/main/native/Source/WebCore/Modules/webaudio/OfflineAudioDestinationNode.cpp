@@ -41,8 +41,8 @@ WTF_MAKE_ISO_ALLOCATED_IMPL(OfflineAudioDestinationNode);
 
 const size_t renderQuantumSize = 128;
 
-OfflineAudioDestinationNode::OfflineAudioDestinationNode(BaseAudioContext& context, AudioBuffer* renderTarget)
-    : AudioDestinationNode(context)
+OfflineAudioDestinationNode::OfflineAudioDestinationNode(AudioContext& context, AudioBuffer* renderTarget)
+    : AudioDestinationNode(context, renderTarget->sampleRate())
     , m_renderTarget(renderTarget)
     , m_startedRendering(false)
 {
@@ -75,17 +75,17 @@ void OfflineAudioDestinationNode::uninitialize()
     AudioNode::uninitialize();
 }
 
-ExceptionOr<void> OfflineAudioDestinationNode::startRendering()
+void OfflineAudioDestinationNode::startRendering()
 {
     ALWAYS_LOG(LOGIDENTIFIER);
 
     ASSERT(isMainThread());
     ASSERT(m_renderTarget.get());
     if (!m_renderTarget.get())
-        return Exception { InvalidStateError };
+        return;
 
     if (m_startedRendering)
-        return Exception { InvalidStateError, "Already started rendering"_s };
+        return;
 
     m_startedRendering = true;
     ref();
@@ -97,8 +97,7 @@ ExceptionOr<void> OfflineAudioDestinationNode::startRendering()
             context().finishedRendering(didRender);
             deref();
         });
-    }, ThreadType::Audio);
-    return { };
+    });
 }
 
 bool OfflineAudioDestinationNode::offlineRender()

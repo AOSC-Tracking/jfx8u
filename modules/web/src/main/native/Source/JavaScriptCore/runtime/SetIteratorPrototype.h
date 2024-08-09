@@ -31,14 +31,7 @@ namespace JSC {
 
 class SetIteratorPrototype final : public JSNonFinalObject {
 public:
-    using Base = JSNonFinalObject;
-
-    template<typename CellType, SubspaceAccess>
-    static IsoSubspace* subspaceFor(VM& vm)
-    {
-        STATIC_ASSERT_ISO_SUBSPACE_SHARABLE(SetIteratorPrototype, Base);
-        return &vm.plainObjectSpace;
-    }
+    typedef JSNonFinalObject Base;
 
     static SetIteratorPrototype* create(VM& vm, JSGlobalObject* globalObject, Structure* structure)
     {

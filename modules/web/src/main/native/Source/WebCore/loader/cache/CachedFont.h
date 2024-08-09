@@ -65,14 +65,14 @@ protected:
 private:
     String calculateItemInCollection() const;
 
-    void checkNotify(const NetworkLoadMetrics&) override;
+    void checkNotify() override;
     bool mayTryReplaceEncodedData() const override;
 
     void load(CachedResourceLoader&) override;
     NO_RETURN_DUE_TO_ASSERT void setBodyDataFrom(const CachedResource&) final { ASSERT_NOT_REACHED(); }
 
     void didAddClient(CachedResourceClient&) override;
-    void finishLoading(SharedBuffer*, const NetworkLoadMetrics&) override;
+    void finishLoading(SharedBuffer*) override;
 
     void allClientsRemoved() override;
 

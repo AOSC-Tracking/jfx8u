@@ -31,7 +31,7 @@
 
 namespace WebCore {
 
-String MIMETypeRegistry::mimeTypeForExtension(const String& extension)
+String MIMETypeRegistry::getMIMETypeForExtension(const String& extension)
 {
     if (extension.isEmpty())
         return String();
@@ -51,7 +51,7 @@ bool MIMETypeRegistry::isApplicationPluginMIMEType(const String&)
     return false;
 }
 
-String MIMETypeRegistry::preferredExtensionForMIMEType(const String& mimeType)
+String MIMETypeRegistry::getPreferredExtensionForMIMEType(const String& mimeType)
 {
     if (mimeType.isEmpty())
         return String();
@@ -64,12 +64,6 @@ String MIMETypeRegistry::preferredExtensionForMIMEType(const String& mimeType)
         free(extension);
     }
     return returnValue;
-}
-
-Vector<String> MIMETypeRegistry::extensionsForMIMEType(const String&)
-{
-    ASSERT_NOT_IMPLEMENTED_YET();
-    return { };
 }
 
 }

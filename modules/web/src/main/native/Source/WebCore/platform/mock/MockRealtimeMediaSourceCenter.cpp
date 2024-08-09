@@ -43,8 +43,6 @@
 
 #if PLATFORM(COCOA)
 #include "CoreAudioCaptureSource.h"
-#include "DisplayCaptureSourceCocoa.h"
-#include "MockRealtimeVideoSourceMac.h"
 #endif
 
 namespace WebCore {
@@ -59,7 +57,6 @@ static inline Vector<MockMediaDevice> defaultDevices()
             MockCameraProperties {
                 30,
                 RealtimeMediaSourceSettings::VideoFacingMode::User, {
-                    { { 2560, 1440 }, { { 10, 10 }, { 7.5, 7.5 }, { 5, 5 } } },
                     { { 1280, 720 }, { { 30, 30}, { 27.5, 27.5}, { 25, 25}, { 22.5, 22.5}, { 20, 20}, { 17.5, 17.5}, { 15, 15}, { 12.5, 12.5}, { 10, 10}, { 7.5, 7.5}, { 5, 5} } },
                     { { 640, 480 },  { { 30, 30}, { 27.5, 27.5}, { 25, 25}, { 22.5, 22.5}, { 20, 20}, { 17.5, 17.5}, { 15, 15}, { 12.5, 12.5}, { 10, 10}, { 7.5, 7.5}, { 5, 5} } },
                     { { 112, 112 },  { { 30, 30}, { 27.5, 27.5}, { 25, 25}, { 22.5, 22.5}, { 20, 20}, { 17.5, 17.5}, { 15, 15}, { 12.5, 12.5}, { 10, 10}, { 7.5, 7.5}, { 5, 5} } },
@@ -86,8 +83,8 @@ static inline Vector<MockMediaDevice> defaultDevices()
         MockMediaDevice { "SCREEN-1"_s, "Mock screen device 1"_s, MockDisplayProperties { CaptureDevice::DeviceType::Screen, Color::lightGray, { 3840, 2160 } } },
         MockMediaDevice { "SCREEN-2"_s, "Mock screen device 2"_s, MockDisplayProperties { CaptureDevice::DeviceType::Screen, Color::yellow, { 1920, 1080 } } },
 
-        MockMediaDevice { "WINDOW-2"_s, "Mock window 1"_s, MockDisplayProperties { CaptureDevice::DeviceType::Screen, SRGBA<uint8_t> { 255, 241, 181 }, { 640, 480 } } },
-        MockMediaDevice { "WINDOW-2"_s, "Mock window 2"_s, MockDisplayProperties { CaptureDevice::DeviceType::Screen, SRGBA<uint8_t> { 255, 208, 181 }, { 1280, 600 } } },
+        MockMediaDevice { "WINDOW-2"_s, "Mock window 1"_s, MockDisplayProperties { CaptureDevice::DeviceType::Screen, SimpleColor { 0xfff1b5 }, { 640, 480 } } },
+        MockMediaDevice { "WINDOW-2"_s, "Mock window 2"_s, MockDisplayProperties { CaptureDevice::DeviceType::Screen, SimpleColor { 0xffd0b5 }, { 1280, 600 } } },
     };
 }
 
@@ -103,46 +100,15 @@ public:
     }
 
 private:
+#if PLATFORM(IOS_FAMILY)
+    void setVideoCapturePageState(bool interrupted, bool pageMuted) final
+    {
+        if (activeSource())
+            activeSource()->setInterrupted(interrupted, pageMuted);
+    }
+#endif
     CaptureDeviceManager& videoCaptureDeviceManager() final { return MockRealtimeMediaSourceCenter::singleton().videoCaptureDeviceManager(); }
 };
-
-#if PLATFORM(MAC)
-class MockDisplayCapturer final : public DisplayCaptureSourceCocoa::Capturer {
-public:
-    explicit MockDisplayCapturer(const CaptureDevice&);
-
-private:
-    bool start(float) final;
-    void stop() final  { m_source->stop(); }
-    DisplayCaptureSourceCocoa::DisplayFrameType generateFrame() final;
-    RealtimeMediaSourceSettings::DisplaySurfaceType surfaceType() const final { return RealtimeMediaSourceSettings::DisplaySurfaceType::Monitor; }
-    void commitConfiguration(float) final { }
-    CaptureDevice::DeviceType deviceType() const final { return CaptureDevice::DeviceType::Screen; }
-#if !RELEASE_LOG_DISABLED
-    const char* logClassName() const final { return "MockDisplayCapturer"; }
-#endif
-
-    Ref<MockRealtimeVideoSource> m_source;
-};
-
-MockDisplayCapturer::MockDisplayCapturer(const CaptureDevice& device)
-    : m_source(MockRealtimeVideoSourceMac::createForMockDisplayCapturer(String { device.persistentId() }, String { device.label() }, String { }))
-{
-}
-
-bool MockDisplayCapturer::start(float)
-{
-    m_source->start();
-    return true;
-}
-
-DisplayCaptureSourceCocoa::DisplayFrameType MockDisplayCapturer::generateFrame()
-{
-    if (auto* imageBuffer = m_source->imageBuffer())
-        return imageBuffer->copyNativeImage();
-    return { };
-}
-#endif
 
 class MockRealtimeDisplaySourceFactory : public DisplayCaptureFactory {
 public:
@@ -154,11 +120,7 @@ public:
         switch (device.type()) {
         case CaptureDevice::DeviceType::Screen:
         case CaptureDevice::DeviceType::Window:
-#if PLATFORM(MAC)
-            return DisplayCaptureSourceCocoa::create(UniqueRef<DisplayCaptureSourceCocoa::Capturer>(makeUniqueRef<MockDisplayCapturer>(device)), device, constraints);
-#else
             return MockRealtimeVideoSource::create(String { device.persistentId() }, String { device.label() }, String { }, constraints);
-#endif
             break;
         case CaptureDevice::DeviceType::Microphone:
         case CaptureDevice::DeviceType::Camera:
@@ -173,7 +135,7 @@ private:
     CaptureDeviceManager& displayCaptureDeviceManager() final { return MockRealtimeMediaSourceCenter::singleton().displayCaptureDeviceManager(); }
 };
 
-class MockRealtimeAudioSourceFactory final : public AudioCaptureFactory {
+class MockRealtimeAudioSourceFactory : public AudioCaptureFactory {
 public:
     CaptureSourceOrError createAudioCaptureSource(const CaptureDevice& device, String&& hashSalt, const MediaConstraints* constraints) final
     {
@@ -185,9 +147,7 @@ public:
     }
 private:
 #if PLATFORM(IOS_FAMILY)
-    void setActiveSource(RealtimeMediaSource& source) final { CoreAudioCaptureSourceFactory::singleton().setActiveSource(source); }
-    void unsetActiveSource(RealtimeMediaSource& source) final { CoreAudioCaptureSourceFactory::singleton().unsetActiveSource(source); }
-    RealtimeMediaSource* activeSource() final { return CoreAudioCaptureSourceFactory::singleton().activeSource(); }
+    void setAudioCapturePageState(bool interrupted, bool pageMuted) final { CoreAudioCaptureSourceFactory::singleton().setAudioCapturePageState(interrupted, pageMuted); }
 #endif
     CaptureDeviceManager& audioCaptureDeviceManager() final { return MockRealtimeMediaSourceCenter::singleton().audioCaptureDeviceManager(); }
 };

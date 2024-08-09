@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019 Apple Inc. All rights reserved.
+ * Copyright (C) 2014 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -25,15 +25,14 @@
 
 #pragma once
 
-#if ENABLE(APPLE_PAY)
-
 namespace WebCore {
 
-enum class ApplePaySetupFeatureType : uint8_t {
-    ApplePay,
-    AppleCard,
+struct LayerFlushThrottleState {
+    enum {
+        Enabled = 1 << 0,
+        UserIsInteracting = 1 << 1
+    };
+    typedef unsigned Flags;
 };
 
 } // namespace WebCore
-
-#endif // ENABLE(APPLE_PAY)

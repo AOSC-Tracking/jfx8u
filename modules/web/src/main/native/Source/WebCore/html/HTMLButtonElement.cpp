@@ -74,15 +74,15 @@ const AtomString& HTMLButtonElement::formControlType() const
 {
     switch (m_type) {
         case SUBMIT: {
-            static MainThreadNeverDestroyed<const AtomString> submit("submit", AtomString::ConstructFromLiteral);
+            static NeverDestroyed<const AtomString> submit("submit", AtomString::ConstructFromLiteral);
             return submit;
         }
         case BUTTON: {
-            static MainThreadNeverDestroyed<const AtomString> button("button", AtomString::ConstructFromLiteral);
+            static NeverDestroyed<const AtomString> button("button", AtomString::ConstructFromLiteral);
             return button;
         }
         case RESET: {
-            static MainThreadNeverDestroyed<const AtomString> reset("reset", AtomString::ConstructFromLiteral);
+            static NeverDestroyed<const AtomString> reset("reset", AtomString::ConstructFromLiteral);
             return reset;
         }
     }
@@ -211,11 +211,11 @@ bool HTMLButtonElement::appendFormData(DOMFormData& formData, bool)
     return true;
 }
 
-bool HTMLButtonElement::accessKeyAction(bool sendMouseEvents)
+void HTMLButtonElement::accessKeyAction(bool sendMouseEvents)
 {
     focus();
 
-    return dispatchSimulatedClick(0, sendMouseEvents ? SendMouseUpDownEvents : SendNoEvents);
+    dispatchSimulatedClick(0, sendMouseEvents ? SendMouseUpDownEvents : SendNoEvents);
 }
 
 bool HTMLButtonElement::isURLAttribute(const Attribute& attribute) const

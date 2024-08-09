@@ -38,8 +38,6 @@ ALLOW_UNUSED_PARAMETERS_END
 
 namespace WebCore {
 
-class RealtimeMediaSource;
-
 class LibWebRTCRtpReceiverBackend final : public RTCRtpReceiverBackend {
     WTF_MAKE_FAST_ALLOCATED;
 public:
@@ -49,8 +47,6 @@ public:
     }
 
     webrtc::RtpReceiverInterface* rtcReceiver() { return m_rtcReceiver.get(); }
-
-    Ref<RealtimeMediaSource> createSource();
 
 private:
     RTCRtpParameters getParameters() final;

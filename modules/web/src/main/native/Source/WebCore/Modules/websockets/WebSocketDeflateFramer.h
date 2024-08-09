@@ -30,7 +30,7 @@
 
 #pragma once
 
-#if !PLATFORM(JAVA)
+#if USE(ZLIB)
 #include "WebSocketDeflater.h"
 #endif
 #include "WebSocketExtensionProcessor.h"
@@ -80,6 +80,7 @@ public:
 
     std::unique_ptr<WebSocketExtensionProcessor> createExtensionProcessor();
 
+    bool canDeflate() const;
     bool enabled() const { return m_enabled; }
 
     std::unique_ptr<DeflateResultHolder> deflate(WebSocketFrame&);
@@ -89,13 +90,13 @@ public:
 
     void didFail();
 
-#if !PLATFORM(JAVA)
+#if USE(ZLIB)
     void enableDeflate(int windowBits, WebSocketDeflater::ContextTakeOverMode);
 #endif
 
 private:
     bool m_enabled;
-#if !PLATFORM(JAVA)
+#if USE(ZLIB)
     std::unique_ptr<WebSocketDeflater> m_deflater;
     std::unique_ptr<WebSocketInflater> m_inflater;
 #endif

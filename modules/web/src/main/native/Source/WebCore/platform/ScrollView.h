@@ -57,7 +57,6 @@ OBJC_CLASS WAKView;
 
 namespace WebCore {
 
-class EventRegionContext;
 class HostWindow;
 class LegacyTileCache;
 class Scrollbar;
@@ -140,23 +139,11 @@ public:
     // Overridden by FrameView to create custom CSS scrollbars if applicable.
     virtual Ref<Scrollbar> createScrollbar(ScrollbarOrientation);
 
-    virtual void styleAndRenderTreeDidChange();
+    virtual void styleDidChange();
 
     // If the prohibits scrolling flag is set, then all scrolling in the view (even programmatic scrolling) is turned off.
     void setProhibitsScrolling(bool b) { m_prohibitsScrolling = b; }
     bool prohibitsScrolling() const { return m_prohibitsScrolling; }
-
-    class ProhibitScrollingWhenChangingContentSizeForScope {
-        WTF_MAKE_FAST_ALLOCATED;
-    public:
-        ProhibitScrollingWhenChangingContentSizeForScope(ScrollView&);
-        ~ProhibitScrollingWhenChangingContentSizeForScope();
-
-    private:
-        WeakPtr<ScrollView> m_scrollView;
-    };
-
-    std::unique_ptr<ProhibitScrollingWhenChangingContentSizeForScope> prohibitScrollingWhenChangingContentSizeForScope();
 
     // Whether or not a scroll view will blit visible contents when it is scrolled. Blitting is disabled in situations
     // where it would cause rendering glitches (such as with fixed backgrounds or when the view is partially transparent).
@@ -244,7 +231,7 @@ public:
 
     // Scroll position used by web-exposed features (has legacy iOS behavior).
     WEBCORE_EXPORT IntPoint contentsScrollPosition() const;
-    void setContentsScrollPosition(const IntPoint&, ScrollClamping = ScrollClamping::Clamped, AnimatedScroll = AnimatedScroll::No);
+    void setContentsScrollPosition(const IntPoint&, ScrollClamping = ScrollClamping::Clamped);
 
 #if PLATFORM(IOS_FAMILY)
     int actualScrollX() const { return unobscuredContentRect().x(); }
@@ -274,8 +261,7 @@ public:
     ScrollPosition cachedScrollPosition() const { return m_cachedScrollPosition; }
 
     // Functions for scrolling the view.
-    virtual void setScrollPosition(const ScrollPosition&, ScrollClamping = ScrollClamping::Clamped, AnimatedScroll = AnimatedScroll::No);
-
+    virtual void setScrollPosition(const ScrollPosition&, ScrollClamping = ScrollClamping::Clamped);
     void scrollBy(const IntSize& s) { return setScrollPosition(scrollPosition() + s); }
 
     // This function scrolls by lines, pages or pixels.
@@ -291,7 +277,6 @@ public:
     WEBCORE_EXPORT void setScrollbarsSuppressed(bool suppressed, bool repaintOnUnsuppress = false);
     bool scrollbarsSuppressed() const { return m_scrollbarsSuppressed; }
 
-    WEBCORE_EXPORT FloatPoint rootViewToContents(const FloatPoint&) const;
     WEBCORE_EXPORT IntPoint rootViewToContents(const IntPoint&) const;
     WEBCORE_EXPORT IntPoint contentsToRootView(const IntPoint&) const;
     WEBCORE_EXPORT FloatPoint contentsToRootView(const FloatPoint&) const;
@@ -364,7 +349,7 @@ public:
     }
 
     // Widget override. Handles painting of the contents of the view as well as the scrollbars.
-    WEBCORE_EXPORT void paint(GraphicsContext&, const IntRect&, Widget::SecurityOriginPaintPolicy = SecurityOriginPaintPolicy::AnyOrigin, EventRegionContext* = nullptr) final;
+    WEBCORE_EXPORT void paint(GraphicsContext&, const IntRect&, Widget::SecurityOriginPaintPolicy = SecurityOriginPaintPolicy::AnyOrigin) final;
     void paintScrollbars(GraphicsContext&, const IntRect&);
 
     // Widget overrides to ensure that our children's visibility status is kept up to date when we get shown and hidden.
@@ -402,7 +387,7 @@ protected:
     ScrollView();
 
     virtual void repaintContentRectangle(const IntRect&);
-    virtual void paintContents(GraphicsContext&, const IntRect& damageRect, SecurityOriginPaintPolicy = SecurityOriginPaintPolicy::AnyOrigin, EventRegionContext* = nullptr) = 0;
+    virtual void paintContents(GraphicsContext&, const IntRect& damageRect, SecurityOriginPaintPolicy = SecurityOriginPaintPolicy::AnyOrigin) = 0;
 
     virtual void paintOverhangAreas(GraphicsContext&, const IntRect& horizontalOverhangArea, const IntRect& verticalOverhangArea, const IntRect& dirtyRect);
 
@@ -443,8 +428,6 @@ protected:
 
     virtual void unobscuredContentSizeChanged() = 0;
 
-    virtual void didFinishProhibitingScrollingWhenChangingContentSize() = 0;
-
 #if PLATFORM(COCOA) && defined __OBJC__
 public:
     WEBCORE_EXPORT NSView* documentView() const;
@@ -465,7 +448,6 @@ private:
     bool setHasScrollbarInternal(RefPtr<Scrollbar>&, ScrollbarOrientation, bool hasBar, bool* contentSizeAffected);
 
     bool isScrollView() const final { return true; }
-    String debugDescription() const override;
 
     void init();
     void destroy();
@@ -507,18 +489,6 @@ private:
     void calculateOverhangAreasForPainting(IntRect& horizontalOverhangRect, IntRect& verticalOverhangRect);
     void updateOverhangAreas();
 
-    void incrementProhibitsScrollingWhenChangingContentSizeCount() { ++m_prohibitsScrollingWhenChangingContentSizeCount; }
-    void decrementProhibitsScrollingWhenChangingContentSizeCount()
-    {
-        if (!m_prohibitsScrollingWhenChangingContentSizeCount) {
-            ASSERT_NOT_REACHED();
-            return;
-        }
-
-        if (!--m_prohibitsScrollingWhenChangingContentSizeCount)
-            didFinishProhibitingScrollingWhenChangingContentSize();
-    }
-
     HashSet<Ref<Widget>> m_children;
 
     RefPtr<Scrollbar> m_horizontalScrollbar;
@@ -550,7 +520,6 @@ private:
     IntPoint m_panScrollIconPoint;
 
     unsigned m_updateScrollbarsPass { 0 };
-    unsigned m_prohibitsScrollingWhenChangingContentSizeCount { 0 };
 
     bool m_horizontalScrollbarLock { false };
     bool m_verticalScrollbarLock { false };
@@ -575,7 +544,4 @@ private:
 
 } // namespace WebCore
 
-SPECIALIZE_TYPE_TRAITS_BEGIN(WebCore::ScrollView)
-    static bool isType(const WebCore::Widget& widget) { return widget.isScrollView(); }
-    static bool isType(const WebCore::ScrollableArea& area) { return area.isScrollView(); }
-SPECIALIZE_TYPE_TRAITS_END()
+SPECIALIZE_TYPE_TRAITS_WIDGET(ScrollView, isScrollView())

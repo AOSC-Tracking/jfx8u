@@ -51,6 +51,10 @@ inline void removePrimitiveDisableCallback(void (*)(void*), void*) { }
 
 inline void forbidDisablingPrimitiveGigacage() { }
 
+inline bool isDisablingPrimitiveGigacageForbidden() { return false; }
+inline bool isPrimitiveGigacagePermanentlyEnabled() { return false; }
+inline bool canPrimitiveGigacageBeDisabled() { return true; }
+
 ALWAYS_INLINE const char* name(Kind kind)
 {
     switch (kind) {
@@ -66,13 +70,8 @@ ALWAYS_INLINE const char* name(Kind kind)
 }
 
 ALWAYS_INLINE bool contains(const void*) { return false; }
-ALWAYS_INLINE bool disablingPrimitiveGigacageIsForbidden() { return false; }
-ALWAYS_INLINE bool isEnabled() { return false; }
 ALWAYS_INLINE bool isEnabled(Kind) { return false; }
 ALWAYS_INLINE size_t mask(Kind) { return 0; }
-ALWAYS_INLINE size_t footprint(Kind) { return 0; }
-ALWAYS_INLINE size_t maxSize(Kind) { return 0; }
-ALWAYS_INLINE size_t size(Kind) { return 0; }
 
 template<typename T>
 inline T* caged(Kind, T* ptr) { return ptr; }

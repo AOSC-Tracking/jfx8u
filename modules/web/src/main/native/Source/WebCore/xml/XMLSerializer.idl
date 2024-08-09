@@ -19,10 +19,9 @@
  */
 
 [
+    Constructor,
     ImplementationLacksVTable,
 ] interface XMLSerializer {
-    constructor();
-
     DOMString serializeToString(Node node);
 };
 

@@ -52,15 +52,10 @@ static bool parseAccessControlMaxAge(const String& string, Seconds& expiryDelta)
     return ok;
 }
 
-Expected<UniqueRef<CrossOriginPreflightResultCacheItem>, String> CrossOriginPreflightResultCacheItem::create(StoredCredentialsPolicy policy, const ResourceResponse& response)
+bool CrossOriginPreflightResultCacheItem::parse(const ResourceResponse& response)
 {
-    auto methods = parseAccessControlAllowList(response.httpHeaderField(HTTPHeaderName::AccessControlAllowMethods));
-    if (!methods)
-        return makeUnexpected(makeString("Header Access-Control-Allow-Methods has an invalid value: ", response.httpHeaderField(HTTPHeaderName::AccessControlAllowMethods)));
-
-    auto headers = parseAccessControlAllowList<ASCIICaseInsensitiveHash>(response.httpHeaderField(HTTPHeaderName::AccessControlAllowHeaders));
-    if (!headers)
-        return makeUnexpected(makeString("Header Access-Control-Allow-Headers has an invalid value: ", response.httpHeaderField(HTTPHeaderName::AccessControlAllowHeaders)));
+    m_methods = parseAccessControlAllowList(response.httpHeaderField(HTTPHeaderName::AccessControlAllowMethods));
+    m_headers = parseAccessControlAllowList<ASCIICaseInsensitiveHash>(response.httpHeaderField(HTTPHeaderName::AccessControlAllowHeaders));
 
     Seconds expiryDelta = 0_s;
     if (parseAccessControlMaxAge(response.httpHeaderField(HTTPHeaderName::AccessControlMaxAge), expiryDelta)) {
@@ -69,45 +64,43 @@ Expected<UniqueRef<CrossOriginPreflightResultCacheItem>, String> CrossOriginPref
     } else
         expiryDelta = defaultPreflightCacheTimeout;
 
-    return makeUniqueRef<CrossOriginPreflightResultCacheItem>(MonotonicTime::now() + expiryDelta, policy, WTFMove(*methods), WTFMove(*headers));
+    m_absoluteExpiryTime = MonotonicTime::now() + expiryDelta;
+    return true;
 }
 
-Optional<String> CrossOriginPreflightResultCacheItem::validateMethodAndHeaders(const String& method, const HTTPHeaderMap& requestHeaders) const
+bool CrossOriginPreflightResultCacheItem::allowsCrossOriginMethod(const String& method, StoredCredentialsPolicy storedCredentialsPolicy, String& errorDescription) const
 {
-    if (!allowsCrossOriginMethod(method, m_storedCredentialsPolicy))
-        return makeString("Method ", method, " is not allowed by Access-Control-Allow-Methods.");
+    if (m_methods.contains(method) || (m_methods.contains("*") && storedCredentialsPolicy != StoredCredentialsPolicy::Use) || isOnAccessControlSimpleRequestMethodWhitelist(method))
+        return true;
 
-    if (auto badHeader = validateCrossOriginHeaders(requestHeaders, m_storedCredentialsPolicy))
-        return makeString("Request header field ", *badHeader, " is not allowed by Access-Control-Allow-Headers.");
-    return { };
+    errorDescription = "Method " + method + " is not allowed by Access-Control-Allow-Methods.";
+    return false;
 }
 
-bool CrossOriginPreflightResultCacheItem::allowsCrossOriginMethod(const String& method, StoredCredentialsPolicy storedCredentialsPolicy) const
-{
-    return m_methods.contains(method) || (m_methods.contains("*") && storedCredentialsPolicy != StoredCredentialsPolicy::Use) || isOnAccessControlSimpleRequestMethodAllowlist(method);
-}
-
-Optional<String> CrossOriginPreflightResultCacheItem::validateCrossOriginHeaders(const HTTPHeaderMap& requestHeaders, StoredCredentialsPolicy storedCredentialsPolicy) const
+bool CrossOriginPreflightResultCacheItem::allowsCrossOriginHeaders(const HTTPHeaderMap& requestHeaders, StoredCredentialsPolicy storedCredentialsPolicy, String& errorDescription) const
 {
     bool validWildcard = m_headers.contains("*") && storedCredentialsPolicy != StoredCredentialsPolicy::Use;
     for (const auto& header : requestHeaders) {
         if (header.keyAsHTTPHeaderName && isCrossOriginSafeRequestHeader(header.keyAsHTTPHeaderName.value(), header.value))
             continue;
-        if (!m_headers.contains(header.key) && !validWildcard)
-            return header.key;
+        if (!m_headers.contains(header.key) && !validWildcard) {
+            errorDescription = "Request header field " + header.key + " is not allowed by Access-Control-Allow-Headers.";
+            return false;
+        }
     }
-    return { };
+    return true;
 }
 
 bool CrossOriginPreflightResultCacheItem::allowsRequest(StoredCredentialsPolicy storedCredentialsPolicy, const String& method, const HTTPHeaderMap& requestHeaders) const
 {
+    String ignoredExplanation;
     if (m_absoluteExpiryTime < MonotonicTime::now())
         return false;
     if (storedCredentialsPolicy == StoredCredentialsPolicy::Use && m_storedCredentialsPolicy == StoredCredentialsPolicy::DoNotUse)
         return false;
-    if (!allowsCrossOriginMethod(method, storedCredentialsPolicy))
+    if (!allowsCrossOriginMethod(method, storedCredentialsPolicy, ignoredExplanation))
         return false;
-    if (auto badHeader = validateCrossOriginHeaders(requestHeaders, storedCredentialsPolicy))
+    if (!allowsCrossOriginHeaders(requestHeaders, storedCredentialsPolicy, ignoredExplanation))
         return false;
     return true;
 }

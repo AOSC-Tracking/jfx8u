@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2018 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -27,31 +27,30 @@
 
 #if ENABLE(LAYOUT_FORMATTING_CONTEXT)
 
-#include "LayoutBox.h"
+#include "FloatAvoider.h"
 #include <wtf/IsoMalloc.h>
 
 namespace WebCore {
-
 namespace Layout {
 
-class InlineTextBox : public Box {
-    WTF_MAKE_ISO_ALLOCATED(InlineTextBox);
-public:
-    InlineTextBox(String, bool canUseSimplifiedContentMeasuring, RenderStyle&&);
-    virtual ~InlineTextBox() = default;
+class Box;
 
-    String content() const { return m_content; }
-    // FIXME: This should not be a box's property.
-    bool canUseSimplifiedContentMeasuring() const { return m_canUseSimplifiedContentMeasuring; }
+class FloatBox : public FloatAvoider {
+    WTF_MAKE_ISO_ALLOCATED(FloatBox);
+public:
+    FloatBox(const Box&, Display::Box absoluteDisplayBox, LayoutPoint containingBlockAbsoluteTopLeft, HorizontalEdges containingBlockAbsoluteContentBox, Optional<LayoutUnit> previousFloatAbsoluteTop);
+
+    Display::Rect rect() const final;
 
 private:
-    String m_content;
-    bool m_canUseSimplifiedContentMeasuring { false };
+    bool isLeftAligned() const final { return layoutBox().isLeftFloatingPositioned(); }
+
+    PositionInContextRoot horizontalPositionCandidate(HorizontalConstraints) final;
+    PositionInContextRoot verticalPositionCandidate(PositionInContextRoot) final;
+
+    PositionInContextRoot initialVerticalPosition(Optional<LayoutUnit> previousFloatAbsoluteTop) const;
 };
 
 }
 }
-
-SPECIALIZE_TYPE_TRAITS_LAYOUT_BOX(InlineTextBox, isInlineTextBox())
-
 #endif

@@ -26,6 +26,8 @@
 #include "config.h"
 #include <wtf/WorkerPool.h>
 
+#include <wtf/NeverDestroyed.h>
+
 namespace WTF {
 
 class WorkerPool::Worker final : public AutomaticThread {
@@ -71,7 +73,7 @@ public:
         return m_pool.shouldSleep(locker);
     }
 
-    const char* name() const final
+    const char* name() const override
     {
         return m_pool.name();
     }

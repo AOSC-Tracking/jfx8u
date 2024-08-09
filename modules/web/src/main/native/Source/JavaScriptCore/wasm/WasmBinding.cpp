@@ -29,6 +29,7 @@
 #if ENABLE(WEBASSEMBLY)
 
 #include "CCallHelpers.h"
+#include "JSCInlines.h"
 #include "LinkBuffer.h"
 #include "WasmCallingConvention.h"
 #include "WasmInstance.h"

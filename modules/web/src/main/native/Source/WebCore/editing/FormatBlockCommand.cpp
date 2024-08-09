@@ -31,6 +31,7 @@
 #include "Element.h"
 #include "HTMLElement.h"
 #include "HTMLNames.h"
+#include "Range.h"
 #include "VisibleUnits.h"
 #include <wtf/NeverDestroyed.h>
 
@@ -67,14 +68,14 @@ void FormatBlockCommand::formatRange(const Position& start, const Position& end,
     RefPtr<Node> outerBlock = (start.deprecatedNode() == nodeToSplitTo) ? start.deprecatedNode() : splitTreeToNode(*start.deprecatedNode(), *nodeToSplitTo);
     RefPtr<Node> nodeAfterInsertionPosition = outerBlock;
 
-    auto range = makeSimpleRange(start, endOfSelection);
+    auto range = Range::create(document(), start, endOfSelection);
     Element* refNode = enclosingBlockFlowElement(end);
     Element* root = editableRootForPosition(start);
     // Root is null for elements with contenteditable=false.
     if (!root || !refNode)
         return;
     if (isElementForFormatBlock(refNode->tagQName()) && start == startOfBlock(start)
-        && (end == endOfBlock(end) || (range && isNodeVisiblyContainedWithin(*refNode, *range)))
+        && (end == endOfBlock(end) || isNodeVisiblyContainedWithin(*refNode, range.get()))
         && refNode != root && !root->isDescendantOf(*refNode)) {
         // Already in a block element that only contains the current paragraph
         if (refNode->hasTagName(tagName()))
@@ -98,22 +99,23 @@ void FormatBlockCommand::formatRange(const Position& start, const Position& end,
         insertBlockPlaceholder(lastParagraphInBlockNode);
 }
 
-Element* FormatBlockCommand::elementForFormatBlockCommand(const Optional<SimpleRange>& range)
+Element* FormatBlockCommand::elementForFormatBlockCommand(Range* range)
 {
     if (!range)
         return nullptr;
 
-    auto commonAncestor = commonInclusiveAncestor(*range);
-    while (commonAncestor && !isElementForFormatBlock(commonAncestor.get()))
+    Node* commonAncestor = range->commonAncestorContainer();
+    while (commonAncestor && !isElementForFormatBlock(commonAncestor))
         commonAncestor = commonAncestor->parentNode();
-    if (!is<Element>(commonAncestor))
+
+    if (!commonAncestor)
         return nullptr;
 
-    auto rootEditableElement = range->start.container->rootEditableElement();
+    Element* rootEditableElement = range->startContainer().rootEditableElement();
     if (!rootEditableElement || commonAncestor->contains(rootEditableElement))
         return nullptr;
 
-    return &downcast<Element>(*commonAncestor);
+    return commonAncestor->isElementNode() ? downcast<Element>(commonAncestor) : nullptr;
 }
 
 bool isElementForFormatBlock(const QualifiedName& tagName)

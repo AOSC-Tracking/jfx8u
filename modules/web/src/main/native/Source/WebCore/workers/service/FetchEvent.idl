@@ -24,6 +24,7 @@
 */
 
 [
+    Constructor(DOMString type, FetchEventInit eventInitDict),
     Conditional=SERVICE_WORKER,
     JSCustomMarkFunction,
     EnabledAtRuntime=ServiceWorker,
@@ -31,8 +32,6 @@
     Exposed=(ServiceWorker),
     JSGenerateToNativeObject
 ] interface FetchEvent : ExtendableEvent {
-    constructor(DOMString type, FetchEventInit eventInitDict);
-
     [SameObject] readonly attribute FetchRequest request;
     readonly attribute DOMString clientId;
     readonly attribute DOMString reservedClientId;

@@ -29,6 +29,7 @@
 #if ENABLE(JIT)
 
 #include "JIT.h"
+#include "JSCInlines.h"
 #include "VMInlines.h"
 
 namespace JSC {
@@ -94,7 +95,7 @@ private:
     bool m_isFinishedCompiling { false };
 };
 
-class JITWorklist::Thread final : public AutomaticThread {
+class JITWorklist::Thread : public AutomaticThread {
 public:
     Thread(const AbstractLocker& locker, JITWorklist& worklist)
         : AutomaticThread(locker, worklist.m_lock, worklist.m_condition.copyRef())
@@ -103,7 +104,7 @@ public:
         m_worklist.m_numAvailableThreads++;
     }
 
-    const char* name() const final
+    const char* name() const override
     {
 #if OS(LINUX)
         return "JITWorker";
@@ -112,8 +113,8 @@ public:
 #endif
     }
 
-private:
-    PollResult poll(const AbstractLocker&) final
+protected:
+    PollResult poll(const AbstractLocker&) override
     {
         RELEASE_ASSERT(m_worklist.m_numAvailableThreads);
 
@@ -125,7 +126,7 @@ private:
         return PollResult::Work;
     }
 
-    WorkResult work() final
+    WorkResult work() override
     {
         RELEASE_ASSERT(!m_myPlans.isEmpty());
 
@@ -146,6 +147,7 @@ private:
         return WorkResult::Continue;
     }
 
+private:
     JITWorklist& m_worklist;
     Plans m_myPlans;
 };

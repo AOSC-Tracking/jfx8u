@@ -58,7 +58,10 @@ bool SVGGlyphRefElement::hasValidGlyphElement(String& glyphName) const
 
 static float parseFloat(const AtomString& value)
 {
-    return parseNumber(value).valueOr(0);
+    float result;
+    if (!parseNumberFromString(value, result))
+        return 0;
+    return result;
 }
 
 void SVGGlyphRefElement::parseAttribute(const QualifiedName& name, const AtomString& value)

@@ -26,7 +26,6 @@
 #include "config.h"
 #include "RemoveNodePreservingChildrenCommand.h"
 
-#include "Editing.h"
 #include "Node.h"
 #include <wtf/Assertions.h>
 
@@ -42,10 +41,6 @@ RemoveNodePreservingChildrenCommand::RemoveNodePreservingChildrenCommand(Ref<Nod
 void RemoveNodePreservingChildrenCommand::doApply()
 {
     Vector<Ref<Node>> children;
-    auto parent = makeRefPtr(m_node->parentNode());
-    if (!parent || (m_shouldAssumeContentIsAlwaysEditable == DoNotAssumeContentIsAlwaysEditable && !isEditableNode(*parent)))
-        return;
-
     for (Node* child = m_node->firstChild(); child; child = child->nextSibling())
         children.append(*child);
 

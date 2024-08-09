@@ -1,6 +1,6 @@
 /*
  *  Copyright (C) 1999-2001, 2004 Harri Porten (porten@kde.org)
- *  Copyright (c) 2007-2020 Apple Inc. All rights reserved.
+ *  Copyright (c) 2007, 2008, 2016-2017 Apple Inc. All rights reserved.
  *  Copyright (C) 2009 Torch Mobile, Inc.
  *  Copyright (C) 2010 Peter Varga (pvarga@inf.u-szeged.hu), University of Szeged
  *
@@ -23,6 +23,9 @@
 #include "config.h"
 #include "RegExp.h"
 
+#include "ExceptionHelpers.h"
+#include "Lexer.h"
+#include "JSCInlines.h"
 #include "RegExpCache.h"
 #include "RegExpInlines.h"
 #include "YarrJIT.h"
@@ -167,7 +170,7 @@ RegExp::RegExp(VM& vm, const String& patternString, OptionSet<Yarr::Flags> flags
 void RegExp::finishCreation(VM& vm)
 {
     Base::finishCreation(vm);
-    Yarr::YarrPattern pattern(m_patternString, m_flags, m_constructionErrorCode);
+    Yarr::YarrPattern pattern(m_patternString, m_flags, m_constructionErrorCode, vm.stackLimit());
     if (!isValid()) {
         m_state = ParseError;
         return;
@@ -224,10 +227,13 @@ void RegExp::byteCodeCompileIfNecessary(VM* vm)
     if (m_regExpBytecode)
         return;
 
-    Yarr::YarrPattern pattern(m_patternString, m_flags, m_constructionErrorCode);
+    Yarr::YarrPattern pattern(m_patternString, m_flags, m_constructionErrorCode, vm->stackLimit());
     if (hasError(m_constructionErrorCode)) {
+        RELEASE_ASSERT_NOT_REACHED();
+#if COMPILER_QUIRK(CONSIDERS_UNREACHABLE_CODE)
         m_state = ParseError;
         return;
+#endif
     }
     ASSERT(m_numSubpatterns == pattern.m_numSubpatterns);
 
@@ -242,7 +248,7 @@ void RegExp::compile(VM* vm, Yarr::YarrCharSize charSize)
 {
     auto locker = holdLock(cellLock());
 
-    Yarr::YarrPattern pattern(m_patternString, m_flags, m_constructionErrorCode);
+    Yarr::YarrPattern pattern(m_patternString, m_flags, m_constructionErrorCode, vm->stackLimit());
     if (hasError(m_constructionErrorCode)) {
         m_state = ParseError;
         return;
@@ -256,7 +262,7 @@ void RegExp::compile(VM* vm, Yarr::YarrCharSize charSize)
     }
 
 #if ENABLE(YARR_JIT)
-    if (!pattern.containsUnsignedLengthPattern() && Options::useRegExpJIT()
+    if (!pattern.containsUnsignedLengthPattern() && VM::canUseJIT() && Options::useRegExpJIT()
 #if !ENABLE(YARR_JIT_BACKREFERENCES)
         && !pattern.m_containsBackreferences
 #endif
@@ -283,9 +289,9 @@ void RegExp::compile(VM* vm, Yarr::YarrCharSize charSize)
     }
 }
 
-int RegExp::match(JSGlobalObject* globalObject, const String& s, unsigned startOffset, Vector<int>& ovector)
+int RegExp::match(VM& vm, const String& s, unsigned startOffset, Vector<int>& ovector)
 {
-    return matchInline(globalObject, globalObject->vm(), s, startOffset, ovector);
+    return matchInline(vm, s, startOffset, ovector);
 }
 
 bool RegExp::matchConcurrently(
@@ -296,9 +302,7 @@ bool RegExp::matchConcurrently(
     if (!hasCodeFor(s.is8Bit() ? Yarr::Char8 : Yarr::Char16))
         return false;
 
-    position = matchInline<Vector<int>&, Yarr::MatchFrom::CompilerThread>(nullptr, vm, s, startOffset, ovector);
-    if (m_state == ParseError)
-        return false;
+    position = match(vm, s, startOffset, ovector);
     return true;
 }
 
@@ -306,7 +310,7 @@ void RegExp::compileMatchOnly(VM* vm, Yarr::YarrCharSize charSize)
 {
     auto locker = holdLock(cellLock());
 
-    Yarr::YarrPattern pattern(m_patternString, m_flags, m_constructionErrorCode);
+    Yarr::YarrPattern pattern(m_patternString, m_flags, m_constructionErrorCode, vm->stackLimit());
     if (hasError(m_constructionErrorCode)) {
         m_state = ParseError;
         return;
@@ -320,7 +324,7 @@ void RegExp::compileMatchOnly(VM* vm, Yarr::YarrCharSize charSize)
     }
 
 #if ENABLE(YARR_JIT)
-    if (!pattern.containsUnsignedLengthPattern() && Options::useRegExpJIT()
+    if (!pattern.containsUnsignedLengthPattern() && VM::canUseJIT() && Options::useRegExpJIT()
 #if !ENABLE(YARR_JIT_BACKREFERENCES)
         && !pattern.m_containsBackreferences
 #endif
@@ -347,9 +351,9 @@ void RegExp::compileMatchOnly(VM* vm, Yarr::YarrCharSize charSize)
     }
 }
 
-MatchResult RegExp::match(JSGlobalObject* globalObject, const String& s, unsigned startOffset)
+MatchResult RegExp::match(VM& vm, const String& s, unsigned startOffset)
 {
-    return matchInline(globalObject, globalObject->vm(), s, startOffset);
+    return matchInline(vm, s, startOffset);
 }
 
 bool RegExp::matchConcurrently(VM& vm, const String& s, unsigned startOffset, MatchResult& result)
@@ -359,7 +363,7 @@ bool RegExp::matchConcurrently(VM& vm, const String& s, unsigned startOffset, Ma
     if (!hasMatchOnlyCodeFor(s.is8Bit() ? Yarr::Char8 : Yarr::Char16))
         return false;
 
-    result = matchInline<Yarr::MatchFrom::CompilerThread>(nullptr, vm, s, startOffset);
+    result = match(vm, s, startOffset);
     return true;
 }
 

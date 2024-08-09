@@ -27,14 +27,15 @@
 #include "NullSetterFunction.h"
 
 #include "CodeBlock.h"
+#include "Error.h"
 #include "JSCInlines.h"
+#include "JSCJSValueInlines.h"
+#include "StackVisitor.h"
 
 namespace JSC {
 
 const ClassInfo NullSetterFunction::s_info = { "Function", &Base::s_info, nullptr, nullptr, CREATE_METHOD_TABLE(NullSetterFunction) };
 
-
-#if ASSERT_ENABLED
 
 class GetCallerStrictnessFunctor {
 public:
@@ -51,9 +52,7 @@ public:
             return StackVisitor::Continue;
 
         CodeBlock* codeBlock = visitor->codeBlock();
-        // This does not take into account that we might have an strict opcode in a non-strict context, but that's
-        // ok since we assert below that this function should never be called from any kind strict context.
-        m_callerIsStrict = codeBlock && codeBlock->ownerExecutable()->isInStrictContext();
+        m_callerIsStrict = codeBlock && codeBlock->isStrictMode();
         return StackVisitor::Done;
     }
 
@@ -71,34 +70,20 @@ static bool callerIsStrict(VM& vm, CallFrame* callFrame)
     return iter.callerIsStrict();
 }
 
-#endif // ASSERT_ENABLED
-
 namespace NullSetterFunctionInternal {
-
 static EncodedJSValue JSC_HOST_CALL callReturnUndefined(JSGlobalObject* globalObject, CallFrame* callFrame)
-{
-#if !ASSERT_ENABLED
-    UNUSED_PARAM(globalObject);
-    UNUSED_PARAM(callFrame);
-#endif
-    ASSERT(!callerIsStrict(globalObject->vm(), callFrame));
-    return JSValue::encode(jsUndefined());
-}
-
-static EncodedJSValue JSC_HOST_CALL callThrowError(JSGlobalObject* globalObject, CallFrame*)
 {
     VM& vm = globalObject->vm();
     auto scope = DECLARE_THROW_SCOPE(vm);
-    // This function is only called from IC. And we do not want to include this frame in Error's stack.
-    constexpr bool useCurrentFrame = false;
-    throwException(globalObject, scope, ErrorInstance::create(globalObject, vm, globalObject->errorStructure(ErrorType::TypeError), ReadonlyPropertyWriteError, nullptr, TypeNothing, useCurrentFrame));
-    return { };
+
+    if (callerIsStrict(vm, callFrame))
+        return JSValue::encode(throwTypeError(globalObject, scope, "Setting a property that has only a getter"_s));
+    return JSValue::encode(jsUndefined());
+}
 }
 
-}
-
-NullSetterFunction::NullSetterFunction(VM& vm, Structure* structure, ECMAMode ecmaMode)
-    : Base(vm, structure, ecmaMode.isStrict() ? NullSetterFunctionInternal::callThrowError : NullSetterFunctionInternal::callReturnUndefined, nullptr)
+NullSetterFunction::NullSetterFunction(VM& vm, Structure* structure)
+    : Base(vm, structure, NullSetterFunctionInternal::callReturnUndefined, nullptr)
 {
 }
 

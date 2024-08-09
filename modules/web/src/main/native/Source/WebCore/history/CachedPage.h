@@ -51,7 +51,7 @@ public:
 
     CachedFrame* cachedMainFrame() { return m_cachedMainFrame.get(); }
 
-#if ENABLE(VIDEO)
+#if ENABLE(VIDEO_TRACK)
     void markForCaptionPreferencesChanged() { m_needsCaptionPreferencesChanged = true; }
 #endif
 
@@ -63,7 +63,7 @@ private:
     Page& m_page;
     MonotonicTime m_expirationTime;
     std::unique_ptr<CachedFrame> m_cachedMainFrame;
-#if ENABLE(VIDEO)
+#if ENABLE(VIDEO_TRACK)
     bool m_needsCaptionPreferencesChanged { false };
 #endif
     bool m_needsDeviceOrPageScaleChanged { false };

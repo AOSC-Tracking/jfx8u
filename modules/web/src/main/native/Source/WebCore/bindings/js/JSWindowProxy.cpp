@@ -96,15 +96,16 @@ void JSWindowProxy::setWindow(AbstractDOMWindow& domWindow)
 
     // Explicitly protect the prototype so it isn't collected when we allocate the global object.
     // (Once the global object is fully constructed, it will mark its own prototype.)
-    JSNonFinalObject* prototype = isRemoteDOMWindow ? static_cast<JSNonFinalObject*>(JSRemoteDOMWindowPrototype::create(vm, nullptr, &prototypeStructure)) : static_cast<JSNonFinalObject*>(JSDOMWindowPrototype::create(vm, nullptr, &prototypeStructure));
-    JSC::EnsureStillAliveScope protectedPrototype(prototype);
+    // FIXME: Why do we need to protect this when there's a pointer to it on the stack?
+    // Perhaps the issue is that structure objects aren't seen when scanning the stack?
+    Strong<JSNonFinalObject> prototype(vm, isRemoteDOMWindow ? static_cast<JSNonFinalObject*>(JSRemoteDOMWindowPrototype::create(vm, nullptr, &prototypeStructure)) : static_cast<JSNonFinalObject*>(JSDOMWindowPrototype::create(vm, nullptr, &prototypeStructure)));
 
     JSDOMGlobalObject* window = nullptr;
     if (isRemoteDOMWindow) {
-        auto& windowStructure = *JSRemoteDOMWindow::createStructure(vm, nullptr, prototype);
+        auto& windowStructure = *JSRemoteDOMWindow::createStructure(vm, nullptr, prototype.get());
         window = JSRemoteDOMWindow::create(vm, &windowStructure, downcast<RemoteDOMWindow>(domWindow), this);
     } else {
-        auto& windowStructure = *JSDOMWindow::createStructure(vm, nullptr, prototype);
+        auto& windowStructure = *JSDOMWindow::createStructure(vm, nullptr, prototype.get());
         window = JSDOMWindow::create(vm, &windowStructure, downcast<DOMWindow>(domWindow), this);
     }
 

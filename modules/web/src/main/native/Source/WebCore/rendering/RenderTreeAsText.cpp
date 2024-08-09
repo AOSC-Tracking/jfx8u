@@ -27,7 +27,6 @@
 #include "RenderTreeAsText.h"
 
 #include "ClipRect.h"
-#include "ColorSerialization.h"
 #include "Document.h"
 #include "Frame.h"
 #include "FrameSelection.h"
@@ -239,24 +238,24 @@ void RenderTreeAsText::writeRenderObject(TextStream& ts, const RenderObject& o, 
 
         if (o.parent()) {
             Color color = o.style().visitedDependentColor(CSSPropertyColor);
-            if (!equalIgnoringSemanticColor(o.parent()->style().visitedDependentColor(CSSPropertyColor), color))
-                ts << " [color=" << serializationForRenderTreeAsText(color) << "]";
+            if (o.parent()->style().visitedDependentColor(CSSPropertyColor).rgb() != color.rgb())
+                ts << " [color=" << color.nameForRenderTreeAsText() << "]";
 
             // Do not dump invalid or transparent backgrounds, since that is the default.
             Color backgroundColor = o.style().visitedDependentColor(CSSPropertyBackgroundColor);
-            if (!equalIgnoringSemanticColor(o.parent()->style().visitedDependentColor(CSSPropertyBackgroundColor), backgroundColor)
-                && backgroundColor != Color::transparentBlack)
-                ts << " [bgcolor=" << serializationForRenderTreeAsText(backgroundColor) << "]";
+            if (o.parent()->style().visitedDependentColor(CSSPropertyBackgroundColor).rgb() != backgroundColor.rgb()
+                && backgroundColor.rgb() != Color::transparent)
+                ts << " [bgcolor=" << backgroundColor.nameForRenderTreeAsText() << "]";
 
             Color textFillColor = o.style().visitedDependentColor(CSSPropertyWebkitTextFillColor);
-            if (!equalIgnoringSemanticColor(o.parent()->style().visitedDependentColor(CSSPropertyWebkitTextFillColor), textFillColor)
-                && textFillColor != color && textFillColor != Color::transparentBlack)
-                ts << " [textFillColor=" << serializationForRenderTreeAsText(textFillColor) << "]";
+            if (o.parent()->style().visitedDependentColor(CSSPropertyWebkitTextFillColor).rgb() != textFillColor.rgb()
+                && textFillColor.rgb() != color.rgb() && textFillColor.rgb() != Color::transparent)
+                ts << " [textFillColor=" << textFillColor.nameForRenderTreeAsText() << "]";
 
             Color textStrokeColor = o.style().visitedDependentColor(CSSPropertyWebkitTextStrokeColor);
-            if (!equalIgnoringSemanticColor(o.parent()->style().visitedDependentColor(CSSPropertyWebkitTextStrokeColor), textStrokeColor)
-                && textStrokeColor != color && textStrokeColor != Color::transparentBlack)
-                ts << " [textStrokeColor=" << serializationForRenderTreeAsText(textStrokeColor) << "]";
+            if (o.parent()->style().visitedDependentColor(CSSPropertyWebkitTextStrokeColor).rgb() != textStrokeColor.rgb()
+                && textStrokeColor.rgb() != color.rgb() && textStrokeColor.rgb() != Color::transparent)
+                ts << " [textStrokeColor=" << textStrokeColor.nameForRenderTreeAsText() << "]";
 
             if (o.parent()->style().textStrokeWidth() != o.style().textStrokeWidth() && o.style().textStrokeWidth() > 0)
                 ts << " [textStrokeWidth=" << o.style().textStrokeWidth() << "]";
@@ -291,10 +290,10 @@ void RenderTreeAsText::writeRenderObject(TextStream& ts, const RenderObject& o, 
             else {
                 ts << " (" << borderTop << "px ";
                 printBorderStyle(ts, o.style().borderTopStyle());
-                auto color = o.style().borderTopColor();
-                if (!color.isValid())
-                    color = o.style().color();
-                ts << serializationForRenderTreeAsText(color) << ")";
+                Color col = o.style().borderTopColor();
+                if (!col.isValid())
+                    col = o.style().color();
+                ts << col.nameForRenderTreeAsText() << ")";
             }
 
             if (o.style().borderRight() != prevBorder) {
@@ -304,10 +303,10 @@ void RenderTreeAsText::writeRenderObject(TextStream& ts, const RenderObject& o, 
                 else {
                     ts << " (" << borderRight << "px ";
                     printBorderStyle(ts, o.style().borderRightStyle());
-                    auto color = o.style().borderRightColor();
-                    if (!color.isValid())
-                        color = o.style().color();
-                    ts << serializationForRenderTreeAsText(color) << ")";
+                    Color col = o.style().borderRightColor();
+                    if (!col.isValid())
+                        col = o.style().color();
+                    ts << col.nameForRenderTreeAsText() << ")";
                 }
             }
 
@@ -318,10 +317,10 @@ void RenderTreeAsText::writeRenderObject(TextStream& ts, const RenderObject& o, 
                 else {
                     ts << " (" << borderBottom << "px ";
                     printBorderStyle(ts, o.style().borderBottomStyle());
-                    auto color = o.style().borderBottomColor();
-                    if (!color.isValid())
-                        color = o.style().color();
-                    ts << serializationForRenderTreeAsText(color) << ")";
+                    Color col = o.style().borderBottomColor();
+                    if (!col.isValid())
+                        col = o.style().color();
+                    ts << col.nameForRenderTreeAsText() << ")";
                 }
             }
 
@@ -332,10 +331,10 @@ void RenderTreeAsText::writeRenderObject(TextStream& ts, const RenderObject& o, 
                 else {
                     ts << " (" << borderLeft << "px ";
                     printBorderStyle(ts, o.style().borderLeftStyle());
-                    auto color = o.style().borderLeftColor();
-                    if (!color.isValid())
-                        color = o.style().color();
-                    ts << serializationForRenderTreeAsText(color) << ")";
+                    Color col = o.style().borderLeftColor();
+                    if (!col.isValid())
+                        col = o.style().color();
+                    ts << col.nameForRenderTreeAsText() << ")";
                 }
             }
 

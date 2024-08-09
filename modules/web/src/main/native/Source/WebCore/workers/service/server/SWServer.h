@@ -29,7 +29,6 @@
 
 #include "ClientOrigin.h"
 #include "DocumentIdentifier.h"
-#include "ExceptionOr.h"
 #include "SWServerWorker.h"
 #include "SecurityOriginData.h"
 #include "ServiceWorkerClientData.h"
@@ -102,6 +101,7 @@ public:
         WEBCORE_EXPORT void finishFetchingScriptInServer(const ServiceWorkerFetchResult&);
         WEBCORE_EXPORT void addServiceWorkerRegistrationInServer(ServiceWorkerRegistrationIdentifier);
         WEBCORE_EXPORT void removeServiceWorkerRegistrationInServer(ServiceWorkerRegistrationIdentifier);
+        WEBCORE_EXPORT void syncTerminateWorker(ServiceWorkerIdentifier);
         WEBCORE_EXPORT void whenRegistrationReady(uint64_t registrationReadyRequestIdentifier, const SecurityOriginData& topOrigin, const URL& clientURL);
 
         WEBCORE_EXPORT void storeRegistrationsOnDisk(CompletionHandler<void()>&&);
@@ -126,8 +126,7 @@ public:
 
     using SoftUpdateCallback = Function<void(ServiceWorkerJobData&& jobData, bool shouldRefreshCache, ResourceRequest&&, CompletionHandler<void(const ServiceWorkerFetchResult&)>&&)>;
     using CreateContextConnectionCallback = Function<void(const WebCore::RegistrableDomain&, CompletionHandler<void()>&&)>;
-    using AppBoundDomainsCallback = Function<void(CompletionHandler<void(HashSet<WebCore::RegistrableDomain>&&)>&&)>;
-    WEBCORE_EXPORT SWServer(UniqueRef<SWOriginStore>&&, bool processTerminationDelayEnabled, String&& registrationDatabaseDirectory, PAL::SessionID, bool hasServiceWorkerEntitlement, SoftUpdateCallback&&, CreateContextConnectionCallback&&, AppBoundDomainsCallback&&);
+    WEBCORE_EXPORT SWServer(UniqueRef<SWOriginStore>&&, bool processTerminationDelayEnabled, String&& registrationDatabaseDirectory, PAL::SessionID, SoftUpdateCallback&&, CreateContextConnectionCallback&&);
 
     WEBCORE_EXPORT ~SWServer();
 
@@ -144,19 +143,19 @@ public:
     WEBCORE_EXPORT Vector<ServiceWorkerRegistrationData> getRegistrations(const SecurityOriginData& topOrigin, const URL& clientURL);
 
     WEBCORE_EXPORT void scheduleJob(ServiceWorkerJobData&&);
-    WEBCORE_EXPORT void scheduleUnregisterJob(ServiceWorkerJobDataIdentifier, SWServerRegistration&, DocumentOrWorkerIdentifier, URL&&);
-
     void rejectJob(const ServiceWorkerJobData&, const ExceptionData&);
     void resolveRegistrationJob(const ServiceWorkerJobData&, const ServiceWorkerRegistrationData&, ShouldNotifyWhenResolved);
     void resolveUnregistrationJob(const ServiceWorkerJobData&, const ServiceWorkerRegistrationKey&, bool unregistrationResult);
     void startScriptFetch(const ServiceWorkerJobData&, bool shouldRefreshCache);
 
-    void updateWorker(const ServiceWorkerJobDataIdentifier&, SWServerRegistration&, const URL&, const String& script, const CertificateInfo&, const ContentSecurityPolicyResponseHeaders&, const String& referrerPolicy, WorkerType, HashMap<URL, ServiceWorkerContextData::ImportedScript>&&);
+    void updateWorker(const ServiceWorkerJobDataIdentifier&, SWServerRegistration&, const URL&, const String& script, const ContentSecurityPolicyResponseHeaders&, const String& referrerPolicy, WorkerType, HashMap<URL, ServiceWorkerContextData::ImportedScript>&&);
+    void terminateWorker(SWServerWorker&);
+    WEBCORE_EXPORT void syncTerminateWorker(SWServerWorker&);
     void fireInstallEvent(SWServerWorker&);
     void fireActivateEvent(SWServerWorker&);
 
     WEBCORE_EXPORT SWServerWorker* workerByID(ServiceWorkerIdentifier) const;
-    WEBCORE_EXPORT Optional<ServiceWorkerClientData> serviceWorkerClientWithOriginByID(const ClientOrigin&, const ServiceWorkerClientIdentifier&) const;
+    Optional<ServiceWorkerClientData> serviceWorkerClientWithOriginByID(const ClientOrigin&, const ServiceWorkerClientIdentifier&) const;
     String serviceWorkerClientUserAgent(const ClientOrigin&) const;
     WEBCORE_EXPORT SWServerWorker* activeWorkerFromRegistrationID(ServiceWorkerRegistrationIdentifier);
 
@@ -177,7 +176,7 @@ public:
     void didFinishActivation(SWServerWorker&);
     void workerContextTerminated(SWServerWorker&);
     void matchAll(SWServerWorker&, const ServiceWorkerClientQueryOptions&, ServiceWorkerClientsMatchAllCallback&&);
-    Optional<ExceptionData> claim(SWServerWorker&);
+    void claim(SWServerWorker&);
 
     WEBCORE_EXPORT static HashSet<SWServer*>& allServers();
 
@@ -213,11 +212,7 @@ public:
 
     WEBCORE_EXPORT void handleLowMemoryWarning();
 
-    static constexpr Seconds defaultTerminationDelay = 10_s;
-
 private:
-    void validateRegistrationDomain(WebCore::RegistrableDomain, CompletionHandler<void(bool)>&&);
-
     void scriptFetchFinished(const ServiceWorkerFetchResult&);
 
     void didResolveRegistrationPromise(Connection*, const ServiceWorkerRegistrationKey&);
@@ -237,6 +232,12 @@ private:
     void forEachClientForOrigin(const ClientOrigin&, const WTF::Function<void(ServiceWorkerClientData&)>&);
 
     void performGetOriginsWithRegistrationsCallbacks();
+
+    enum TerminationMode {
+        Synchronous,
+        Asynchronous,
+    };
+    void terminateWorkerInternal(SWServerWorker&, TerminationMode);
 
     void contextConnectionCreated(SWServerToContextConnection&);
 
@@ -272,11 +273,6 @@ private:
     HashSet<WebCore::RegistrableDomain> m_pendingConnectionDomains;
     Vector<CompletionHandler<void()>> m_importCompletedCallbacks;
     SoftUpdateCallback m_softUpdateCallback;
-    AppBoundDomainsCallback m_appBoundDomainsCallback;
-
-    HashSet<WebCore::RegistrableDomain> m_appBoundDomains;
-    bool m_hasServiceWorkerEntitlement { false };
-    bool m_hasReceivedAppBoundDomains { false };
 };
 
 } // namespace WebCore

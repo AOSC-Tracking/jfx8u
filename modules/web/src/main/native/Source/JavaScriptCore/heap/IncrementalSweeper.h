@@ -32,7 +32,7 @@ namespace JSC {
 class Heap;
 class BlockDirectory;
 
-class IncrementalSweeper final : public JSRunLoopTimer {
+class IncrementalSweeper : public JSRunLoopTimer {
 public:
     using Base = JSRunLoopTimer;
     JS_EXPORT_PRIVATE explicit IncrementalSweeper(Heap*);
@@ -40,7 +40,7 @@ public:
     JS_EXPORT_PRIVATE void startSweeping(Heap&);
     void freeFastMallocMemoryAfterSweeping() { m_shouldFreeFastMallocMemoryAfterSweeping = true; }
 
-    void doWork(VM&) final;
+    void doWork(VM&) override;
     void stopSweeping();
 
 private:

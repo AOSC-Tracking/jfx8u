@@ -27,8 +27,8 @@
 #pragma once
 
 #include "ExceptionOr.h"
-#include "URLDecomposition.h"
 #include <wtf/URL.h>
+#include "URLUtils.h"
 
 namespace WebCore {
 
@@ -37,21 +37,18 @@ class ScriptExecutionContext;
 class URLRegistrable;
 class URLSearchParams;
 
-class DOMURL final : public RefCounted<DOMURL>, public URLDecomposition {
+class WEBCORE_EXPORT DOMURL : public RefCounted<DOMURL>, public URLUtils<DOMURL> {
 public:
     static ExceptionOr<Ref<DOMURL>> create(const String& url, const String& base);
     static ExceptionOr<Ref<DOMURL>> create(const String& url, const DOMURL& base);
-    static ExceptionOr<Ref<DOMURL>> create(const String& url, const URL& base);
     static ExceptionOr<Ref<DOMURL>> create(const String& url);
     ~DOMURL();
 
-    const URL& href() const { return m_url; }
-    ExceptionOr<void> setHref(const String&);
+    URL href() const { return m_url; }
+    ExceptionOr<void> setHref(const String& url);
     void setQuery(const String&);
 
     URLSearchParams& searchParams();
-
-    const String& toJSON() const { return m_url.string(); }
 
     static String createObjectURL(ScriptExecutionContext&, Blob&);
     static void revokeObjectURL(ScriptExecutionContext&, const String&);
@@ -59,10 +56,7 @@ public:
     static String createPublicURL(ScriptExecutionContext&, URLRegistrable&);
 
 private:
-    DOMURL(URL&& completeURL, const URL& baseURL);
-
-    URL fullURL() const final { return m_url; }
-    void setFullURL(const URL& fullURL) final { setHref(fullURL.string()); }
+    DOMURL(URL&& completeURL, URL&& baseURL);
 
     URL m_baseURL;
     URL m_url;

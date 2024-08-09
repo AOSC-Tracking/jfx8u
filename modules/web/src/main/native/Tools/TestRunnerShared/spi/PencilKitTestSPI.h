@@ -23,6 +23,8 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#pragma once
+
 #import <wtf/Platform.h>
 
 #if HAVE(PENCILKIT)

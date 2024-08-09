@@ -25,12 +25,15 @@
 
 
 #include "config.h"
+
 #include "PropertyDescriptor.h"
 
 #include "GetterSetter.h"
-#include "JSCJSValueInlines.h"
+#include "JSObject.h"
+#include "JSCInlines.h"
 
 namespace JSC {
+unsigned PropertyDescriptor::defaultAttributes = PropertyAttribute::DontDelete | PropertyAttribute::DontEnum | PropertyAttribute::ReadOnly;
 
 bool PropertyDescriptor::writable() const
 {
@@ -69,7 +72,7 @@ void PropertyDescriptor::setUndefined()
     m_attributes = PropertyAttribute::ReadOnly | PropertyAttribute::DontDelete | PropertyAttribute::DontEnum;
 }
 
-GetterSetter* PropertyDescriptor::slowGetterSetter(JSGlobalObject* globalObject) const
+GetterSetter* PropertyDescriptor::slowGetterSetter(JSGlobalObject* globalObject)
 {
     VM& vm = globalObject->vm();
     JSValue getter = m_getter && !m_getter.isUndefined() ? jsCast<JSObject*>(m_getter) : jsUndefined();
@@ -92,13 +95,13 @@ JSValue PropertyDescriptor::setter() const
 JSObject* PropertyDescriptor::getterObject() const
 {
     ASSERT(isAccessorDescriptor() && getterPresent());
-    return m_getter.isObject() ? asObject(m_getter) : nullptr;
+    return m_getter.isObject() ? asObject(m_getter) : 0;
 }
 
 JSObject* PropertyDescriptor::setterObject() const
 {
     ASSERT(isAccessorDescriptor() && setterPresent());
-    return m_setter.isObject() ? asObject(m_setter) : nullptr;
+    return m_setter.isObject() ? asObject(m_setter) : 0;
 }
 
 void PropertyDescriptor::setDescriptor(JSValue value, unsigned attributes)

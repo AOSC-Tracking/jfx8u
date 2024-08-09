@@ -30,19 +30,20 @@
 #import "NSURLExtras.h"
 
 #import <wtf/Function.h>
+#import <wtf/ObjCRuntimeExtras.h>
 #import <wtf/RetainPtr.h>
 #import <wtf/URLHelpers.h>
 #import <wtf/URLParser.h>
 #import <wtf/Vector.h>
 #import <wtf/cf/CFURLExtras.h>
 
+#define URL_BYTES_BUFFER_LENGTH 2048
+
 namespace WTF {
 
 using namespace URLHelpers;
 
-constexpr unsigned urlBytesBufferLength = 2048;
-
-static BOOL readIDNAllowedScriptListFile(NSString *filename)
+static BOOL readIDNScriptWhiteListFile(NSString *filename)
 {
     if (!filename)
         return NO;
@@ -66,7 +67,7 @@ static BOOL readIDNAllowedScriptListFile(NSString *filename)
         
         if (result == 1) {
             // Got a word, map to script code and put it into the array.
-            addScriptToIDNAllowedScriptList(word);
+            whiteListIDNScript(word);
         }
     }
     fclose(file);
@@ -75,15 +76,18 @@ static BOOL readIDNAllowedScriptListFile(NSString *filename)
 
 namespace URLHelpers {
 
-void loadIDNAllowedScriptList()
+void loadIDNScriptWhiteList()
 {
     static dispatch_once_t flag;
     dispatch_once(&flag, ^{
-        for (NSString *directory in NSSearchPathForDirectoriesInDomains(NSLibraryDirectory, NSAllDomainsMask, YES)) {
-            if (readIDNAllowedScriptListFile([directory stringByAppendingPathComponent:@"IDNScriptWhiteList.txt"]))
+        // Read white list from library.
+        NSArray *dirs = NSSearchPathForDirectoriesInDomains(NSLibraryDirectory, NSAllDomainsMask, YES);
+        int numDirs = [dirs count];
+        for (int i = 0; i < numDirs; i++) {
+            if (readIDNScriptWhiteListFile([[dirs objectAtIndex:i] stringByAppendingPathComponent:@"IDNScriptWhiteList.txt"]))
                 return;
         }
-        initializeDefaultIDNAllowedScriptList();
+        initializeDefaultIDNScriptWhiteList();
     });
 }
 
@@ -91,15 +95,18 @@ void loadIDNAllowedScriptList()
     
 static String decodePercentEscapes(const String& string)
 {
-    NSString *substring = CFBridgingRelease(CFURLCreateStringByReplacingPercentEscapes(nullptr, string.createCFString().get(), CFSTR("")));
+    NSString *substring = (NSString *)string;
+    substring = CFBridgingRelease(CFURLCreateStringByReplacingPercentEscapes(nullptr, (CFStringRef)substring, CFSTR("")));
+
     if (!substring)
         return string;
-    return substring;
+
+    return (String)substring;
 }
 
 NSString *decodeHostName(NSString *string)
 {
-    Optional<String> host = mapHostName(string, nullptr);
+    Optional<String> host = mapHostName(string, nullopt);
     if (!host)
         return nil;
     return !*host ? string : (NSString *)*host;
@@ -129,7 +136,7 @@ NSURL *URLByTruncatingOneCharacterBeforeComponent(NSURL *URL, CFURLComponentType
     if (fragRg.location == kCFNotFound)
         return URL;
 
-    Vector<UInt8, urlBytesBufferLength> urlBytes(urlBytesBufferLength);
+    Vector<UInt8, URL_BYTES_BUFFER_LENGTH> urlBytes(URL_BYTES_BUFFER_LENGTH);
     CFIndex numBytes = CFURLGetBytes((__bridge CFURLRef)URL, urlBytes.data(), urlBytes.size());
     if (numBytes == -1) {
         numBytes = CFURLGetBytes((__bridge CFURLRef)URL, nullptr, 0);
@@ -263,7 +270,7 @@ static BOOL hasQuestionMarkOnlyQueryString(NSURL *URL)
 
 NSData *dataForURLComponentType(NSURL *URL, CFURLComponentType componentType)
 {
-    Vector<UInt8, urlBytesBufferLength> allBytesBuffer(urlBytesBufferLength);
+    Vector<UInt8, URL_BYTES_BUFFER_LENGTH> allBytesBuffer(URL_BYTES_BUFFER_LENGTH);
     CFIndex bytesFilled = CFURLGetBytes((__bridge CFURLRef)URL, allBytesBuffer.data(), allBytesBuffer.size());
     if (bytesFilled == -1) {
         CFIndex bytesToAllocate = CFURLGetBytes((__bridge CFURLRef)URL, nullptr, 0);
@@ -319,7 +326,7 @@ static NSURL *URLByRemovingComponentAndSubsequentCharacter(NSURL *URL, CFURLComp
     // Remove one subsequent character.
     range.length++;
 
-    Vector<UInt8, urlBytesBufferLength> buffer(urlBytesBufferLength);
+    Vector<UInt8, URL_BYTES_BUFFER_LENGTH> buffer(URL_BYTES_BUFFER_LENGTH);
     CFIndex numBytes = CFURLGetBytes((__bridge CFURLRef)URL, buffer.data(), buffer.size());
     if (numBytes == -1) {
         numBytes = CFURLGetBytes((__bridge CFURLRef)URL, nullptr, 0);
@@ -349,8 +356,8 @@ NSURL *URLByRemovingUserInfo(NSURL *URL)
 
 NSData *originalURLData(NSURL *URL)
 {
-    UInt8 *buffer = (UInt8 *)malloc(urlBytesBufferLength);
-    CFIndex bytesFilled = CFURLGetBytes((__bridge CFURLRef)URL, buffer, urlBytesBufferLength);
+    UInt8 *buffer = (UInt8 *)malloc(URL_BYTES_BUFFER_LENGTH);
+    CFIndex bytesFilled = CFURLGetBytes((__bridge CFURLRef)URL, buffer, URL_BYTES_BUFFER_LENGTH);
     if (bytesFilled == -1) {
         CFIndex bytesToAllocate = CFURLGetBytes((__bridge CFURLRef)URL, nullptr, 0);
         buffer = (UInt8 *)realloc(buffer, bytesToAllocate);

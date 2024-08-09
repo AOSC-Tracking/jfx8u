@@ -27,8 +27,11 @@
 #include "JSWeakObjectMapRefPrivate.h"
 
 #include "APICast.h"
+#include "JSCJSValue.h"
 #include "JSCallbackObject.h"
 #include "JSWeakObjectMapRefInternal.h"
+#include "JSCInlines.h"
+#include "Weak.h"
 #include "WeakGCMapInlines.h"
 
 using namespace JSC;
@@ -69,7 +72,7 @@ JSObjectRef JSWeakObjectMapGet(JSContextRef ctx, JSWeakObjectMapRef map, void* k
 {
     if (!ctx) {
         ASSERT_NOT_REACHED();
-        return nullptr;
+        return 0;
     }
     JSGlobalObject* globalObject = toJS(ctx);
     JSLockHolder locker(globalObject);

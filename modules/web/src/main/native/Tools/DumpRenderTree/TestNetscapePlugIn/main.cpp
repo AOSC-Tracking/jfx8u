@@ -53,12 +53,11 @@ static inline int strcasecmp(const char* s1, const char* s2)
 #endif
 
 extern "C" {
-WTF_EXPORT_DECLARATION
 NPError STDCALL NP_GetEntryPoints(NPPluginFuncs *pluginFuncs);
 }
 
 // Entry points
-extern "C" WTF_EXPORT_DECLARATION
+extern "C"
 NPError STDCALL NP_Initialize(NPNetscapeFuncs *browserFuncs
 #if defined(XP_UNIX)
                               , NPPluginFuncs *pluginFuncs
@@ -115,7 +114,7 @@ NPError STDCALL NP_GetEntryPoints(NPPluginFuncs *pluginFuncs)
     return NPERR_NO_ERROR;
 }
 
-extern "C" WTF_EXPORT_DECLARATION
+extern "C"
 void STDCALL NP_Shutdown(void)
 {
     PluginTest::NP_Shutdown();
@@ -729,13 +728,13 @@ NPError NPP_SetValue(NPP instance, NPNVariable variable, void *value)
 }
 
 #if defined(XP_UNIX)
-extern "C" WTF_EXPORT_DECLARATION
+extern "C"
 const char* NP_GetMIMEDescription(void)
 {
     return "application/x-webkit-test-netscape:testnetscape:test netscape content;image/png:png:PNG image";
 }
 
-extern "C" WTF_EXPORT_DECLARATION
+extern "C"
 NPError NP_GetValue(NPP instance, NPPVariable variable, void* value)
 {
     return NPP_GetValue(instance, variable, value);

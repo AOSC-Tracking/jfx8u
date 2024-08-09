@@ -365,7 +365,7 @@ void EditorClientJava::handleKeyboardEvent(KeyboardEvent& evt)
     }
 }
 
-bool EditorClientJava::shouldDeleteRange(const Optional<SimpleRange>&)
+bool EditorClientJava::shouldDeleteRange(Range*)
 {
     notImplemented();
     return true;
@@ -402,36 +402,36 @@ int EditorClientJava::spellCheckerDocumentTag()
     return 0;
 }
 
-bool EditorClientJava::shouldBeginEditing(const SimpleRange&)
+bool EditorClientJava::shouldBeginEditing(WebCore::Range*)
 {
     notImplemented();
     return true;
 }
 
-bool EditorClientJava::shouldEndEditing(const SimpleRange&)
+bool EditorClientJava::shouldEndEditing(WebCore::Range*)
 {
     notImplemented();
     return true;
 }
 
-bool EditorClientJava::shouldInsertText(const String&, const Optional<SimpleRange>&, EditorInsertAction)
+bool EditorClientJava::shouldInsertText(const String&, Range*, EditorInsertAction)
 {
     notImplemented();
     return true;
 }
 
-bool EditorClientJava::shouldChangeSelectedRange(const Optional<SimpleRange>&, const Optional<SimpleRange>&, EAffinity, bool)
+bool EditorClientJava::shouldChangeSelectedRange(Range*, Range*, EAffinity, bool)
 {
     return true;
 }
 
-bool EditorClientJava::shouldApplyStyle(const StyleProperties&, const Optional<SimpleRange>&)
+bool EditorClientJava::shouldApplyStyle(StyleProperties*, Range*)
 {
     return true;
 }
 
-void EditorClientJava::didApplyStyle()
-{
+void EditorClientJava::didApplyStyle() {
+    notImplemented();
 }
 
 void EditorClientJava::didBeginEditing()
@@ -474,6 +474,7 @@ void EditorClientJava::didEndEditing()
 
 void EditorClientJava::didWriteSelectionToPasteboard()
 {
+    notImplemented();
 }
 
 bool EditorClientJava::canUndo() const
@@ -510,7 +511,7 @@ void EditorClientJava::redo()
     }
 }
 
-bool EditorClientJava::shouldInsertNode(Node&, const Optional<SimpleRange>&, EditorInsertAction)
+bool EditorClientJava::shouldInsertNode(Node*, Range*, EditorInsertAction)
 {
     notImplemented();
     return true;
@@ -589,7 +590,7 @@ bool EditorClientJava::spellingUIIsShowing()
 }
 
 
-bool EditorClientJava::shouldMoveRangeAfterDelete(const SimpleRange&, const SimpleRange&)
+bool EditorClientJava::shouldMoveRangeAfterDelete(Range*, Range*)
 {
     notImplemented();
     return true;
@@ -632,12 +633,12 @@ bool EditorClientJava::canPaste(Frame*, bool defaultValue) const
     return defaultValue;
 }
 
-void EditorClientJava::discardedComposition(Frame*)
-{
+void EditorClientJava::discardedComposition(Frame*) {
+    notImplemented();
 }
 
-void EditorClientJava::canceledComposition()
-{
+void EditorClientJava::canceledComposition() {
+    notImplemented();
 }
 
 const int gc_maximumm_undoStackDepth = 1000;
@@ -661,12 +662,11 @@ void EditorClientJava::clearUndoRedoOperations()
     m_redoStack.clear();
 }
 
-void EditorClientJava::getClientPasteboardData(const Optional<SimpleRange>&, Vector<String>&, Vector<RefPtr<SharedBuffer> >&)
+void EditorClientJava::getClientPasteboardDataForRange(Range*, Vector<String>&, Vector<RefPtr<SharedBuffer> >&)
 {
-    notImplemented();
 }
 
-void EditorClientJava::willWriteSelectionToPasteboard(const Optional<SimpleRange>&)
+void EditorClientJava::willWriteSelectionToPasteboard(Range*)
 {
 }
 

@@ -27,7 +27,7 @@
 #include "config.h"
 #include "HTMLTrackElement.h"
 
-#if ENABLE(VIDEO)
+#if ENABLE(VIDEO_TRACK)
 
 #include "ContentSecurityPolicy.h"
 #include "Event.h"
@@ -59,7 +59,6 @@ static String urlForLoggingTrack(const URL& url)
 
 inline HTMLTrackElement::HTMLTrackElement(const QualifiedName& tagName, Document& document)
     : HTMLElement(tagName, document)
-    , ActiveDOMObject(document)
     , m_loadTimer(*this, &HTMLTrackElement::loadTimerFired)
 {
     LOG(Media, "HTMLTrackElement::HTMLTrackElement - %p", this);
@@ -76,9 +75,7 @@ HTMLTrackElement::~HTMLTrackElement()
 
 Ref<HTMLTrackElement> HTMLTrackElement::create(const QualifiedName& tagName, Document& document)
 {
-    auto trackElement = adoptRef(*new HTMLTrackElement(tagName, document));
-    trackElement->suspendIfNeeded();
-    return trackElement;
+    return adoptRef(*new HTMLTrackElement(tagName, document));
 }
 
 Node::InsertedIntoAncestorResult HTMLTrackElement::insertedIntoAncestor(InsertionType insertionType, ContainerNode& parentOfInsertedTree)
@@ -114,6 +111,8 @@ void HTMLTrackElement::parseAttribute(const QualifiedName& name, const AtomStrin
         track().setLabel(value);
     else if (name == srclangAttr)
         track().setLanguage(value);
+    else if (name == defaultAttr)
+        track().setIsDefault(!value.isNull());
 
     HTMLElement::parseAttribute(name, value);
 }
@@ -235,10 +234,6 @@ bool HTMLTrackElement::canLoadURL(const URL& url)
 
 void HTMLTrackElement::didCompleteLoad(LoadStatus status)
 {
-    // Make sure the JS wrapper stays alive until the end of this method, even though we update the
-    // readyState to no longer be LOADING.
-    auto wrapperProtector = makePendingActivity(*this);
-
     // 4.8.10.12.3 Sourcing out-of-band text tracks (continued)
 
     // 4. Download: ...
@@ -278,11 +273,9 @@ void HTMLTrackElement::setReadyState(ReadyState state)
         parent->textTrackReadyStateChanged(m_track.get());
 }
 
-HTMLTrackElement::ReadyState HTMLTrackElement::readyState() const
+HTMLTrackElement::ReadyState HTMLTrackElement::readyState()
 {
-    if (!m_track)
-        return HTMLTrackElement::NONE;
-    return static_cast<ReadyState>(m_track->readinessState());
+    return static_cast<ReadyState>(track().readinessState());
 }
 
 const AtomString& HTMLTrackElement::mediaElementCrossOriginAttribute() const
@@ -338,22 +331,6 @@ RefPtr<HTMLMediaElement> HTMLTrackElement::mediaElement() const
     if (!is<HTMLMediaElement>(parent))
         return nullptr;
     return downcast<HTMLMediaElement>(parent.get());
-}
-
-const char* HTMLTrackElement::activeDOMObjectName() const
-{
-    return "HTMLTrackElement";
-}
-
-void HTMLTrackElement::eventListenersDidChange()
-{
-    m_hasRelevantLoadEventsListener = hasEventListeners(eventNames().errorEvent)
-        || hasEventListeners(eventNames().loadEvent);
-}
-
-bool HTMLTrackElement::virtualHasPendingActivity() const
-{
-    return m_hasRelevantLoadEventsListener && readyState() == HTMLTrackElement::LOADING;
 }
 
 }

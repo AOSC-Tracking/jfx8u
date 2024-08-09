@@ -23,7 +23,8 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#pragma once
+#ifndef LengthPoint_h
+#define LengthPoint_h
 
 #include "Length.h"
 
@@ -71,3 +72,5 @@ inline LengthPoint blend(const LengthPoint& from, const LengthPoint& to, double 
 WTF::TextStream& operator<<(WTF::TextStream&, const LengthPoint&);
 
 } // namespace WebCore
+
+#endif // LengthPoint_h

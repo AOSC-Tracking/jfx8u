@@ -34,12 +34,10 @@ namespace JSCastingHelpers {
 
 template<>
 struct InheritsTraits<WebCore::JSNode> {
-    static constexpr Optional<JSTypeRange> typeRange { { static_cast<JSType>(WebCore::JSNodeType), static_cast<JSType>(WebCore::JSNodeType + WebCore::JSNodeTypeMask) } };
-    static_assert(std::numeric_limits<uint8_t>::max() == typeRange->last);
     template<typename From>
-    static inline bool inherits(VM& vm, From* from)
+    static inline bool inherits(VM&, From* from)
     {
-        return inheritsJSTypeImpl<WebCore::JSNode>(vm, from, *typeRange);
+        return from->type() >= WebCore::JSNodeType;
     }
 };
 

@@ -29,7 +29,6 @@
 #include "AccessibilityMenuList.h"
 #include "CSSFontSelector.h"
 #include "Chrome.h"
-#include "ColorBlending.h"
 #include "Frame.h"
 #include "FrameView.h"
 #include "HTMLNames.h"
@@ -421,9 +420,8 @@ void RenderMenuList::didUpdateActiveOption(int optionIndex)
     if (listIndex < 0 || listIndex >= static_cast<int>(selectElement().listItems().size()))
         return;
 
-    auto* axObject = axCache->get(this);
-    if (is<AccessibilityMenuList>(axObject))
-        downcast<AccessibilityMenuList>(*axObject).didUpdateActiveOption(optionIndex);
+    if (auto* menuList = downcast<AccessibilityMenuList>(axCache->get(this)))
+        menuList->didUpdateActiveOption(optionIndex);
 }
 
 String RenderMenuList::itemText(unsigned listIndex) const
@@ -533,14 +531,14 @@ void RenderMenuList::getItemBackgroundColor(unsigned listIndex, Color& itemBackg
     }
 
     // Otherwise, the item's background is overlayed on top of the menu background.
-    backgroundColor = blendSourceOver(style().visitedDependentColorWithColorFilter(CSSPropertyBackgroundColor), backgroundColor);
+    backgroundColor = style().visitedDependentColorWithColorFilter(CSSPropertyBackgroundColor).blend(backgroundColor);
     if (backgroundColor.isOpaque()) {
         itemBackgroundColor = backgroundColor;
         return;
     }
 
     // If the menu background is not opaque, then add an opaque white background behind.
-    itemBackgroundColor = blendSourceOver(Color::white, backgroundColor);
+    itemBackgroundColor = Color(Color::white).blend(backgroundColor);
 }
 
 PopupMenuStyle RenderMenuList::menuStyle() const

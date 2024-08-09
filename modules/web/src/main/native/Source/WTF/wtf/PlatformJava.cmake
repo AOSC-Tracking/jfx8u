@@ -93,8 +93,6 @@ elseif (UNIX)
     list(APPEND WTF_LIBRARIES rt)
 elseif (WIN32)
     list(APPEND WTF_SOURCES
-        generic/WorkQueueGeneric.cpp
-
         win/CPUTimeWin.cpp
         win/DbgHelperWin.cpp
         win/LanguageWin.cpp
@@ -103,6 +101,7 @@ elseif (WIN32)
         win/OSAllocatorWin.cpp
         win/RunLoopWin.cpp
         win/ThreadingWin.cpp
+        win/WorkQueueWin.cpp
     )
 
     list(APPEND WTF_PUBLIC_HEADERS

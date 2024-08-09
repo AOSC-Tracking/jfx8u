@@ -1,6 +1,5 @@
 /*
- * Copyright (C) 2009-2020 Apple Inc. All rights reserved.
- * Copyright (C) 2020 Alexey Shvayka <shvaikalesh@gmail.com>.
+ * Copyright (C) 2009-2019 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -11,17 +10,17 @@
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
  *
- * THIS SOFTWARE IS PROVIDED BY APPLE INC. AND ITS CONTRIBUTORS ``AS IS''
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
- * THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
- * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL APPLE INC. OR ITS CONTRIBUTORS
- * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
- * THE POSSIBILITY OF SUCH DAMAGE.
+ * THIS SOFTWARE IS PROVIDED BY APPLE INC. ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL APPLE INC. OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
 #pragma once
@@ -42,9 +41,7 @@ template<class Delegate, typename CharType>
 class Parser {
 private:
     template<class FriendDelegate>
-    friend ErrorCode parse(FriendDelegate&, const String& pattern, bool isUnicode, unsigned backReferenceLimit, bool isNamedForwardReferenceAllowed);
-
-    enum class UnicodeParseContext : uint8_t { PatternCodePoint, GroupName };
+    friend ErrorCode parse(FriendDelegate&, const String& pattern, bool isUnicode, unsigned backReferenceLimit);
 
     /*
      * CharacterClassParserDelegate:
@@ -203,6 +200,7 @@ private:
         NO_RETURN_DUE_TO_ASSERT void assertionWordBoundary(bool) { RELEASE_ASSERT_NOT_REACHED(); }
         NO_RETURN_DUE_TO_ASSERT void atomBackReference(unsigned) { RELEASE_ASSERT_NOT_REACHED(); }
         NO_RETURN_DUE_TO_ASSERT void atomNamedBackReference(const String&) { RELEASE_ASSERT_NOT_REACHED(); }
+        NO_RETURN_DUE_TO_ASSERT bool isValidNamedForwardReference(const String&) { RELEASE_ASSERT_NOT_REACHED(); }
         NO_RETURN_DUE_TO_ASSERT void atomNamedForwardReference(const String&) { RELEASE_ASSERT_NOT_REACHED(); }
 
     private:
@@ -219,13 +217,12 @@ private:
         UChar32 m_character;
     };
 
-    Parser(Delegate& delegate, const String& pattern, bool isUnicode, unsigned backReferenceLimit, bool isNamedForwardReferenceAllowed)
+    Parser(Delegate& delegate, const String& pattern, bool isUnicode, unsigned backReferenceLimit)
         : m_delegate(delegate)
+        , m_backReferenceLimit(backReferenceLimit)
         , m_data(pattern.characters<CharType>())
         , m_size(pattern.length())
         , m_isUnicode(isUnicode)
-        , m_backReferenceLimit(backReferenceLimit)
-        , m_isNamedForwardReferenceAllowed(isNamedForwardReferenceAllowed)
     {
     }
 
@@ -278,9 +275,12 @@ private:
         // Assertions
         case 'b':
             consume();
-            if (inCharacterClass)
+            if (inCharacterClass) {
+                if (isIdentityEscapeAnError('b'))
+                    break;
+
                 delegate.atomPatternCharacter('\b');
-            else {
+            } else {
                 delegate.assertionWordBoundary(false);
                 return false;
             }
@@ -324,23 +324,6 @@ private:
             delegate.atomBuiltInCharacterClass(BuiltInCharacterClassID::WordClassID, true);
             break;
 
-        case '0': {
-            consume();
-
-            if (!peekIsDigit()) {
-                delegate.atomPatternCharacter(0);
-                break;
-            }
-
-            if (m_isUnicode) {
-                m_errorCode = ErrorCode::InvalidOctalEscape;
-                break;
-            }
-
-            delegate.atomPatternCharacter(consumeOctal(2));
-            break;
-        }
-
         // DecimalEscape
         case '1':
         case '2':
@@ -351,33 +334,39 @@ private:
         case '7':
         case '8':
         case '9': {
-            // For non-Unicode patterns, invalid backreferences are parsed as octal or decimal escapes.
+            // To match Firefox, we parse an invalid backreference in the range [1-7] as an octal escape.
             // First, try to parse this as backreference.
             if (!inCharacterClass) {
                 ParseState state = saveState();
 
                 unsigned backReference = consumeNumber();
                 if (backReference <= m_backReferenceLimit) {
-                    m_maxSeenBackReference = std::max(m_maxSeenBackReference, backReference);
                     delegate.atomBackReference(backReference);
                     break;
                 }
 
                 restoreState(state);
+
                 if (m_isUnicode) {
                     m_errorCode = ErrorCode::InvalidBackreference;
-                    break;
+                    return false;
                 }
             }
 
-            if (m_isUnicode) {
-                m_errorCode = ErrorCode::InvalidOctalEscape;
+            // Not a backreference, and not octal. Just a number.
+            if (peek() >= '8') {
+                delegate.atomPatternCharacter(consume());
                 break;
             }
 
-            delegate.atomPatternCharacter(peek() < '8' ? consumeOctal(3) : consume());
-            break;
+            // Fall-through to handle this as an octal escape.
+            FALLTHROUGH;
         }
+
+        // Octal escape
+        case '0':
+            delegate.atomPatternCharacter(consumeOctal());
+            break;
 
         // ControlEscape
         case 'f':
@@ -453,30 +442,28 @@ private:
         case 'k': {
             consume();
             ParseState state = saveState();
-            if (!inCharacterClass && tryConsume('<')) {
+            if (!atEndOfPattern() && !inCharacterClass) {
+                if (consume() == '<') {
                     auto groupName = tryConsumeGroupName();
-                if (hasError(m_errorCode))
-                    break;
-
                     if (groupName) {
                         if (m_captureGroupNames.contains(groupName.value())) {
                             delegate.atomNamedBackReference(groupName.value());
                             break;
                         }
 
-                    if (m_isNamedForwardReferenceAllowed) {
-                        m_forwardReferenceNames.add(groupName.value());
+                        if (delegate.isValidNamedForwardReference(groupName.value())) {
                             delegate.atomNamedForwardReference(groupName.value());
                             break;
                         }
                     }
+                    if (m_isUnicode) {
+                        m_errorCode = ErrorCode::InvalidBackreference;
+                        break;
+                    }
+                }
             }
-
             restoreState(state);
-            if (!isIdentityEscapeAnError('k')) {
             delegate.atomPatternCharacter('k');
-                m_kIdentityEscapeSeen = true;
-            }
             break;
         }
 
@@ -507,11 +494,64 @@ private:
 
         // UnicodeEscape
         case 'u': {
-            int codePoint = tryConsumeUnicodeEscape<UnicodeParseContext::PatternCodePoint>();
-                if (hasError(m_errorCode))
-                break;
+            consume();
+            if (atEndOfPattern()) {
+                if (isIdentityEscapeAnError('u'))
+                    break;
 
-            delegate.atomPatternCharacter(codePoint == -1 ? 'u' : codePoint);
+                delegate.atomPatternCharacter('u');
+                break;
+            }
+
+            if (m_isUnicode && peek() == '{') {
+                consume();
+                UChar32 codePoint = 0;
+                do {
+                    if (atEndOfPattern() || !isASCIIHexDigit(peek())) {
+                        m_errorCode = ErrorCode::InvalidUnicodeEscape;
+                        break;
+                    }
+
+                    codePoint = (codePoint << 4) | toASCIIHexValue(consume());
+
+                    if (codePoint > UCHAR_MAX_VALUE)
+                        m_errorCode = ErrorCode::InvalidUnicodeEscape;
+                } while (!atEndOfPattern() && peek() != '}');
+                if (!atEndOfPattern() && peek() == '}')
+                    consume();
+                else if (!hasError(m_errorCode))
+                    m_errorCode = ErrorCode::InvalidUnicodeEscape;
+                if (hasError(m_errorCode))
+                    return false;
+
+                delegate.atomPatternCharacter(codePoint);
+                break;
+            }
+            int u = tryConsumeHex(4);
+            if (u == -1) {
+                if (isIdentityEscapeAnError('u'))
+                    break;
+
+                delegate.atomPatternCharacter('u');
+            } else {
+                // If we have the first of a surrogate pair, look for the second.
+                if (U16_IS_LEAD(u) && m_isUnicode && (patternRemaining() >= 6) && peek() == '\\') {
+                    ParseState state = saveState();
+                    consume();
+
+                    if (tryConsume('u')) {
+                        int surrogate2 = tryConsumeHex(4);
+                        if (U16_IS_TRAIL(surrogate2)) {
+                            u = U16_GET_SUPPLEMENTARY(u, surrogate2);
+                            delegate.atomPatternCharacter(u);
+                            break;
+                        }
+                    }
+
+                    restoreState(state);
+                }
+                delegate.atomPatternCharacter(u);
+            }
             break;
         }
 
@@ -534,13 +574,10 @@ private:
         return true;
     }
 
-    template<UnicodeParseContext context>
     UChar32 consumePossibleSurrogatePair()
     {
-        bool unicodePatternOrGroupName = m_isUnicode || context == UnicodeParseContext::GroupName;
-
         UChar32 ch = consume();
-        if (U16_IS_LEAD(ch) && unicodePatternOrGroupName && !atEndOfPattern()) {
+        if (U16_IS_LEAD(ch) && m_isUnicode && (patternRemaining() > 0)) {
             ParseState state = saveState();
 
             UChar32 surrogate2 = consume();
@@ -596,7 +633,7 @@ private:
                 break;
 
             default:
-                characterClassConstructor.atomPatternCharacter(consumePossibleSurrogatePair<UnicodeParseContext::PatternCodePoint>(), true);
+                characterClassConstructor.atomPatternCharacter(consumePossibleSurrogatePair(), true);
             }
 
             if (hasError(m_errorCode))
@@ -642,15 +679,7 @@ private:
 
             case '<': {
                 auto groupName = tryConsumeGroupName();
-                if (hasError(m_errorCode))
-                    break;
-
                 if (groupName) {
-                    if (m_kIdentityEscapeSeen) {
-                        m_errorCode = ErrorCode::InvalidNamedBackReference;
-                        break;
-                    }
-
                     auto setAddResult = m_captureGroupNames.add(groupName.value());
                     if (setAddResult.isNewEntry)
                         m_delegate.atomParenthesesSubpatternBegin(true, groupName);
@@ -667,9 +696,6 @@ private:
             }
         } else
             m_delegate.atomParenthesesSubpatternBegin();
-
-        if (type == ParenthesesType::Subpattern)
-            ++m_numSubpatterns;
 
         m_parenthesesStack.append(type);
     }
@@ -838,7 +864,7 @@ private:
             }
 
             default:
-                m_delegate.atomPatternCharacter(consumePossibleSurrogatePair<UnicodeParseContext::PatternCodePoint>());
+                m_delegate.atomPatternCharacter(consumePossibleSurrogatePair());
                 lastTokenWasAnAtom = true;
             }
 
@@ -858,85 +884,12 @@ private:
     ErrorCode parse()
     {
         if (m_size > MAX_PATTERN_SIZE)
-            return ErrorCode::PatternTooLarge;
-
+            m_errorCode = ErrorCode::PatternTooLarge;
+        else
             parseTokens();
-
-        if (!hasError(m_errorCode)) {
-            ASSERT(atEndOfPattern());
-            handleIllegalReferences();
-            ASSERT(atEndOfPattern());
-        }
+        ASSERT(atEndOfPattern() || hasError(m_errorCode));
 
         return m_errorCode;
-    }
-
-    void handleIllegalReferences()
-    {
-        bool shouldReparse = false;
-
-        if (m_maxSeenBackReference > m_numSubpatterns) {
-            // Contains illegal numeric backreference. See https://tc39.es/ecma262/#prod-annexB-AtomEscape
-            if (m_isUnicode) {
-                m_errorCode = ErrorCode::InvalidBackreference;
-                return;
-            }
-
-            m_backReferenceLimit = m_numSubpatterns;
-            shouldReparse = true;
-        }
-
-        if (m_kIdentityEscapeSeen && !m_captureGroupNames.isEmpty()) {
-            m_errorCode = ErrorCode::InvalidNamedBackReference;
-            return;
-        }
-
-        if (containsIllegalNamedForwardReference()) {
-            // \k<a> is parsed as named reference in Unicode patterns because of strict IdentityEscape grammar.
-            // See https://tc39.es/ecma262/#sec-patterns-static-semantics-early-errors
-            if (m_isUnicode || !m_captureGroupNames.isEmpty()) {
-                m_errorCode = ErrorCode::InvalidNamedBackReference;
-                return;
-            }
-
-            m_isNamedForwardReferenceAllowed = false;
-            shouldReparse = true;
-        }
-
-        if (shouldReparse) {
-            resetForReparsing();
-            parseTokens();
-        }
-    }
-
-    bool containsIllegalNamedForwardReference()
-    {
-        if (m_forwardReferenceNames.isEmpty())
-            return false;
-
-        if (m_captureGroupNames.isEmpty())
-            return true;
-
-        for (auto& entry : m_forwardReferenceNames) {
-            if (!m_captureGroupNames.contains(entry))
-                return true;
-        }
-
-        return false;
-    }
-
-    void resetForReparsing()
-    {
-        ASSERT(!hasError(m_errorCode));
-
-        m_delegate.resetForReparsing();
-        m_index = 0;
-        m_numSubpatterns = 0;
-        m_maxSeenBackReference = 0;
-        m_kIdentityEscapeSeen = false;
-        m_parenthesesStack.clear();
-        m_captureGroupNames.clear();
-        m_forwardReferenceNames.clear();
     }
 
     // Misc helper functions:
@@ -982,73 +935,70 @@ private:
         return peek() - '0';
     }
 
-    template<UnicodeParseContext context>
     int tryConsumeUnicodeEscape()
     {
-        ASSERT(!hasError(m_errorCode));
-
-        bool unicodePatternOrGroupName = m_isUnicode || context == UnicodeParseContext::GroupName;
-
-        if (!tryConsume('u') || atEndOfPattern()) {
-            if (unicodePatternOrGroupName)
-                m_errorCode = ErrorCode::InvalidUnicodeEscape;
+        if (!tryConsume('u'))
             return -1;
-        }
 
-        if (unicodePatternOrGroupName && tryConsume('{')) {
+        if (m_isUnicode && tryConsume('{')) {
             int codePoint = 0;
             do {
                 if (atEndOfPattern() || !isASCIIHexDigit(peek())) {
-                    m_errorCode = ErrorCode::InvalidUnicodeCodePointEscape;
+                    m_errorCode = ErrorCode::InvalidUnicodeEscape;
                     return -1;
                 }
 
                 codePoint = (codePoint << 4) | toASCIIHexValue(consume());
 
                 if (codePoint > UCHAR_MAX_VALUE) {
-                    m_errorCode = ErrorCode::InvalidUnicodeCodePointEscape;
+                    m_errorCode = ErrorCode::InvalidUnicodeEscape;
                     return -1;
                 }
             } while (!atEndOfPattern() && peek() != '}');
-
-            if (!tryConsume('}')) {
-                m_errorCode = ErrorCode::InvalidUnicodeCodePointEscape;
+            if (!atEndOfPattern() && peek() == '}')
+                consume();
+            else if (!hasError(m_errorCode))
+                m_errorCode = ErrorCode::InvalidUnicodeEscape;
+            if (hasError(m_errorCode))
                 return -1;
-            }
 
             return codePoint;
         }
 
-        int codeUnit = tryConsumeHex(4);
-        if (codeUnit == -1) {
-            if (unicodePatternOrGroupName)
-                m_errorCode = ErrorCode::InvalidUnicodeEscape;
+        int u = tryConsumeHex(4);
+        if (u == -1)
             return -1;
-        }
 
         // If we have the first of a surrogate pair, look for the second.
-        if (U16_IS_LEAD(codeUnit) && unicodePatternOrGroupName && patternRemaining() >= 6 && peek() == '\\') {
+        if (U16_IS_LEAD(u) && m_isUnicode && (patternRemaining() >= 6) && peek() == '\\') {
             ParseState state = saveState();
             consume();
 
             if (tryConsume('u')) {
                 int surrogate2 = tryConsumeHex(4);
-                if (U16_IS_TRAIL(surrogate2))
-                    return U16_GET_SUPPLEMENTARY(codeUnit, surrogate2);
+                if (U16_IS_TRAIL(surrogate2)) {
+                    u = U16_GET_SUPPLEMENTARY(u, surrogate2);
+                    return u;
+                }
             }
 
             restoreState(state);
         }
 
-        return codeUnit;
+        return u;
     }
 
     int tryConsumeIdentifierCharacter()
     {
-        if (tryConsume('\\'))
-            return tryConsumeUnicodeEscape<UnicodeParseContext::GroupName>();
+        int ch = peek();
 
-        return consumePossibleSurrogatePair<UnicodeParseContext::GroupName>();
+        if (ch == '\\') {
+            consume();
+            ch = tryConsumeUnicodeEscape();
+        } else
+            consume();
+
+        return ch;
     }
 
     bool isIdentifierStart(int ch)
@@ -1086,13 +1036,14 @@ private:
         return n.hasOverflowed() ? quantifyInfinite : n.unsafeGet();
     }
 
-    // https://tc39.es/ecma262/#prod-annexB-LegacyOctalEscapeSequence
-    unsigned consumeOctal(unsigned count)
+    unsigned consumeOctal()
     {
-        unsigned octal = 0;
-        while (count-- && octal < 32 && !atEndOfPattern() && WTF::isASCIIOctalDigit(peek()))
-            octal = octal * 8 + consumeDigit();
-        return octal;
+        ASSERT(WTF::isASCIIOctalDigit(peek()));
+
+        unsigned n = consumeDigit();
+        while (n < 32 && !atEndOfPattern() && WTF::isASCIIOctalDigit(peek()))
+            n = n * 8 + consumeDigit();
+        return n;
     }
 
     bool tryConsume(UChar ch)
@@ -1205,19 +1156,14 @@ private:
     enum class ParenthesesType : uint8_t { Subpattern, Assertion };
 
     Delegate& m_delegate;
+    unsigned m_backReferenceLimit;
     ErrorCode m_errorCode { ErrorCode::NoError };
     const CharType* m_data;
     unsigned m_size;
     unsigned m_index { 0 };
     bool m_isUnicode;
-    unsigned m_backReferenceLimit;
-    unsigned m_numSubpatterns { 0 };
-    unsigned m_maxSeenBackReference { 0 };
-    bool m_isNamedForwardReferenceAllowed;
-    bool m_kIdentityEscapeSeen { false };
     Vector<ParenthesesType, 16> m_parenthesesStack;
     HashSet<String> m_captureGroupNames;
-    HashSet<String> m_forwardReferenceNames;
 
     // Derived by empirical testing of compile time in PCRE and WREC.
     static constexpr unsigned MAX_PATTERN_SIZE = 1024 * 1024;
@@ -1249,13 +1195,12 @@ private:
  *    void atomParenthesesEnd();
  *    void atomBackReference(unsigned subpatternId);
  *    void atomNamedBackReference(const String& subpatternName);
+ *    bool isValidNamedForwardReference(const String& subpatternName);
  *    void atomNamedForwardReference(const String& subpatternName);
  *
  *    void quantifyAtom(unsigned min, unsigned max, bool greedy);
  *
  *    void disjunction();
- *
- *    void resetForReparsing();
  *
  * The regular expression is described by a sequence of assertion*() and atom*()
  * callbacks to the delegate, describing the terms in the regular expression.
@@ -1287,11 +1232,11 @@ private:
  */
 
 template<class Delegate>
-ErrorCode parse(Delegate& delegate, const String& pattern, bool isUnicode, unsigned backReferenceLimit = quantifyInfinite, bool isNamedForwardReferenceAllowed = true)
+ErrorCode parse(Delegate& delegate, const String& pattern, bool isUnicode, unsigned backReferenceLimit = quantifyInfinite)
 {
     if (pattern.is8Bit())
-        return Parser<Delegate, LChar>(delegate, pattern, isUnicode, backReferenceLimit, isNamedForwardReferenceAllowed).parse();
-    return Parser<Delegate, UChar>(delegate, pattern, isUnicode, backReferenceLimit, isNamedForwardReferenceAllowed).parse();
+        return Parser<Delegate, LChar>(delegate, pattern, isUnicode, backReferenceLimit).parse();
+    return Parser<Delegate, UChar>(delegate, pattern, isUnicode, backReferenceLimit).parse();
 }
 
 } } // namespace JSC::Yarr

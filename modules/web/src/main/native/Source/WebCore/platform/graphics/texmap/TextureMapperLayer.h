@@ -17,7 +17,8 @@
  Boston, MA 02110-1301, USA.
  */
 
-#pragma once
+#ifndef TextureMapperLayer_h
+#define TextureMapperLayer_h
 
 #include "FilterOperations.h"
 #include "FloatRect.h"
@@ -58,7 +59,6 @@ public:
     void setChildren(const Vector<TextureMapperLayer*>&);
     void setMaskLayer(TextureMapperLayer*);
     void setReplicaLayer(TextureMapperLayer*);
-    void setBackdropLayer(TextureMapperLayer*);
     void setPosition(const FloatPoint&);
     void setBoundsOrigin(const FloatPoint&);
     void setSize(const FloatSize&);
@@ -81,7 +81,6 @@ public:
     void setSolidColor(const Color&);
     void setContentsTileSize(const FloatSize&);
     void setContentsTilePhase(const FloatSize&);
-    void setContentsClippingRect(const FloatRoundedRect&);
     void setFilters(const FilterOperations&);
 
     bool hasFilters() const
@@ -107,13 +106,13 @@ public:
     void addChild(TextureMapperLayer*);
 
 private:
-    TextureMapperLayer& rootLayer() const
+    const TextureMapperLayer& rootLayer() const
     {
         if (m_effectTarget)
             return m_effectTarget->rootLayer();
         if (m_parent)
             return m_parent->rootLayer();
-        return const_cast<TextureMapperLayer&>(*this);
+        return *this;
     }
     void computeTransformsRecursive();
 
@@ -167,10 +166,8 @@ private:
         FloatRect contentsRect;
         FloatSize contentsTileSize;
         FloatSize contentsTilePhase;
-        FloatRoundedRect contentsClippingRect;
         WeakPtr<TextureMapperLayer> maskLayer;
         WeakPtr<TextureMapperLayer> replicaLayer;
-        WeakPtr<TextureMapperLayer> backdropLayer;
         Color solidColor;
         FilterOperations filters;
         Color debugBorderColor;
@@ -212,7 +209,6 @@ private:
 #if USE(COORDINATED_GRAPHICS)
     RefPtr<Nicosia::AnimatedBackingStoreClient> m_animatedBackingStoreClient;
 #endif
-    bool m_isBackdrop { false };
 
     struct {
         TransformationMatrix localTransform;
@@ -226,4 +222,6 @@ private:
     } m_layerTransforms;
 };
 
-} // namespace WebCore
+}
+
+#endif // TextureMapperLayer_h

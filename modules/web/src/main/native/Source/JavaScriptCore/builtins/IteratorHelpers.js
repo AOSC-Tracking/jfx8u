@@ -32,7 +32,7 @@ function performIteration(iterable)
 
     var result = [];
 
-    var iterator = iterable.@@iterator();
+    var iterator = iterable.@iteratorSymbol();
     var next = iterator.next;
     var item;
     var index = 0;

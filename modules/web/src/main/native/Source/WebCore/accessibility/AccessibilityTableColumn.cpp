@@ -31,6 +31,7 @@
 
 #include "AXObjectCache.h"
 #include "AccessibilityTableCell.h"
+#include "HTMLCollection.h"
 #include "HTMLElement.h"
 #include "HTMLNames.h"
 #include "RenderTable.h"
@@ -69,17 +70,20 @@ LayoutRect AccessibilityTableColumn::elementRect() const
     return columnRect;
 }
 
-AXCoreObject* AccessibilityTableColumn::columnHeader()
+AXCoreObject* AccessibilityTableColumn::headerObject()
 {
-    if (!m_parent || !is<AccessibilityTable>(*m_parent)
-        || !m_parent->isExposable())
+    if (!m_parent)
         return nullptr;
 
     RenderObject* renderer = m_parent->renderer();
     if (!renderer)
         return nullptr;
+    if (!is<AccessibilityTable>(*m_parent))
+        return nullptr;
 
     auto& parentTable = downcast<AccessibilityTable>(*m_parent);
+    if (!parentTable.isExposableThroughAccessibility())
+        return nullptr;
 
     if (parentTable.isAriaTable()) {
         for (const auto& cell : children()) {
@@ -188,13 +192,13 @@ void AccessibilityTableColumn::addChildren()
         return;
 
     auto& parentTable = downcast<AccessibilityTable>(*m_parent);
-    if (!parentTable.isExposable())
+    if (!parentTable.isExposableThroughAccessibility())
         return;
 
     int numRows = parentTable.rowCount();
 
     for (int i = 0; i < numRows; ++i) {
-        auto* cell = parentTable.cellForColumnAndRow(m_columnIndex, i);
+        AccessibilityTableCell* cell = parentTable.cellForColumnAndRow(m_columnIndex, i);
         if (!cell)
             continue;
 

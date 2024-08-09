@@ -123,26 +123,27 @@ public:
     bool hasReifiedName() const { return m_hasReifiedName; }
     void setHasReifiedName() { m_hasReifiedName = true; }
 
-    bool hasModifiedLengthForNonHostFunction() const { return m_hasModifiedLengthForNonHostFunction; }
-    void setHasModifiedLengthForNonHostFunction()
+    bool hasModifiedLength() const { return m_hasModifiedLength; }
+    void setHasModifiedLength()
     {
-        m_hasModifiedLengthForNonHostFunction = true;
+        m_hasModifiedLength = true;
     }
-    bool hasModifiedNameForNonHostFunction() const { return m_hasModifiedNameForNonHostFunction; }
-    void setHasModifiedNameForNonHostFunction()
+    bool hasModifiedName() const { return m_hasModifiedName; }
+    void setHasModifiedName()
     {
-        m_hasModifiedNameForNonHostFunction = true;
+        m_hasModifiedName = true;
     }
 
     bool hasAllocationProfileClearingWatchpoint() const { return !!m_allocationProfileClearingWatchpoint; }
     Watchpoint* createAllocationProfileClearingWatchpoint();
     class AllocationProfileClearingWatchpoint;
 
-private:
-    friend class LLIntOffsetsExtractor;
-
+protected:
     explicit FunctionRareData(VM&, ExecutableBase*);
     ~FunctionRareData();
+
+private:
+    friend class LLIntOffsetsExtractor;
 
     // Ideally, there would only be one allocation profile for subclassing but due to Reflect.construct we
     // have two. There are some pros and cons in comparison to our current system to using the same profile
@@ -165,8 +166,8 @@ private:
     std::unique_ptr<AllocationProfileClearingWatchpoint> m_allocationProfileClearingWatchpoint;
     bool m_hasReifiedLength : 1;
     bool m_hasReifiedName : 1;
-    bool m_hasModifiedLengthForNonHostFunction : 1;
-    bool m_hasModifiedNameForNonHostFunction : 1;
+    bool m_hasModifiedLength : 1;
+    bool m_hasModifiedName : 1;
 };
 
 class FunctionRareData::AllocationProfileClearingWatchpoint final : public Watchpoint {

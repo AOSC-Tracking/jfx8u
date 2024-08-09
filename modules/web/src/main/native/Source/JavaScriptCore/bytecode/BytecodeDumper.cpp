@@ -27,11 +27,19 @@
 #include "config.h"
 #include "BytecodeDumper.h"
 
+#include "ArithProfile.h"
+#include "B3Type.h"
 #include "BytecodeGenerator.h"
-#include "BytecodeGraph.h"
 #include "BytecodeStructs.h"
+#include "CallLinkStatus.h"
 #include "CodeBlock.h"
-#include "JSCJSValueInlines.h"
+#include "Error.h"
+#include "HeapInlines.h"
+#include "InterpreterInlines.h"
+#include "PolymorphicAccess.h"
+#include "PutByIdFlags.h"
+#include "StructureInlines.h"
+#include "ToThisStatus.h"
 #include "UnlinkedCodeBlockGenerator.h"
 #include "UnlinkedMetadataTableInlines.h"
 #include "WasmFunctionCodeBlock.h"
@@ -41,6 +49,11 @@
 #include "WasmSignatureInlines.h"
 
 namespace JSC {
+
+static ALWAYS_INLINE bool isConstantRegisterIndex(int index)
+{
+    return index >= FirstConstantRegisterIndex;
+}
 
 void BytecodeDumperBase::printLocationAndOp(InstructionStream::Offset location, const char* op)
 {
@@ -212,8 +225,8 @@ void CodeBlockBytecodeDumper<Block>::dumpStringSwitchJumpTables()
     }
 }
 
-template <typename Block>
-static void dumpHeader(Block* block, const InstructionStream& instructions, PrintStream& out)
+template<class Block>
+void CodeBlockBytecodeDumper<Block>::dumpBlock(Block* block, const InstructionStream& instructions, PrintStream& out, const ICStatusMap& statusMap)
 {
     size_t instructionCount = 0;
     size_t wide16InstructionCount = 0;
@@ -242,62 +255,16 @@ static void dumpHeader(Block* block, const InstructionStream& instructions, Prin
         block->numParameters(), block->numCalleeLocals(), block->numVars());
     out.print("; scope at ", block->scopeRegister());
     out.printf("\n");
-}
-
-template <typename Dumper>
-static void dumpFooter(Dumper& dumper)
-{
-    dumper.dumpIdentifiers();
-    dumper.dumpConstants();
-    dumper.dumpExceptionHandlers();
-    dumper.dumpSwitchJumpTables();
-    dumper.dumpStringSwitchJumpTables();
-}
-
-template<class Block>
-void CodeBlockBytecodeDumper<Block>::dumpBlock(Block* block, const InstructionStream& instructions, PrintStream& out, const ICStatusMap& statusMap)
-{
-    dumpHeader(block, instructions, out);
 
     CodeBlockBytecodeDumper<Block> dumper(block, out);
     for (const auto& it : instructions)
         dumper.dumpBytecode(it, statusMap);
 
-    dumpFooter(dumper);
-
-    out.printf("\n");
-}
-
-template<class Block>
-void CodeBlockBytecodeDumper<Block>::dumpGraph(Block* block, const InstructionStream& instructions, BytecodeGraph& graph, PrintStream& out, const ICStatusMap& icStatusMap)
-{
-    dumpHeader(block, instructions, out);
-
-    CodeBlockBytecodeDumper<Block> dumper(block, out);
-
-    out.printf("\n");
-
-    for (BytecodeBasicBlock& block : graph) {
-        if (block.isEntryBlock() || block.isExitBlock())
-            continue;
-
-        out.print("bb#", block.index(), "\n");
-
-        for (unsigned i = 0; i < block.totalLength(); ) {
-            auto& currentInstruction = instructions.at(i + block.leaderOffset());
-            dumper.dumpBytecode(currentInstruction, icStatusMap);
-            i += currentInstruction.ptr()->size();
-        }
-
-        out.print("Successors: [");
-        for (unsigned successor : block.successors()) {
-            if (!graph[successor].isExitBlock())
-                out.print(" #", successor);
-        }
-        out.print(" ]\n\n");
-    }
-
-    dumpFooter(dumper);
+    dumper.dumpIdentifiers();
+    dumper.dumpConstants();
+    dumper.dumpExceptionHandlers();
+    dumper.dumpSwitchJumpTables();
+    dumper.dumpStringSwitchJumpTables();
 
     out.printf("\n");
 }

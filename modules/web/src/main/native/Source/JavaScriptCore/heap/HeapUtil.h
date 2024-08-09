@@ -88,7 +88,7 @@ public:
             MarkedBlock* previousCandidate = MarkedBlock::blockFor(previousPointer);
             if (!filter.ruleOut(bitwise_cast<Bits>(previousCandidate))
                 && set.contains(previousCandidate)
-                && mayHaveIndexingHeader(previousCandidate->handle().cellKind())) {
+                && hasInteriorPointers(previousCandidate->handle().cellKind())) {
                 previousPointer = static_cast<char*>(previousCandidate->handle().cellAlign(previousPointer));
                 if (previousCandidate->handle().isLiveCell(markingVersion, newlyAllocatedVersion, isMarking, previousPointer))
                     func(previousPointer, previousCandidate->handle().cellKind());
@@ -106,26 +106,20 @@ public:
         HeapCell::Kind cellKind = candidate->handle().cellKind();
 
         auto tryPointer = [&] (void* pointer) {
-            bool isLive = candidate->handle().isLiveCell(markingVersion, newlyAllocatedVersion, isMarking, pointer);
-            if (isLive)
+            if (candidate->handle().isLiveCell(markingVersion, newlyAllocatedVersion, isMarking, pointer))
                 func(pointer, cellKind);
-            // Only return early if we are marking a non-butterfly, since butterflies without indexed properties could point past the end of their allocation.
-            // If we do, and there is another live butterfly immediately following the first, we will mark the latter one here but we still need to
-            // mark the former.
-            return isLive && !mayHaveIndexingHeader(cellKind);
         };
 
         if (isJSCellKind(cellKind)) {
-            if (LIKELY(MarkedBlock::isAtomAligned(pointer))) {
-                if (tryPointer(pointer))
-                    return;
-            }
+            if (MarkedBlock::isAtomAligned(pointer))
+                tryPointer(pointer);
+            if (!hasInteriorPointers(cellKind))
+                return;
         }
 
-        // We could point into the middle of an object.
+        // A butterfly could point into the middle of an object.
         char* alignedPointer = static_cast<char*>(candidate->handle().cellAlign(pointer));
-        if (tryPointer(alignedPointer))
-            return;
+        tryPointer(alignedPointer);
 
         // Also, a butterfly could point at the end of an object plus sizeof(IndexingHeader). In that
         // case, this is pointing to the object to the right of the one we should be marking.

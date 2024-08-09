@@ -27,6 +27,8 @@
 #include "JSBoundFunction.h"
 
 #include "ExecutableBaseInlines.h"
+#include "GetterSetter.h"
+#include "JSGlobalObject.h"
 #include "JSCInlines.h"
 
 namespace JSC {
@@ -55,9 +57,10 @@ EncodedJSValue JSC_HOST_CALL boundThisNoArgsFunctionCall(JSGlobalObject* globalO
         // Force the executable to cache its arity entrypoint.
         executable->entrypointFor(CodeForCall, MustCheckArity);
     }
-    auto callData = getCallData(globalObject->vm(), targetFunction);
-    ASSERT(callData.type != CallData::Type::None);
-    return JSValue::encode(call(globalObject, targetFunction, callData, boundFunction->boundThis(), args));
+    CallData callData;
+    CallType callType = getCallData(globalObject->vm(), targetFunction, callData);
+    ASSERT(callType != CallType::None);
+    return JSValue::encode(call(globalObject, targetFunction, callType, callData, boundFunction->boundThis(), args));
 }
 
 EncodedJSValue JSC_HOST_CALL boundFunctionCall(JSGlobalObject* globalObject, CallFrame* callFrame)
@@ -82,9 +85,10 @@ EncodedJSValue JSC_HOST_CALL boundFunctionCall(JSGlobalObject* globalObject, Cal
     }
 
     JSObject* targetFunction = boundFunction->targetFunction();
-    auto callData = getCallData(vm, targetFunction);
-    ASSERT(callData.type != CallData::Type::None);
-    RELEASE_AND_RETURN(scope, JSValue::encode(call(globalObject, targetFunction, callData, boundFunction->boundThis(), args)));
+    CallData callData;
+    CallType callType = getCallData(vm, targetFunction, callData);
+    ASSERT(callType != CallType::None);
+    RELEASE_AND_RETURN(scope, JSValue::encode(call(globalObject, targetFunction, callType, callData, boundFunction->boundThis(), args)));
 }
 
 EncodedJSValue JSC_HOST_CALL boundThisNoArgsFunctionConstruct(JSGlobalObject* globalObject, CallFrame* callFrame)
@@ -104,13 +108,10 @@ EncodedJSValue JSC_HOST_CALL boundThisNoArgsFunctionConstruct(JSGlobalObject* gl
     RELEASE_ASSERT(!args.hasOverflowed());
 
     JSFunction* targetFunction = jsCast<JSFunction*>(boundFunction->targetFunction());
-    auto constructData = getConstructData(globalObject->vm(), targetFunction);
-    ASSERT(constructData.type != CallData::Type::None);
-
-    JSValue newTarget = callFrame->newTarget();
-    if (newTarget == boundFunction)
-        newTarget = targetFunction;
-    return JSValue::encode(construct(globalObject, targetFunction, constructData, args, newTarget));
+    ConstructData constructData;
+    ConstructType constructType = getConstructData(globalObject->vm(), targetFunction, constructData);
+    ASSERT(constructType != ConstructType::None);
+    return JSValue::encode(construct(globalObject, targetFunction, constructType, constructData, args));
 }
 
 EncodedJSValue JSC_HOST_CALL boundFunctionConstruct(JSGlobalObject* globalObject, CallFrame* callFrame)
@@ -135,13 +136,10 @@ EncodedJSValue JSC_HOST_CALL boundFunctionConstruct(JSGlobalObject* globalObject
     }
 
     JSObject* targetFunction = boundFunction->targetFunction();
-    auto constructData = getConstructData(vm, targetFunction);
-    ASSERT(constructData.type != CallData::Type::None);
-
-    JSValue newTarget = callFrame->newTarget();
-    if (newTarget == boundFunction)
-        newTarget = targetFunction;
-    RELEASE_AND_RETURN(scope, JSValue::encode(construct(globalObject, targetFunction, constructData, args, newTarget)));
+    ConstructData constructData;
+    ConstructType constructType = getConstructData(vm, targetFunction, constructData);
+    ASSERT(constructType != ConstructType::None);
+    RELEASE_AND_RETURN(scope, JSValue::encode(construct(globalObject, targetFunction, constructType, constructData, args)));
 }
 
 EncodedJSValue JSC_HOST_CALL isBoundFunction(JSGlobalObject* globalObject, CallFrame* callFrame)
@@ -199,7 +197,9 @@ JSBoundFunction* JSBoundFunction::create(VM& vm, JSGlobalObject* globalObject, J
     }
 
     bool isJSFunction = getJSFunction(targetFunction);
-    bool canConstruct = targetFunction->isConstructor(vm);
+    ConstructData constructData;
+    ConstructType constructType = JSC::getConstructData(vm, targetFunction, constructData);
+    bool canConstruct = constructType != ConstructType::None;
 
     NativeExecutable* executable = vm.getBoundFunction(isJSFunction, canConstruct);
     Structure* structure = getBoundFunctionStructure(vm, globalObject, targetFunction);

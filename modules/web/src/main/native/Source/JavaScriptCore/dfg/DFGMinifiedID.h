@@ -87,7 +87,9 @@ struct MinifiedIDHash {
 namespace WTF {
 
 template<typename T> struct DefaultHash;
-template<> struct DefaultHash<JSC::DFG::MinifiedID> : JSC::DFG::MinifiedIDHash { };
+template<> struct DefaultHash<JSC::DFG::MinifiedID> {
+    typedef JSC::DFG::MinifiedIDHash Hash;
+};
 
 template<typename T> struct HashTraits;
 template<> struct HashTraits<JSC::DFG::MinifiedID> : SimpleClassHashTraits<JSC::DFG::MinifiedID> {

@@ -26,7 +26,7 @@
 #include "config.h"
 #include "HeapSnapshot.h"
 
-#include <wtf/DataLog.h>
+#include "JSCInlines.h"
 #include <wtf/Optional.h>
 
 namespace JSC {

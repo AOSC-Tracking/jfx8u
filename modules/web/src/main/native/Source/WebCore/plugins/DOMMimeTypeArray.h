@@ -20,21 +20,19 @@
 
 #pragma once
 
+#include "DOMMimeType.h"
+#include "Navigator.h"
 #include "ScriptWrappable.h"
-#include <wtf/Ref.h>
 #include <wtf/RefCounted.h>
-#include <wtf/Vector.h>
-#include <wtf/WeakPtr.h>
 
 namespace WebCore {
 
-class DOMMimeType;
-class Navigator;
+class PluginData;
 
 class DOMMimeTypeArray final : public ScriptWrappable, public RefCounted<DOMMimeTypeArray> {
     WTF_MAKE_ISO_ALLOCATED(DOMMimeTypeArray);
 public:
-    static Ref<DOMMimeTypeArray> create(Navigator&, Vector<Ref<DOMMimeType>>&& = { });
+    static Ref<DOMMimeTypeArray> create(Navigator& navigator) { return adoptRef(*new DOMMimeTypeArray(navigator)); }
     ~DOMMimeTypeArray();
 
     unsigned length() const;
@@ -45,10 +43,11 @@ public:
     Navigator* navigator() { return m_navigator.get(); }
 
 private:
-    explicit DOMMimeTypeArray(Navigator&, Vector<Ref<DOMMimeType>>&&);
+    explicit DOMMimeTypeArray(Navigator&);
+    PluginData* getPluginData() const;
+    Frame* frame() const { return m_navigator ? m_navigator->frame() : nullptr; }
 
     WeakPtr<Navigator> m_navigator;
-    Vector<Ref<DOMMimeType>> m_types;
 };
 
 } // namespace WebCore

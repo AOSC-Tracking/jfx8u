@@ -95,14 +95,14 @@ static LayoutUnit computeOffsetAfterLineBreak(LayoutUnit lineBreakPosition, bool
 }
 
 static void setPageBreakForLine(unsigned lineBreakIndex, PaginatedLines& lines, RenderBlockFlow& flow, Layout::SimpleLineStruts& struts,
-    bool atTheTopOfColumnOrPage, bool lineDoesNotFit)
+    bool atTheTopOfColumnOrPage)
 {
     auto line = lines.at(lineBreakIndex);
     auto remainingLogicalHeight = flow.pageRemainingLogicalHeightForOffset(line.top, RenderBlockFlow::ExcludePageBoundary);
     auto& style = flow.style();
     auto firstLineDoesNotFit = !lineBreakIndex && line.height < flow.pageLogicalHeightForOffset(line.top);
-    auto moveOrphanToNextColumn = lineDoesNotFit && !style.hasAutoOrphans() && style.orphans() > (short)lineBreakIndex;
-    if (firstLineDoesNotFit || moveOrphanToNextColumn) {
+    auto orphanDoesNotFit = !style.hasAutoOrphans() && style.orphans() > (short)lineBreakIndex;
+    if (firstLineDoesNotFit || orphanDoesNotFit) {
         auto firstLine = lines.first();
         auto firstLineOverflowRect = computeOverflow(flow, LayoutRect(0_lu, firstLine.top, 0_lu, firstLine.height));
         auto firstLineUpperOverhang = std::max(LayoutUnit(-firstLineOverflowRect.y()), 0_lu);
@@ -146,12 +146,11 @@ void adjustLinePositionsForPagination(SimpleLineLayout::Layout& simpleLines, Ren
         lines.append(line);
         auto remainingHeight = flow.pageRemainingLogicalHeightForOffset(line.top, RenderBlockFlow::ExcludePageBoundary);
         auto atTheTopOfColumnOrPage = flow.pageLogicalHeightForOffset(line.top) == remainingHeight;
-        auto lineDoesNotFit = line.height > remainingHeight;
-        if (lineDoesNotFit || (atTheTopOfColumnOrPage && lineIndex)) {
+        if (line.height > remainingHeight || (atTheTopOfColumnOrPage && lineIndex)) {
             auto lineBreakIndex = computeLineBreakIndex(lineIndex, lineCount, orphans, widows, struts);
             // Are we still at the top of the column/page?
             atTheTopOfColumnOrPage = atTheTopOfColumnOrPage ? lineIndex == lineBreakIndex : false;
-            setPageBreakForLine(lineBreakIndex, lines, flow, struts, atTheTopOfColumnOrPage, lineDoesNotFit);
+            setPageBreakForLine(lineBreakIndex, lines, flow, struts, atTheTopOfColumnOrPage);
             // Recompute line positions that we already visited but widow break pushed them to a new page.
             for (auto i = lineBreakIndex; i < lines.size(); ++i)
                 lines.at(i) = computeLineTopAndBottomWithOverflow(flow, i, struts);

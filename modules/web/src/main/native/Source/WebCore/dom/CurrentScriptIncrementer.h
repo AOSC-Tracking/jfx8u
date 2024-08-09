@@ -29,27 +29,34 @@
 #pragma once
 
 #include "Document.h"
-#include "ScriptElement.h"
+#include "HTMLScriptElement.h"
 
 namespace WebCore {
 
 class CurrentScriptIncrementer {
     WTF_MAKE_NONCOPYABLE(CurrentScriptIncrementer);
 public:
-    CurrentScriptIncrementer(Document& document, ScriptElement& scriptElement)
+    CurrentScriptIncrementer(Document& document, Element& element)
         : m_document(document)
+        , m_isHTMLScriptElement(is<HTMLScriptElement>(element))
     {
-        bool shouldPushNullForCurrentScript = scriptElement.element().isInShadowTree() || scriptElement.scriptType() != ScriptElement::ScriptType::Classic;
-        m_document.pushCurrentScript(shouldPushNullForCurrentScript ? nullptr : &scriptElement.element());
+        if (!m_isHTMLScriptElement)
+            return;
+        auto& scriptElement = downcast<HTMLScriptElement>(element);
+        bool shouldPushNullForCurrentScript = scriptElement.isInShadowTree() || scriptElement.scriptType() == ScriptElement::ScriptType::Module;
+        m_document.pushCurrentScript(shouldPushNullForCurrentScript ? nullptr : &scriptElement);
     }
 
     ~CurrentScriptIncrementer()
     {
+        if (!m_isHTMLScriptElement)
+            return;
         m_document.popCurrentScript();
     }
 
 private:
     Document& m_document;
+    bool m_isHTMLScriptElement;
 };
 
 } // namespace WebCore

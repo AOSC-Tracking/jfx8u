@@ -28,12 +28,14 @@
 
 #if ENABLE(DFG_JIT)
 
+#include "BytecodeLivenessAnalysisInlines.h"
 #include "DFGEpoch.h"
 #include "DFGForAllKills.h"
 #include "DFGGraph.h"
+#include "DFGInsertionSet.h"
 #include "DFGMayExit.h"
 #include "DFGPhase.h"
-#include "JSCJSValueInlines.h"
+#include "JSCInlines.h"
 #include "OperandsInlines.h"
 
 namespace JSC { namespace DFG {
@@ -88,7 +90,7 @@ private:
             });
 
         if (DFGMovHintRemovalPhaseInternal::verbose)
-            dataLog("    Locals at ", block->terminal()->origin.forExit, ": ", m_state, "\n");
+            dataLog("    Locals: ", m_state, "\n");
 
         // Assume that blocks after us exit.
         currentEpoch.bump();
@@ -99,7 +101,7 @@ private:
             if (node->op() == MovHint) {
                 Epoch localEpoch = m_state.operand(node->unlinkedOperand());
                 if (DFGMovHintRemovalPhaseInternal::verbose)
-                    dataLog("    At ", node, " (", node->unlinkedOperand(), "): current = ", currentEpoch, ", local = ", localEpoch, "\n");
+                    dataLog("    At ", node, ": current = ", currentEpoch, ", local = ", localEpoch, "\n");
                 if (!localEpoch || localEpoch == currentEpoch) {
                     node->setOpAndDefaultFlags(ZombieHint);
                     node->child1() = Edge();

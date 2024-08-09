@@ -34,24 +34,19 @@ namespace JSC {
 
 class WebAssemblyLinkErrorPrototype final : public JSNonFinalObject {
 public:
-    using Base = JSNonFinalObject;
+    typedef JSNonFinalObject Base;
     static constexpr unsigned StructureFlags = Base::StructureFlags | HasStaticPropertyTable;
-
-    template<typename CellType, SubspaceAccess>
-    static IsoSubspace* subspaceFor(VM& vm)
-    {
-        STATIC_ASSERT_ISO_SUBSPACE_SHARABLE(WebAssemblyLinkErrorPrototype, Base);
-        return &vm.plainObjectSpace;
-    }
 
     static WebAssemblyLinkErrorPrototype* create(VM&, JSGlobalObject*, Structure*);
     static Structure* createStructure(VM&, JSGlobalObject*, JSValue);
 
     DECLARE_INFO;
 
+protected:
+    void finishCreation(VM&);
+
 private:
     WebAssemblyLinkErrorPrototype(VM&, Structure*);
-    void finishCreation(VM&);
 };
 
 } // namespace JSC

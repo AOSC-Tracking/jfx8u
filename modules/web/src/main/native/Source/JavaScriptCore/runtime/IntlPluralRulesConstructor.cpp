@@ -27,10 +27,14 @@
 #include "config.h"
 #include "IntlPluralRulesConstructor.h"
 
+#if ENABLE(INTL)
+
+#include "Error.h"
 #include "IntlObject.h"
 #include "IntlPluralRules.h"
 #include "IntlPluralRulesPrototype.h"
 #include "JSCInlines.h"
+#include "Lookup.h"
 
 namespace JSC {
 
@@ -87,12 +91,8 @@ static EncodedJSValue JSC_HOST_CALL constructIntlPluralRules(JSGlobalObject* glo
 
     // 13.2.1 Intl.PluralRules ([ locales [ , options ] ])
     // https://tc39.github.io/ecma402/#sec-intl.pluralrules
-    JSObject* newTarget = asObject(callFrame->newTarget());
-    Structure* structure = newTarget == callFrame->jsCallee()
-        ? globalObject->pluralRulesStructure()
-        : InternalFunction::createSubclassStructure(globalObject, newTarget, getFunctionRealm(vm, newTarget)->pluralRulesStructure());
-    RETURN_IF_EXCEPTION(scope, { });
-
+    Structure* structure = InternalFunction::createSubclassStructure(globalObject, callFrame->jsCallee(), callFrame->newTarget(), jsCast<IntlPluralRulesConstructor*>(callFrame->jsCallee())->pluralRulesStructure(vm));
+    RETURN_IF_EXCEPTION(scope, encodedJSValue());
     IntlPluralRules* pluralRules = IntlPluralRules::create(vm, structure);
     ASSERT(pluralRules);
 
@@ -127,3 +127,5 @@ EncodedJSValue JSC_HOST_CALL IntlPluralRulesConstructorFuncSupportedLocalesOf(JS
 }
 
 } // namespace JSC
+
+#endif // ENABLE(INTL)

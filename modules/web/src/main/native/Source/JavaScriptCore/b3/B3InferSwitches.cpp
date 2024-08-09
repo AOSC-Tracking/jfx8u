@@ -30,8 +30,9 @@
 
 #include "B3BasicBlockInlines.h"
 #include "B3CaseCollectionInlines.h"
-#include "B3InsertionSet.h"
+#include "B3InsertionSetInlines.h"
 #include "B3PhaseScope.h"
+#include "B3ProcedureInlines.h"
 #include "B3SwitchValue.h"
 #include "B3UseCounts.h"
 #include "B3ValueInlines.h"

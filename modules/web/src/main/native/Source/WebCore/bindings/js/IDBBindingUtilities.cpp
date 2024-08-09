@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2010 Google Inc. All rights reserved.
  * Copyright (C) 2012 Michael Pruett <michael@68k.org>
- * Copyright (C) 2014-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2014-2019 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -36,7 +36,6 @@
 #include "IDBKey.h"
 #include "IDBKeyData.h"
 #include "IDBKeyPath.h"
-#include "IDBObjectStoreInfo.h"
 #include "IDBValue.h"
 #include "IndexKey.h"
 #include "JSBlob.h"
@@ -60,9 +59,6 @@ using namespace JSC;
 
 static bool get(JSGlobalObject& lexicalGlobalObject, JSValue object, const String& keyPathElement, JSValue& result)
 {
-    VM& vm = lexicalGlobalObject.vm();
-    auto scope = DECLARE_THROW_SCOPE(vm);
-
     if (object.isString() && keyPathElement == "length") {
         result = jsNumber(asString(object)->length());
         return true;
@@ -70,11 +66,11 @@ static bool get(JSGlobalObject& lexicalGlobalObject, JSValue object, const Strin
     if (!object.isObject())
         return false;
 
+    VM& vm = lexicalGlobalObject.vm();
     auto* obj = asObject(object);
     Identifier identifier = Identifier::fromString(vm, keyPathElement);
     if (obj->inherits<JSArray>(vm) && keyPathElement == "length") {
         result = obj->get(&lexicalGlobalObject, identifier);
-        RETURN_IF_EXCEPTION(scope, false);
         return true;
     }
     if (obj->inherits<JSBlob>(vm) && (keyPathElement == "size" || keyPathElement == "type")) {
@@ -103,15 +99,12 @@ static bool get(JSGlobalObject& lexicalGlobalObject, JSValue object, const Strin
     }
 
     PropertyDescriptor descriptor;
-    bool found = obj->getOwnPropertyDescriptor(&lexicalGlobalObject, identifier, descriptor);
-    RETURN_IF_EXCEPTION(scope, false);
-    if (!found)
+    if (!obj->getOwnPropertyDescriptor(&lexicalGlobalObject, identifier, descriptor))
         return false;
     if (!descriptor.enumerable())
         return false;
 
     result = obj->get(&lexicalGlobalObject, identifier);
-    RETURN_IF_EXCEPTION(scope, false);
     return true;
 }
 
@@ -121,10 +114,11 @@ static bool canSet(JSValue object, const String& keyPathElement)
     return object.isObject();
 }
 
-static bool set(VM& vm, JSValue& object, const String& keyPathElement, JSValue jsValue)
+static bool set(JSGlobalObject& lexicalGlobalObject, JSValue& object, const String& keyPathElement, JSValue jsValue)
 {
     if (!canSet(object, keyPathElement))
         return false;
+    VM& vm = lexicalGlobalObject.vm();
     Identifier identifier = Identifier::fromString(vm, keyPathElement);
     asObject(object)->putDirect(vm, identifier, jsValue);
     return true;
@@ -169,11 +163,11 @@ JSValue toJS(JSGlobalObject& lexicalGlobalObject, JSGlobalObject& globalObject, 
         return JSArrayBuffer::create(lexicalGlobalObject.vm(), structure, WTFMove(arrayBuffer));
     }
     case IndexedDB::KeyType::String:
-        return jsStringWithCache(vm, key->string());
+        return jsStringWithCache(&lexicalGlobalObject, key->string());
     case IndexedDB::KeyType::Date:
         // FIXME: This should probably be toJS<IDLDate>(...) as per:
         // http://w3c.github.io/IndexedDB/#request-convert-a-key-to-a-value
-        RELEASE_AND_RETURN(scope, toJS<IDLNullable<IDLDate>>(lexicalGlobalObject, key->date()));
+        return toJS<IDLNullable<IDLDate>>(lexicalGlobalObject, key->date());
     case IndexedDB::KeyType::Number:
         return jsNumber(key->number());
     case IndexedDB::KeyType::Min:
@@ -192,19 +186,14 @@ static const size_t maximumDepth = 2000;
 static RefPtr<IDBKey> createIDBKeyFromValue(JSGlobalObject& lexicalGlobalObject, JSValue value, Vector<JSArray*>& stack)
 {
     VM& vm = lexicalGlobalObject.vm();
-    auto scope = DECLARE_THROW_SCOPE(vm);
+    if (value.isNumber() && !std::isnan(value.toNumber(&lexicalGlobalObject)))
+        return IDBKey::createNumber(value.toNumber(&lexicalGlobalObject));
 
-    if (value.isNumber() && !std::isnan(value.asNumber()))
-        return IDBKey::createNumber(value.asNumber());
-
-    if (value.isString()) {
-        auto string = asString(value)->value(&lexicalGlobalObject);
-        RETURN_IF_EXCEPTION(scope, { });
-        return IDBKey::createString(WTFMove(string));
-    }
+    if (value.isString())
+        return IDBKey::createString(asString(value)->value(&lexicalGlobalObject));
 
     if (value.inherits<DateInstance>(vm)) {
-        auto dateValue = valueToDate(vm, value);
+        auto dateValue = valueToDate(lexicalGlobalObject, value);
         if (!std::isnan(dateValue))
             return IDBKey::createDate(dateValue);
     }
@@ -225,9 +214,7 @@ static RefPtr<IDBKey> createIDBKeyFromValue(JSGlobalObject& lexicalGlobalObject,
             Vector<RefPtr<IDBKey>> subkeys;
             for (size_t i = 0; i < length; i++) {
                 JSValue item = array->getIndex(&lexicalGlobalObject, i);
-                RETURN_IF_EXCEPTION(scope, { });
                 RefPtr<IDBKey> subkey = createIDBKeyFromValue(lexicalGlobalObject, item, stack);
-                RETURN_IF_EXCEPTION(scope, { });
                 if (!subkey)
                     subkeys.append(IDBKey::createInvalid());
                 else
@@ -268,7 +255,7 @@ static JSValue getNthValueOnKeyPath(JSGlobalObject& lexicalGlobalObject, JSValue
     return currentValue;
 }
 
-static RefPtr<IDBKey> internalCreateIDBKeyFromScriptValueAndKeyPath(JSGlobalObject& lexicalGlobalObject, JSValue value, const String& keyPath)
+static RefPtr<IDBKey> internalCreateIDBKeyFromScriptValueAndKeyPath(JSGlobalObject& lexicalGlobalObject, const JSValue& value, const String& keyPath)
 {
     Vector<String> keyPathElements;
     IDBKeyPathParseError error;
@@ -292,7 +279,7 @@ static JSValue ensureNthValueOnKeyPath(JSGlobalObject& lexicalGlobalObject, JSVa
         const String& keyPathElement = keyPathElements[i];
         if (!get(lexicalGlobalObject, parentValue, keyPathElement, currentValue)) {
             JSObject* object = constructEmptyObject(&lexicalGlobalObject);
-            if (!set(lexicalGlobalObject.vm(), parentValue, keyPathElement, JSValue(object)))
+            if (!set(lexicalGlobalObject, parentValue, keyPathElement, JSValue(object)))
                 return jsUndefined();
             currentValue = JSValue(object);
         }
@@ -344,14 +331,14 @@ bool injectIDBKeyIntoScriptValue(JSGlobalObject& lexicalGlobalObject, const IDBK
     JSValue existingKey;
     if (get(lexicalGlobalObject, parent, keyPathElements.last(), existingKey) && !key->compare(createIDBKeyFromValue(lexicalGlobalObject, existingKey)))
         return true;
-    if (!set(lexicalGlobalObject.vm(), parent, keyPathElements.last(), toJS(lexicalGlobalObject, lexicalGlobalObject, key.get())))
+    if (!set(lexicalGlobalObject, parent, keyPathElements.last(), toJS(lexicalGlobalObject, lexicalGlobalObject, key.get())))
         return false;
 
     return true;
 }
 
 
-RefPtr<IDBKey> maybeCreateIDBKeyFromScriptValueAndKeyPath(JSGlobalObject& lexicalGlobalObject, JSValue value, const IDBKeyPath& keyPath)
+RefPtr<IDBKey> maybeCreateIDBKeyFromScriptValueAndKeyPath(JSGlobalObject& lexicalGlobalObject, const JSValue& value, const IDBKeyPath& keyPath)
 {
     if (WTF::holds_alternative<Vector<String>>(keyPath)) {
         auto& array = WTF::get<Vector<String>>(keyPath);
@@ -369,7 +356,7 @@ RefPtr<IDBKey> maybeCreateIDBKeyFromScriptValueAndKeyPath(JSGlobalObject& lexica
     return internalCreateIDBKeyFromScriptValueAndKeyPath(lexicalGlobalObject, value, WTF::get<String>(keyPath));
 }
 
-bool canInjectIDBKeyIntoScriptValue(JSGlobalObject& lexicalGlobalObject, JSValue scriptValue, const IDBKeyPath& keyPath)
+bool canInjectIDBKeyIntoScriptValue(JSGlobalObject& lexicalGlobalObject, const JSValue& scriptValue, const IDBKeyPath& keyPath)
 {
     LOG(StorageAPI, "canInjectIDBKeyIntoScriptValue");
 
@@ -418,7 +405,7 @@ JSC::JSValue toJS(JSC::JSGlobalObject* lexicalGlobalObject, JSDOMGlobalObject* g
     return deserializeIDBValueToJSValue(*lexicalGlobalObject, *globalObject, value);
 }
 
-Ref<IDBKey> scriptValueToIDBKey(JSGlobalObject& lexicalGlobalObject, JSValue scriptValue)
+Ref<IDBKey> scriptValueToIDBKey(JSGlobalObject& lexicalGlobalObject, const JSValue& scriptValue)
 {
     return createIDBKeyFromValue(lexicalGlobalObject, scriptValue);
 }
@@ -474,34 +461,6 @@ void generateIndexKeyForValue(JSGlobalObject& lexicalGlobalObject, const IDBInde
         return;
 
     outKey = IndexKey(WTFMove(keyDatas));
-}
-
-IndexIDToIndexKeyMap generateIndexKeyMapForValue(JSC::JSGlobalObject& lexicalGlobalObject, const IDBObjectStoreInfo& storeInfo, const IDBKeyData& key, const IDBValue& value)
-{
-    auto& indexMap = storeInfo.indexMap();
-    auto indexCount = indexMap.size();
-    if (!indexCount)
-        return IndexIDToIndexKeyMap { };
-
-    JSLockHolder locker(lexicalGlobalObject.vm());
-    auto jsValue = deserializeIDBValueToJSValue(lexicalGlobalObject, value);
-    if (jsValue.isUndefinedOrNull())
-        return IndexIDToIndexKeyMap { };
-
-    IndexIDToIndexKeyMap indexKeys;
-    indexKeys.reserveInitialCapacity(indexCount);
-
-    for (const auto& entry : indexMap) {
-        IndexKey indexKey;
-        generateIndexKeyForValue(lexicalGlobalObject, entry.value, jsValue, indexKey, storeInfo.keyPath(), key);
-
-        if (indexKey.isNull())
-            continue;
-
-        indexKeys.add(entry.key, WTFMove(indexKey));
-    }
-
-    return indexKeys;
 }
 
 Optional<JSC::JSValue> deserializeIDBValueWithKeyInjection(JSGlobalObject& lexicalGlobalObject, const IDBValue& value, const IDBKeyData& key, const Optional<IDBKeyPath>& keyPath)

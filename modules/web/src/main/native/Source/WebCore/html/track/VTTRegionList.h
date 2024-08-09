@@ -26,7 +26,7 @@
 
 #pragma once
 
-#if ENABLE(VIDEO)
+#if ENABLE(VIDEO_TRACK)
 
 #include "VTTRegion.h"
 
@@ -68,4 +68,4 @@ inline void VTTRegionList::clear()
 
 } // namespace WebCore
 
-#endif // ENABLE(VIDEO)
+#endif // ENABLE(VIDEO_TRACK)

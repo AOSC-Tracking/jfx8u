@@ -33,9 +33,7 @@
 #include "CanvasGradient.h"
 #include "CanvasPattern.h"
 #include "CanvasRenderingContext2D.h"
-#include "DisplayListDrawingContext.h"
 #include "Document.h"
-#include "EventNames.h"
 #include "Frame.h"
 #include "FrameLoaderClient.h"
 #include "GPUBasedCanvasRenderingContext.h"
@@ -80,24 +78,13 @@
 #include "GPUCanvasContext.h"
 #endif
 
-#if ENABLE(WEBXR)
-#include "DOMWindow.h"
-#include "Navigator.h"
-#include "NavigatorWebXR.h"
-#include "WebXRSystem.h"
+#if PLATFORM(COCOA)
+#include "MediaSampleAVFObjC.h"
+#include <pal/cf/CoreMediaSoftLink.h>
 #endif
 
 #if USE(CG)
 #include "ImageBufferUtilitiesCG.h"
-#endif
-
-#if USE(GSTREAMER)
-#include "MediaSampleGStreamer.h"
-#endif
-
-#if PLATFORM(COCOA)
-#include "MediaSampleAVFObjC.h"
-#include <pal/cf/CoreMediaSoftLink.h>
 #endif
 
 namespace WebCore {
@@ -125,24 +112,18 @@ static size_t maxActivePixelMemoryForTesting = 0;
 HTMLCanvasElement::HTMLCanvasElement(const QualifiedName& tagName, Document& document)
     : HTMLElement(tagName, document)
     , CanvasBase(IntSize(defaultWidth, defaultHeight))
-    , ActiveDOMObject(document)
 {
     ASSERT(hasTagName(canvasTag));
-    addObserver(document);
 }
 
 Ref<HTMLCanvasElement> HTMLCanvasElement::create(Document& document)
 {
-    auto canvas = adoptRef(*new HTMLCanvasElement(canvasTag, document));
-    canvas->suspendIfNeeded();
-    return canvas;
+    return adoptRef(*new HTMLCanvasElement(canvasTag, document));
 }
 
 Ref<HTMLCanvasElement> HTMLCanvasElement::create(const QualifiedName& tagName, Document& document)
 {
-    auto canvas = adoptRef(*new HTMLCanvasElement(tagName, document));
-    canvas->suspendIfNeeded();
-    return canvas;
+    return adoptRef(*new HTMLCanvasElement(tagName, document));
 }
 
 HTMLCanvasElement::~HTMLCanvasElement()
@@ -151,7 +132,6 @@ HTMLCanvasElement::~HTMLCanvasElement()
     // downcasts the CanvasBase object to HTMLCanvasElement. That invokes virtual methods, which should be
     // avoided in destructors, but works as long as it's done before HTMLCanvasElement destructs completely.
     notifyObserversCanvasDestroyed();
-    document().clearCanvasPreparation(this);
 
     m_context = nullptr; // Ensure this goes away before the ImageBuffer.
     setImageBuffer(nullptr);
@@ -369,6 +349,9 @@ CanvasRenderingContext2D* HTMLCanvasElement::createContext2d(const String& type)
 
     m_context = CanvasRenderingContext2D::create(*this, document().inQuirksMode());
 
+    downcast<CanvasRenderingContext2D>(*m_context).setUsesDisplayListDrawing(m_usesDisplayListDrawing);
+    downcast<CanvasRenderingContext2D>(*m_context).setTracksDisplayListReplay(m_tracksDisplayListReplay);
+
 #if USE(IOSURFACE_CANVAS_BACKING_STORE) || ENABLE(ACCELERATED_2D_CANVAS)
     // Need to make sure a RenderLayer and compositing layer get created for the Canvas.
     invalidateStyleAndLayerComposition();
@@ -429,23 +412,10 @@ WebGLRenderingContextBase* HTMLCanvasElement::createContextWebGL(const String& t
     if (!shouldEnableWebGL(document().settings()))
         return nullptr;
 
-#if ENABLE(WEBXR)
-    // https://immersive-web.github.io/webxr/#xr-compatible
-    if (attrs.xrCompatible) {
-        if (auto* window = document().domWindow())
-            NavigatorWebXR::xr(window->navigator()).ensureImmersiveXRDeviceIsSelected();
-    }
-#endif
-
-    // TODO(WEBXR): ensure the context is created in a compatible graphics
-    // adapter when there is an active immersive device.
     m_context = WebGLRenderingContextBase::create(*this, attrs, type);
     if (m_context) {
         // Need to make sure a RenderLayer and compositing layer get created for the Canvas.
         invalidateStyleAndLayerComposition();
-#if ENABLE(WEBXR)
-        ASSERT(!attrs.xrCompatible || downcast<WebGLRenderingContextBase>(m_context.get())->isXRCompatible());
-#endif
     }
 
     return downcast<WebGLRenderingContextBase>(m_context.get());
@@ -635,7 +605,7 @@ void HTMLCanvasElement::paint(GraphicsContext& context, const LayoutRect& r)
         bool shouldPaint = true;
 
         if (m_context) {
-            shouldPaint = paintsIntoCanvasBuffer() || document().printing() || m_isSnapshotting;
+            shouldPaint = paintsIntoCanvasBuffer() || document().printing();
             if (shouldPaint)
                 m_context->paintRenderingResultsToCanvas();
         }
@@ -793,9 +763,6 @@ RefPtr<MediaSample> HTMLCanvasElement::toMediaSample()
 #if PLATFORM(COCOA)
     makeRenderingResultsAvailable();
     return MediaSampleAVFObjC::createImageSample(imageBuffer->toBGRAData(), width(), height());
-#elif USE(GSTREAMER)
-    makeRenderingResultsAvailable();
-    return MediaSampleGStreamer::createImageSample(imageBuffer->toBGRAData(), width(), height());
 #else
     return nullptr;
 #endif
@@ -855,41 +822,38 @@ bool HTMLCanvasElement::shouldAccelerate(const IntSize& size) const
 
 void HTMLCanvasElement::setUsesDisplayListDrawing(bool usesDisplayListDrawing)
 {
+    if (usesDisplayListDrawing == m_usesDisplayListDrawing)
+        return;
+
     m_usesDisplayListDrawing = usesDisplayListDrawing;
+
+    if (is<CanvasRenderingContext2D>(m_context.get()))
+        downcast<CanvasRenderingContext2D>(*m_context).setUsesDisplayListDrawing(m_usesDisplayListDrawing);
 }
 
 void HTMLCanvasElement::setTracksDisplayListReplay(bool tracksDisplayListReplay)
 {
-    m_tracksDisplayListReplay = tracksDisplayListReplay;
-
-    if (!buffer())
+    if (tracksDisplayListReplay == m_tracksDisplayListReplay)
         return;
 
-    auto& buffer = *this->buffer();
-    if (buffer.drawingContext())
-        buffer.drawingContext()->setTracksDisplayListReplay(m_tracksDisplayListReplay);
+    m_tracksDisplayListReplay = tracksDisplayListReplay;
+
+    if (is<CanvasRenderingContext2D>(m_context.get()))
+        downcast<CanvasRenderingContext2D>(*m_context).setTracksDisplayListReplay(m_tracksDisplayListReplay);
 }
 
 String HTMLCanvasElement::displayListAsText(DisplayList::AsTextFlags flags) const
 {
-    if (!buffer())
-        return String();
-
-    auto& buffer = *this->buffer();
-    if (buffer.drawingContext())
-        return buffer.drawingContext()->displayList().asText(flags);
+    if (is<CanvasRenderingContext2D>(m_context.get()))
+        return downcast<CanvasRenderingContext2D>(*m_context).displayListAsText(flags);
 
     return String();
 }
 
 String HTMLCanvasElement::replayDisplayListAsText(DisplayList::AsTextFlags flags) const
 {
-    if (!buffer())
-        return String();
-
-    auto& buffer = *this->buffer();
-    if (buffer.drawingContext() && buffer.drawingContext()->replayedDisplayList())
-        return buffer.drawingContext()->replayedDisplayList()->asText(flags);
+    if (is<CanvasRenderingContext2D>(m_context.get()))
+        return downcast<CanvasRenderingContext2D>(*m_context).replayDisplayListAsText(flags);
 
     return String();
 }
@@ -925,15 +889,10 @@ void HTMLCanvasElement::createImageBuffer() const
     if (!width() || !height())
         return;
 
+    RenderingMode renderingMode = shouldAccelerate(size()) ? RenderingMode::Accelerated : RenderingMode::Unaccelerated;
+
     auto hostWindow = (document().view() && document().view()->root()) ? document().view()->root()->hostWindow() : nullptr;
-
-    auto accelerate = shouldAccelerate(size()) ? ShouldAccelerate::Yes : ShouldAccelerate::No;
-    // FIXME: Add a new setting for DisplayList drawing on canvas.
-    auto useDisplayList = m_usesDisplayListDrawing.valueOr(document().settings().displayListDrawingEnabled()) ? ShouldUseDisplayList::Yes : ShouldUseDisplayList::No;
-    setImageBuffer(ImageBuffer::create(size(), accelerate, useDisplayList, RenderingPurpose::Canvas, 1, ColorSpace::SRGB, hostWindow));
-
-    if (buffer() && buffer()->drawingContext())
-        buffer()->drawingContext()->setTracksDisplayListReplay(m_tracksDisplayListReplay);
+    setImageBuffer(ImageBuffer::create(size(), renderingMode, 1, ColorSpace::SRGB, hostWindow));
 
 #if USE(IOSURFACE_CANVAS_BACKING_STORE) || ENABLE(ACCELERATED_2D_CANVAS)
     if (m_context && m_context->is2d()) {
@@ -978,78 +937,6 @@ void HTMLCanvasElement::clearCopiedImage()
 {
     m_copiedImage = nullptr;
     m_didClearImageBuffer = false;
-}
-
-const char* HTMLCanvasElement::activeDOMObjectName() const
-{
-    return "HTMLCanvasElement";
-}
-
-bool HTMLCanvasElement::virtualHasPendingActivity() const
-{
-#if ENABLE(WEBGL)
-    if (is<WebGLRenderingContextBase>(m_context.get())) {
-        // WebGL rendering context may fire contextlost / contextchange / contextrestored events at any point.
-        return m_hasRelevantWebGLEventListener && !downcast<WebGLRenderingContextBase>(*m_context).isContextUnrecoverablyLost();
-    }
-#endif
-
-    return false;
-}
-
-void HTMLCanvasElement::eventListenersDidChange()
-{
-#if ENABLE(WEBGL)
-    m_hasRelevantWebGLEventListener = hasEventListeners(eventNames().webglcontextchangedEvent)
-        || hasEventListeners(eventNames().webglcontextlostEvent)
-        || hasEventListeners(eventNames().webglcontextrestoredEvent);
-#endif
-}
-
-void HTMLCanvasElement::didMoveToNewDocument(Document& oldDocument, Document& newDocument)
-{
-    oldDocument.clearCanvasPreparation(this);
-    removeObserver(oldDocument);
-    addObserver(newDocument);
-
-    HTMLElement::didMoveToNewDocument(oldDocument, newDocument);
-}
-
-Node::InsertedIntoAncestorResult HTMLCanvasElement::insertedIntoAncestor(InsertionType insertionType, ContainerNode& parentOfInsertedTree)
-{
-    if (insertionType.connectedToDocument)
-        addObserver(parentOfInsertedTree.document());
-
-    return HTMLElement::insertedIntoAncestor(insertionType, parentOfInsertedTree);
-}
-
-void HTMLCanvasElement::removedFromAncestor(RemovalType removalType, ContainerNode& oldParentOfRemovedTree)
-{
-    if (removalType.disconnectedFromDocument) {
-        oldParentOfRemovedTree.document().clearCanvasPreparation(this);
-        removeObserver(oldParentOfRemovedTree.document());
-    }
-
-    HTMLElement::removedFromAncestor(removalType, oldParentOfRemovedTree);
-}
-
-bool HTMLCanvasElement::needsPreparationForDisplay()
-{
-#if ENABLE(WEBGL)
-    return is<WebGLRenderingContextBase>(m_context.get());
-#else
-    return false;
-#endif
-}
-
-void HTMLCanvasElement::prepareForDisplay()
-{
-#if ENABLE(WEBGL)
-    ASSERT(needsPreparationForDisplay());
-
-    if (is<WebGLRenderingContextBase>(m_context.get()))
-        downcast<WebGLRenderingContextBase>(m_context.get())->prepareForDisplay();
-#endif
 }
 
 }

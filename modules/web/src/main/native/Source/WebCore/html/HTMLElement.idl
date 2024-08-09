@@ -19,12 +19,11 @@
  */
 
 [
+    CustomConstructor(),
     CustomPushEventHandlerScope,
     ExportMacro=WEBCORE_EXPORT,
     JSGenerateToNativeObject,
 ] interface HTMLElement : Element {
-    [Custom] constructor();
-
     // Metadata attributes.
     [CEReactions, Reflect] attribute DOMString title;
     [CEReactions, Reflect] attribute DOMString lang;
@@ -35,7 +34,7 @@
     [CEReactions, Reflect] attribute boolean hidden;
     void click();
     [CEReactions, Reflect] attribute DOMString accessKey;
-    readonly attribute DOMString accessKeyLabel;
+    // readonly attribute DOMString accessKeyLabel; // FIXME: Not supported.
     [CEReactions] attribute boolean draggable;
     // [CEReactions] attribute HTMLMenuElement? contextMenu; // FIXME: Not supported.
     [CEReactions] attribute boolean spellcheck;

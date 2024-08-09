@@ -25,6 +25,8 @@
 
 #pragma once
 
+#if HAVE(CORE_VIDEO)
+
 #include "GraphicsTypesGL.h"
 #include <wtf/Ref.h>
 #include <wtf/RetainPtr.h>
@@ -65,3 +67,5 @@ private:
 };
 
 }
+
+#endif // HAVE(CORE_VIDEO)

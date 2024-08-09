@@ -27,6 +27,7 @@
 #include "InspectorAuditAgent.h"
 
 #include "InjectedScript.h"
+#include "InjectedScriptManager.h"
 #include "JSLock.h"
 #include "ObjectConstructor.h"
 #include "ScriptDebugServer.h"

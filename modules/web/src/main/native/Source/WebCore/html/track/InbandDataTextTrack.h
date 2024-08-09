@@ -26,7 +26,7 @@
 
 #pragma once
 
-#if ENABLE(VIDEO)
+#if ENABLE(VIDEO_TRACK)
 
 #include "InbandTextTrack.h"
 
@@ -37,11 +37,11 @@ class DataCue;
 class InbandDataTextTrack final : public InbandTextTrack {
     WTF_MAKE_ISO_ALLOCATED(InbandDataTextTrack);
 public:
-    static Ref<InbandDataTextTrack> create(Document&, TextTrackClient&, InbandTextTrackPrivate&);
+    static Ref<InbandDataTextTrack> create(ScriptExecutionContext&, TextTrackClient&, InbandTextTrackPrivate&);
     virtual ~InbandDataTextTrack();
 
 private:
-    InbandDataTextTrack(Document&, TextTrackClient&, InbandTextTrackPrivate&);
+    InbandDataTextTrack(ScriptExecutionContext&, TextTrackClient&, InbandTextTrackPrivate&);
 
     void addDataCue(const MediaTime& start, const MediaTime& end, const void*, unsigned) final;
 
@@ -50,14 +50,12 @@ private:
 #endif
 
 #if ENABLE(DATACUE_VALUE)
-    void addDataCue(const MediaTime& start, const MediaTime& end, Ref<SerializedPlatformDataCue>&&, const String&) final;
-    void updateDataCue(const MediaTime& start, const MediaTime& end, SerializedPlatformDataCue&) final;
-    void removeDataCue(const MediaTime& start, const MediaTime& end, SerializedPlatformDataCue&) final;
+    void addDataCue(const MediaTime& start, const MediaTime& end, Ref<SerializedPlatformRepresentation>&&, const String&) final;
+    void updateDataCue(const MediaTime& start, const MediaTime& end, SerializedPlatformRepresentation&) final;
+    void removeDataCue(const MediaTime& start, const MediaTime& end, SerializedPlatformRepresentation&) final;
     ExceptionOr<void> removeCue(TextTrackCue&) final;
 
-    RefPtr<DataCue> findIncompleteCue(const SerializedPlatformDataCue&);
-
-    Vector<RefPtr<DataCue>> m_incompleteCueMap;
+    HashMap<RefPtr<SerializedPlatformRepresentation>, RefPtr<DataCue>> m_incompleteCueMap;
 #endif
 };
 

@@ -25,11 +25,13 @@
 #include "config.h"
 #include <wtf/text/StringImpl.h>
 
+#include <wtf/ProcessID.h>
 #include <wtf/StdLibExtras.h>
 #include <wtf/text/AtomString.h>
 #include <wtf/text/CString.h>
 #include <wtf/text/ExternalStringImpl.h>
 #include <wtf/text/StringBuffer.h>
+#include <wtf/text/StringHash.h>
 #include <wtf/text/StringView.h>
 #include <wtf/text/SymbolImpl.h>
 #include <wtf/text/SymbolRegistry.h>
@@ -180,7 +182,7 @@ Ref<StringImpl> StringImpl::createWithoutCopying(const LChar* characters, unsign
 template<typename CharacterType> inline Ref<StringImpl> StringImpl::createUninitializedInternal(unsigned length, CharacterType*& data)
 {
     if (!length) {
-        data = nullptr;
+        data = 0;
         return *empty();
     }
     return createUninitializedInternalNonEmpty(length, data);
@@ -216,7 +218,7 @@ template<typename CharacterType> inline Expected<Ref<StringImpl>, UTF8Conversion
     ASSERT(originalString->bufferOwnership() == BufferInternal);
 
     if (!length) {
-        data = nullptr;
+        data = 0;
         return Ref<StringImpl>(*empty());
     }
 
@@ -1181,7 +1183,7 @@ ALWAYS_INLINE static bool equalInner(const StringImpl& string, unsigned startOff
 
 bool StringImpl::startsWith(const StringImpl* string) const
 {
-    return !string || ::WTF::startsWith(*this, *string);
+    return string && ::WTF::startsWith(*this, *string);
 }
 
 bool StringImpl::startsWith(const StringImpl& string) const
@@ -1300,12 +1302,11 @@ Ref<StringImpl> StringImpl::replace(UChar target, UChar replacement)
     UChar* data;
     auto newImpl = createUninitializedInternalNonEmpty(m_length, data);
 
-    copyCharacters(data, m_data16, i);
-    for (unsigned j = i; j != m_length; ++j) {
-        UChar character = m_data16[j];
+    for (i = 0; i != m_length; ++i) {
+        UChar character = m_data16[i];
         if (character == target)
             character = replacement;
-        data[j] = character;
+        data[i] = character;
     }
     return newImpl;
 }

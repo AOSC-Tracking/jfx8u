@@ -31,12 +31,19 @@
 
 #include <wtf/ExportMacros.h>
 
-#if !defined(PAL_EXPORT)
+#if USE(EXPORT_MACROS)
 
 #if defined(BUILDING_PAL) || defined(STATICALLY_LINKED_WITH_PAL)
-#define PAL_EXPORT WTF_EXPORT_DECLARATION
+#define PAL_EXPORT WTF_EXPORT
 #else
-#define PAL_EXPORT WTF_IMPORT_DECLARATION
+#define PAL_EXPORT WTF_IMPORT
 #endif
 
-#endif
+#define PAL_TESTSUPPORT_EXPORT PAL_EXPORT
+
+#else // !USE(EXPORT_MACROS)
+
+#define PAL_EXPORT
+#define PAL_TESTSUPPORT_EXPORT
+
+#endif // USE(EXPORT_MACROS)

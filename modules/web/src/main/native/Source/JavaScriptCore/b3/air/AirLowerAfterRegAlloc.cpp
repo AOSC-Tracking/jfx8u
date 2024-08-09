@@ -28,10 +28,12 @@
 
 #if ENABLE(B3_JIT)
 
+#include "AirArgInlines.h"
 #include "AirCCallingConvention.h"
 #include "AirCode.h"
 #include "AirEmitShuffle.h"
 #include "AirInsertionSet.h"
+#include "AirInstInlines.h"
 #include "AirPadInterference.h"
 #include "AirRegLiveness.h"
 #include "AirPhaseScope.h"
@@ -111,10 +113,10 @@ void lowerAfterRegAlloc(Code& code)
     // If we run after stack allocation then we cannot use those callee saves that aren't in
     // the callee save list. Note that we are only run after stack allocation in -O1, so this
     // kind of slop is OK.
-    RegisterSet disallowedCalleeSaves;
+    RegisterSet blacklistedCalleeSaves;
     if (code.stackIsAllocated()) {
-        disallowedCalleeSaves = RegisterSet::calleeSaveRegisters();
-        disallowedCalleeSaves.exclude(code.calleeSaveRegisters());
+        blacklistedCalleeSaves = RegisterSet::calleeSaveRegisters();
+        blacklistedCalleeSaves.exclude(code.calleeSaveRegisters());
     }
 
     auto getScratches = [&] (RegisterSet set, Bank bank) -> std::array<Arg, 2> {
@@ -122,7 +124,7 @@ void lowerAfterRegAlloc(Code& code)
         for (unsigned i = 0; i < 2; ++i) {
             bool found = false;
             for (Reg reg : code.regsInPriorityOrder(bank)) {
-                if (!set.get(reg) && !disallowedCalleeSaves.get(reg)) {
+                if (!set.get(reg) && !blacklistedCalleeSaves.get(reg)) {
                     result[i] = Tmp(reg);
                     set.set(reg);
                     found = true;

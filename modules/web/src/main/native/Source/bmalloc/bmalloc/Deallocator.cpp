@@ -68,16 +68,14 @@ void Deallocator::deallocateSlowCase(void* object)
     if (!object)
         return;
 
-    if (m_heap.isLarge(object)) {
-        UniqueLockHolder lock(Heap::mutex());
+    UniqueLockHolder lock(Heap::mutex());
+    if (m_heap.isLarge(lock, object)) {
         m_heap.deallocateLarge(lock, object);
         return;
     }
 
-    if (m_objectLog.size() == m_objectLog.capacity()) {
-        UniqueLockHolder lock(Heap::mutex());
+    if (m_objectLog.size() == m_objectLog.capacity())
         processObjectLog(lock);
-    }
 
     m_objectLog.push(object);
 }

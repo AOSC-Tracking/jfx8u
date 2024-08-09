@@ -67,15 +67,10 @@ namespace JSC {
     macro(OperationPutByIdNonStrictBuildList) \
     macro(OperationPutByIdDirectStrictBuildList) \
     macro(OperationPutByIdDirectNonStrictBuildList) \
-    macro(OperationPutByIdDefinePrivateFieldFieldStrictOptimize) \
-    macro(OperationPutByIdPutPrivateFieldFieldStrictOptimize) \
     macro(PutByIdAddAccessCase) \
     macro(PutByIdReplaceWithJump) \
     macro(PutByIdSelfPatch) \
-    macro(InByIdSelfPatch) \
-    macro(DelByReplaceWithJump) \
-    macro(DelByReplaceWithGeneric) \
-    macro(OperationGetPrivateNameOptimize)
+    macro(InByIdSelfPatch)
 
 class ICEvent {
 public:
@@ -179,7 +174,9 @@ namespace WTF {
 void printInternal(PrintStream&, JSC::ICEvent::Kind);
 
 template<typename T> struct DefaultHash;
-template<> struct DefaultHash<JSC::ICEvent> : JSC::ICEventHash { };
+template<> struct DefaultHash<JSC::ICEvent> {
+    typedef JSC::ICEventHash Hash;
+};
 
 template<typename T> struct HashTraits;
 template<> struct HashTraits<JSC::ICEvent> : SimpleClassHashTraits<JSC::ICEvent> {

@@ -67,7 +67,7 @@ public:
 
     const char* data() const
     {
-        return m_buffer ? m_buffer->data() : nullptr;
+        return m_buffer ? m_buffer->data() : 0;
     }
     WTF_EXPORT_PRIVATE char* mutableData();
     size_t length() const
@@ -83,9 +83,6 @@ public:
     bool isHashTableDeletedValue() const { return m_buffer.isHashTableDeletedValue(); }
 
     WTF_EXPORT_PRIVATE unsigned hash() const;
-
-    // Useful if you want your CString to hold dynamic data.
-    WTF_EXPORT_PRIVATE void grow(size_t newLength);
 
 private:
     void copyBufferIfNeeded();
@@ -106,7 +103,9 @@ struct CStringHash {
 };
 
 template<typename T> struct DefaultHash;
-template<> struct DefaultHash<CString> : CStringHash { };
+template<> struct DefaultHash<CString> {
+    typedef CStringHash Hash;
+};
 
 template<typename T> struct HashTraits;
 template<> struct HashTraits<CString> : SimpleClassHashTraits<CString> { };

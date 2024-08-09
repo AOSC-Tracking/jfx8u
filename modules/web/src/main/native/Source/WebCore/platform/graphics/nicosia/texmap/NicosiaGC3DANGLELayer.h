@@ -32,7 +32,7 @@
 
 #include "GLContext.h"
 #include "GraphicsContextGLOpenGL.h"
-#include "NicosiaGCGLLayer.h"
+#include "NicosiaGC3DLayer.h"
 #include <memory>
 
 typedef void *EGLConfig;
@@ -48,7 +48,7 @@ class PlatformDisplay;
 
 namespace Nicosia {
 
-class GCGLANGLELayer final : public GCGLLayer {
+class GC3DANGLELayer final : public GC3DLayer {
     WTF_MAKE_FAST_ALLOCATED;
 public:
     class ANGLEContext {
@@ -73,8 +73,8 @@ public:
         EGLSurface m_surface { nullptr };
     };
 
-    GCGLANGLELayer(WebCore::GraphicsContextGLOpenGL&, WebCore::GraphicsContextGLOpenGL::Destination);
-    virtual ~GCGLANGLELayer();
+    GC3DANGLELayer(WebCore::GraphicsContextGLOpenGL&, WebCore::GraphicsContextGLOpenGL::Destination);
+    virtual ~GC3DANGLELayer();
 
     bool makeContextCurrent() override;
     PlatformGraphicsContextGL platformContext() const override;

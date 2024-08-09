@@ -47,7 +47,7 @@ public:
     JSValue *args;
     JSGlobalObject* globalObject;
 
-    inline void init(CodeBlock*, JSGlobalObject*, JSObject*, JSValue, int, JSValue* otherArgs = nullptr);
+    inline void init(CodeBlock*, JSGlobalObject*, JSObject*, JSValue, int, JSValue* otherArgs = 0);
 
     inline CodeBlock* codeBlock() const;
     inline void setCodeBlock(CodeBlock*);

@@ -25,15 +25,11 @@
 namespace JSC {
 
 class MathObject final : public JSNonFinalObject {
-public:
-    using Base = JSNonFinalObject;
+private:
+    MathObject(VM&, Structure*);
 
-    template<typename CellType, SubspaceAccess>
-    static IsoSubspace* subspaceFor(VM& vm)
-    {
-        STATIC_ASSERT_ISO_SUBSPACE_SHARABLE(MathObject, Base);
-        return &vm.plainObjectSpace;
-    }
+public:
+    typedef JSNonFinalObject Base;
 
     static MathObject* create(VM& vm, JSGlobalObject* globalObject, Structure* structure)
     {
@@ -49,8 +45,7 @@ public:
         return Structure::create(vm, globalObject, prototype, TypeInfo(ObjectType, StructureFlags), info());
     }
 
-private:
-    MathObject(VM&, Structure*);
+protected:
     void finishCreation(VM&, JSGlobalObject*);
 };
 

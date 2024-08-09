@@ -27,6 +27,8 @@
 #include "BytecodeBasicBlock.h"
 
 #include "CodeBlock.h"
+#include "InterpreterInlines.h"
+#include "JSCInlines.h"
 #include "PreciseJumpTargets.h"
 #include "UnlinkedCodeBlockGenerator.h"
 

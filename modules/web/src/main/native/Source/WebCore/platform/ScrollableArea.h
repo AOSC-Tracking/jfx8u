@@ -31,10 +31,6 @@
 #include <wtf/Forward.h>
 #include <wtf/WeakPtr.h>
 
-namespace WTF {
-class TextStream;
-}
-
 namespace WebCore {
 
 class FloatPoint;
@@ -47,6 +43,12 @@ class ScrollAnimator;
 class GraphicsLayer;
 class TiledBacking;
 
+// scrollPosition is in content coordinates (0,0 is at scrollOrigin), so may have negative components.
+typedef IntPoint ScrollPosition;
+// scrollOffset() is the value used by scrollbars (min is 0,0), and should never have negative components.
+typedef IntPoint ScrollOffset;
+
+
 inline int offsetForOrientation(ScrollOffset offset, ScrollbarOrientation orientation)
 {
     switch (orientation) {
@@ -57,18 +59,10 @@ inline int offsetForOrientation(ScrollOffset offset, ScrollbarOrientation orient
     return 0;
 }
 
+
 class ScrollableArea : public CanMakeWeakPtr<ScrollableArea> {
 public:
-    virtual bool isScrollView() const { return false; }
-    virtual bool isRenderLayer() const { return false; }
-    virtual bool isListBox() const { return false; }
-    virtual bool isPDFPlugin() const { return false; }
-
-    ScrollBehaviorStatus currentScrollBehaviorStatus() { return static_cast<ScrollBehaviorStatus>(m_currentScrollBehaviorStatus); }
-    void setScrollBehaviorStatus(ScrollBehaviorStatus status) { m_currentScrollBehaviorStatus = static_cast<unsigned>(status); }
-
     WEBCORE_EXPORT bool scroll(ScrollDirection, ScrollGranularity, float multiplier = 1);
-    WEBCORE_EXPORT void scrollToOffsetWithAnimation(const FloatPoint&, ScrollClamping = ScrollClamping::Clamped);
     WEBCORE_EXPORT void scrollToOffsetWithoutAnimation(const FloatPoint&, ScrollClamping = ScrollClamping::Clamped);
     void scrollToOffsetWithoutAnimation(ScrollbarOrientation, float offset);
 
@@ -82,8 +76,6 @@ public:
     virtual bool requestScrollPositionUpdate(const ScrollPosition&, ScrollType = ScrollType::User, ScrollClamping = ScrollClamping::Clamped) { return false; }
 
     WEBCORE_EXPORT bool handleWheelEvent(const PlatformWheelEvent&);
-
-    bool usesScrollSnap() const;
 
 #if ENABLE(CSS_SCROLL_SNAP)
     WEBCORE_EXPORT const Vector<LayoutUnit>* horizontalSnapOffsets() const;
@@ -132,9 +124,6 @@ public:
 
     virtual bool horizontalScrollbarHiddenByStyle() const { return false; }
     virtual bool verticalScrollbarHiddenByStyle() const { return false; }
-
-    WEBCORE_EXPORT String horizontalScrollbarStateForTesting() const;
-    WEBCORE_EXPORT String verticalScrollbarStateForTesting() const;
 
     bool inLiveResize() const { return m_inLiveResize; }
     WEBCORE_EXPORT virtual void willStartLiveResize();
@@ -277,7 +266,7 @@ public:
 
     virtual IntSize contentsSize() const = 0;
     virtual IntSize overhangAmount() const { return IntSize(); }
-    virtual IntPoint lastKnownMousePositionInView() const { return IntPoint(); }
+    virtual IntPoint lastKnownMousePosition() const { return IntPoint(); }
     virtual bool isHandlingWheelEvent() const { return false; }
 
     virtual int headerHeight() const { return 0; }
@@ -302,7 +291,6 @@ public:
     // Returns the bounding box of this scrollable area, in the coordinate system of the enclosing scroll view.
     virtual IntRect scrollableAreaBoundingBox(bool* = nullptr) const = 0;
 
-    virtual bool isUserScrollInProgress() const { return false; }
     virtual bool isRubberBandInProgress() const { return false; }
     virtual bool isScrollSnapInProgress() const { return false; }
 
@@ -350,8 +338,6 @@ public:
     virtual void logMockScrollAnimatorMessage(const String&) const { };
 
     virtual bool shouldPlaceBlockDirectionScrollbarOnLeft() const = 0;
-
-    virtual String debugDescription() const = 0;
 
 protected:
     WEBCORE_EXPORT ScrollableArea();
@@ -418,9 +404,7 @@ private:
     unsigned m_scrollOriginChanged : 1;
     unsigned m_currentScrollType : 1; // ScrollType
     unsigned m_scrollShouldClearLatchedState : 1;
-    unsigned m_currentScrollBehaviorStatus : 1;
 };
 
-WTF::TextStream& operator<<(WTF::TextStream&, const ScrollableArea&);
-
 } // namespace WebCore
+

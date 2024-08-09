@@ -962,6 +962,7 @@ Controller.prototype = {
         this.resetHideControlsTimer();
         if (this.presentationMode() != 'fullscreen' && this.video.paused && this.controlsAreHidden())
             this.showControls();
+        this.host.setPreparedToReturnVideoLayerToInline(this.shouldReturnVideoLayerToInline());
     },
 
     handleFullscreenChange: function(event)

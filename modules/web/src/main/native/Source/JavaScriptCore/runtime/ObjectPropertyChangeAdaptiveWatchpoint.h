@@ -42,12 +42,12 @@ public:
     }
 
 private:
-    bool isValid() const final
+    bool isValid() const override
     {
         return m_owner->isLive();
     }
 
-    void handleFire(VM& vm, const FireDetail&) final
+    void handleFire(VM& vm, const FireDetail&) override
     {
         m_watchpointSet.fireAll(vm, StringFireDetail("Object Property is changed."));
     }

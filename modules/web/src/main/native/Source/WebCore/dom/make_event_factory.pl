@@ -104,8 +104,6 @@ sub generateImplementation()
         print F "JSC::JSValue toJS(JSC::JSGlobalObject* state, JSDOMGlobalObject* globalObject, ${namespace}& impl)\n";
         print F "{\n";
         print F "    switch (impl.${interfaceMethodName}()) {\n";
-        print F "    case EventTargetInterfaceType:\n";
-        print F "        break;\n";
     }
 
     my %generatedInterfaceNames = ();
@@ -141,7 +139,8 @@ sub generateImplementation()
     if ($factoryFunction eq "toNewlyCreated") {
         print F "    return createWrapper<$namespace>(globalObject, WTFMove(impl));\n";
     } else {
-        print F "    return wrap(state, globalObject, impl);\n";
+        print F "    ASSERT_NOT_REACHED();\n";
+        print F "    return JSC::jsNull();\n";
     }
     print F "}\n";
     print F "\n";

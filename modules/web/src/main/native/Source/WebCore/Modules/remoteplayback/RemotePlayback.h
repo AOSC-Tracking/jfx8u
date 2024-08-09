@@ -79,6 +79,12 @@ private:
     void establishConnection();
     void disconnect();
 
+    enum class UpdateResults {
+        Unchanged,
+        Changed,
+    };
+    UpdateResults updateAvailability();
+
     // ActiveDOMObject.
     const char* activeDOMObjectName() const final;
     void stop() final;

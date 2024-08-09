@@ -150,18 +150,11 @@ void ComplexTextController::finishConstruction()
     adjustGlyphsAndAdvances();
 
     if (!m_isLTROnly) {
-        unsigned length = m_complexTextRuns.size();
-        m_runIndices.reserveInitialCapacity(length);
-        for (unsigned i = 0; i < length; ++i)
-            m_runIndices.uncheckedAppend(length - i - 1);
-        std::sort(m_runIndices.data(), m_runIndices.data() + length,
-            [this](auto a, auto b) {
-                return stringBegin(*m_complexTextRuns[a]) < stringBegin(*m_complexTextRuns[b]);
-            });
+        m_runIndices.reserveInitialCapacity(m_complexTextRuns.size());
 
-        m_glyphCountFromStartToIndex.reserveInitialCapacity(length);
+        m_glyphCountFromStartToIndex.reserveInitialCapacity(m_complexTextRuns.size());
         unsigned glyphCountSoFar = 0;
-        for (unsigned i = 0; i < length; ++i) {
+        for (unsigned i = 0; i < m_complexTextRuns.size(); ++i) {
             m_glyphCountFromStartToIndex.uncheckedAppend(glyphCountSoFar);
             glyphCountSoFar += m_complexTextRuns[i]->glyphCount();
         }
@@ -516,6 +509,30 @@ unsigned ComplexTextController::indexOfCurrentRun(unsigned& leftmostGlyph)
         return m_currentRun;
     }
 
+    if (m_runIndices.isEmpty()) {
+        unsigned firstRun = 0;
+        unsigned firstRunOffset = stringBegin(*m_complexTextRuns[0]);
+        for (unsigned i = 1; i < runCount; ++i) {
+            unsigned offset = stringBegin(*m_complexTextRuns[i]);
+            if (offset < firstRunOffset) {
+                firstRun = i;
+                firstRunOffset = offset;
+            }
+        }
+        m_runIndices.uncheckedAppend(firstRun);
+    }
+
+    while (m_runIndices.size() <= m_currentRun) {
+        unsigned offset = stringEnd(*m_complexTextRuns[m_runIndices.last()]);
+
+        for (unsigned i = 0; i < runCount; ++i) {
+            if (offset == stringBegin(*m_complexTextRuns[i])) {
+                m_runIndices.uncheckedAppend(i);
+                break;
+            }
+        }
+    }
+
     unsigned currentRunIndex = m_runIndices[m_currentRun];
     leftmostGlyph = m_glyphCountFromStartToIndex[currentRunIndex];
     return currentRunIndex;
@@ -621,7 +638,7 @@ void ComplexTextController::advance(unsigned offset, GlyphBuffer* glyphBuffer, G
                     paintAdvance.setHeight(paintAdvance.height() - glyphOrigin(glyphIndexIntoComplexTextController + 1).y() + m_complexTextRuns[currentRunIndex + 1]->initialAdvance().height());
                 }
                 paintAdvance.setHeight(-paintAdvance.height()); // Increasing y points down
-                glyphBuffer->add(m_adjustedGlyphs[glyphIndexIntoComplexTextController], complexTextRun.font(), paintAdvance, complexTextRun.indexAt(m_glyphInCurrentRun));
+                glyphBuffer->add(m_adjustedGlyphs[glyphIndexIntoComplexTextController], &complexTextRun.font(), paintAdvance, complexTextRun.indexAt(m_glyphInCurrentRun));
             }
 
             unsigned oldCharacterInCurrentGlyph = m_characterInCurrentGlyph;
@@ -647,7 +664,7 @@ void ComplexTextController::advance(unsigned offset, GlyphBuffer* glyphBuffer, G
     }
 }
 
-static inline std::pair<bool, bool> expansionLocation(bool ideograph, bool treatAsSpace, bool ltr, bool isAfterExpansion, bool forbidLeftExpansion, bool forbidRightExpansion, bool forceLeftExpansion, bool forceRightExpansion)
+static inline std::pair<bool, bool> expansionLocation(bool ideograph, bool treatAsSpace, bool ltr, bool isAfterExpansion, bool forbidLeadingExpansion, bool forbidTrailingExpansion, bool forceLeadingExpansion, bool forceTrailingExpansion)
 {
     bool expandLeft = ideograph;
     bool expandRight = ideograph;
@@ -659,28 +676,28 @@ static inline std::pair<bool, bool> expansionLocation(bool ideograph, bool treat
     }
     if (isAfterExpansion)
         expandLeft = false;
-    ASSERT(!forbidLeftExpansion || !forceLeftExpansion);
-    ASSERT(!forbidRightExpansion || !forceRightExpansion);
-    if (forbidLeftExpansion)
+    ASSERT(!forbidLeadingExpansion || !forceLeadingExpansion);
+    ASSERT(!forbidTrailingExpansion || !forceTrailingExpansion);
+    if (forbidLeadingExpansion)
         expandLeft = false;
-    if (forbidRightExpansion)
+    if (forbidTrailingExpansion)
         expandRight = false;
-    if (forceLeftExpansion)
+    if (forceLeadingExpansion)
         expandLeft = true;
-    if (forceRightExpansion)
+    if (forceTrailingExpansion)
         expandRight = true;
     return std::make_pair(expandLeft, expandRight);
 }
 
 void ComplexTextController::adjustGlyphsAndAdvances()
 {
-    bool afterExpansion = (m_run.expansionBehavior() & LeftExpansionMask) == ForbidLeftExpansion;
+    bool afterExpansion = (m_run.expansionBehavior() & LeadingExpansionMask) == ForbidLeadingExpansion;
     size_t runCount = m_complexTextRuns.size();
     bool hasExtraSpacing = (m_font.letterSpacing() || m_font.wordSpacing() || m_expansion) && !m_run.spacingDisabled();
-    bool runForcesLeftExpansion = (m_run.expansionBehavior() & LeftExpansionMask) == ForceLeftExpansion;
-    bool runForcesRightExpansion = (m_run.expansionBehavior() & RightExpansionMask) == ForceRightExpansion;
-    bool runForbidsLeftExpansion = (m_run.expansionBehavior() & LeftExpansionMask) == ForbidLeftExpansion;
-    bool runForbidsRightExpansion = (m_run.expansionBehavior() & RightExpansionMask) == ForbidRightExpansion;
+    bool runForcesLeadingExpansion = (m_run.expansionBehavior() & LeadingExpansionMask) == ForceLeadingExpansion;
+    bool runForcesTrailingExpansion = (m_run.expansionBehavior() & TrailingExpansionMask) == ForceTrailingExpansion;
+    bool runForbidsLeadingExpansion = (m_run.expansionBehavior() & LeadingExpansionMask) == ForbidLeadingExpansion;
+    bool runForbidsTrailingExpansion = (m_run.expansionBehavior() & TrailingExpansionMask) == ForbidTrailingExpansion;
 
     // We are iterating in glyph order, not string order. Compare this to WidthIterator::advanceInternal()
     for (size_t runIndex = 0; runIndex < runCount; ++runIndex) {
@@ -740,25 +757,25 @@ void ComplexTextController::adjustGlyphsAndAdvances()
                 bool isFirstCharacter = !(characterIndex + complexTextRun.stringLocation());
                 bool isLastCharacter = characterIndexInRun + 1 == m_run.length() || (U16_IS_LEAD(ch) && characterIndexInRun + 2 == m_run.length() && U16_IS_TRAIL(*(cp + characterIndex + 1)));
 
-                bool forceLeftExpansion = false; // On the left, regardless of m_run.ltr()
-                bool forceRightExpansion = false; // On the right, regardless of m_run.ltr()
-                bool forbidLeftExpansion = false;
-                bool forbidRightExpansion = false;
-                if (runForcesLeftExpansion)
-                    forceLeftExpansion = m_run.ltr() ? isFirstCharacter : isLastCharacter;
-                if (runForcesRightExpansion)
-                    forceRightExpansion = m_run.ltr() ? isLastCharacter : isFirstCharacter;
-                if (runForbidsLeftExpansion)
-                    forbidLeftExpansion = m_run.ltr() ? isFirstCharacter : isLastCharacter;
-                if (runForbidsRightExpansion)
-                    forbidRightExpansion = m_run.ltr() ? isLastCharacter : isFirstCharacter;
+                bool forceLeadingExpansion = false; // On the left, regardless of m_run.ltr()
+                bool forceTrailingExpansion = false; // On the right, regardless of m_run.ltr()
+                bool forbidLeadingExpansion = false;
+                bool forbidTrailingExpansion = false;
+                if (runForcesLeadingExpansion)
+                    forceLeadingExpansion = m_run.ltr() ? isFirstCharacter : isLastCharacter;
+                if (runForcesTrailingExpansion)
+                    forceTrailingExpansion = m_run.ltr() ? isLastCharacter : isFirstCharacter;
+                if (runForbidsLeadingExpansion)
+                    forbidLeadingExpansion = m_run.ltr() ? isFirstCharacter : isLastCharacter;
+                if (runForbidsTrailingExpansion)
+                    forbidTrailingExpansion = m_run.ltr() ? isLastCharacter : isFirstCharacter;
                 // Handle justification and word-spacing.
                 static bool expandAroundIdeographs = FontCascade::canExpandAroundIdeographsInComplexText();
                 bool ideograph = expandAroundIdeographs && FontCascade::isCJKIdeographOrSymbol(ch);
-                if (treatAsSpace || ideograph || forceLeftExpansion || forceRightExpansion) {
+                if (treatAsSpace || ideograph || forceLeadingExpansion || forceTrailingExpansion) {
                     // Distribute the run's total expansion evenly over all expansion opportunities in the run.
                     if (m_expansion) {
-                        auto [expandLeft, expandRight] = expansionLocation(ideograph, treatAsSpace, m_run.ltr(), afterExpansion, forbidLeftExpansion, forbidRightExpansion, forceLeftExpansion, forceRightExpansion);
+                        auto [expandLeft, expandRight] = expansionLocation(ideograph, treatAsSpace, m_run.ltr(), afterExpansion, forbidLeadingExpansion, forbidTrailingExpansion, forceLeadingExpansion, forceTrailingExpansion);
                         if (expandLeft) {
                             m_expansion -= m_expansionPerOpportunity;
                             // Increase previous width

@@ -123,7 +123,9 @@ struct SignatureHash {
 namespace WTF {
 
 template<typename T> struct DefaultHash;
-template<> struct DefaultHash<JSC::Wasm::SignatureHash> : JSC::Wasm::SignatureHash { };
+template<> struct DefaultHash<JSC::Wasm::SignatureHash> {
+    typedef JSC::Wasm::SignatureHash Hash;
+};
 
 template<typename T> struct HashTraits;
 template<> struct HashTraits<JSC::Wasm::SignatureHash> : SimpleClassHashTraits<JSC::Wasm::SignatureHash> {

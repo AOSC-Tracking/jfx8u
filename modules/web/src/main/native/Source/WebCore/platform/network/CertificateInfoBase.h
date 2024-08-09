@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 Igalia S.L. All rights reserved.
+ * Copyright (C) 2018 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -25,34 +25,27 @@
 
 #pragma once
 
-#if ENABLE(WEBXR)
-
-#include "FakeXRRigidTransformInit.h"
-#include "XREye.h"
 #include <wtf/Optional.h>
+#include <wtf/Seconds.h>
 #include <wtf/Vector.h>
+#include <wtf/text/WTFString.h>
 
 namespace WebCore {
 
-struct FakeXRViewInit {
-    struct DeviceResolution {
-        int width;
-        int height;
-    };
-    struct FieldOfViewInit {
-        float upDegrees;
-        float downDegrees;
-        float leftDegrees;
-        float rightDegrees;
-    };
+class CertificateInfoBase {
+public:
+    bool containsNonRootSHA1SignedCertificate() const { return false; };
 
-    XREye eye;
-    Vector<float> projectionMatrix;
-    DeviceResolution resolution;
-    FakeXRRigidTransformInit viewOffset;
-    Optional<FieldOfViewInit> fieldOfView;
+    struct SummaryInfo {
+        String subject;
+        Seconds validFrom;
+        Seconds validUntil;
+        Vector<String> dnsNames;
+        Vector<String> ipAddresses;
+    };
+    Optional<SummaryInfo> summaryInfo() const { return WTF::nullopt; };
+
+    bool isEmpty() const { return true; };
 };
 
 } // namespace WebCore
-
-#endif // ENABLE(WEBXR)

@@ -26,7 +26,7 @@
 #include "config.h"
 #include "WebVTTElement.h"
 
-#if ENABLE(VIDEO)
+#if ENABLE(VIDEO_TRACK)
 
 #include "HTMLSpanElement.h"
 #include "RubyElement.h"

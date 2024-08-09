@@ -30,11 +30,10 @@
 
 #include "ArithProfile.h"
 #include "ArrayConstructor.h"
-#include "ArrayPrototype.h"
+#include "BasicBlockLocation.h"
 #include "BuiltinNames.h"
-#include "ByValInfo.h"
 #include "BytecodeGenerator.h"
-#include "BytecodeOperandsForCheckpoint.h"
+#include "BytecodeUseDef.h"
 #include "CacheableIdentifierInlines.h"
 #include "CallLinkStatus.h"
 #include "CodeBlock.h"
@@ -42,13 +41,12 @@
 #include "CommonSlowPaths.h"
 #include "DFGAbstractHeap.h"
 #include "DFGArrayMode.h"
-#include "DFGBlockSet.h"
+#include "DFGCFG.h"
 #include "DFGCapabilities.h"
 #include "DFGClobberize.h"
 #include "DFGClobbersExitState.h"
 #include "DFGGraph.h"
-#include "DOMJITGetterSetter.h"
-#include "DeleteByStatus.h"
+#include "DFGJITCode.h"
 #include "FunctionCodeBlock.h"
 #include "GetByStatus.h"
 #include "GetterSetter.h"
@@ -60,26 +58,25 @@
 #include "JSImmutableButterfly.h"
 #include "JSInternalPromise.h"
 #include "JSInternalPromiseConstructor.h"
-#include "JSMapIterator.h"
 #include "JSModuleEnvironment.h"
 #include "JSModuleNamespaceObject.h"
 #include "JSPromiseConstructor.h"
-#include "JSSetIterator.h"
-#include "NullSetterFunction.h"
 #include "NumberConstructor.h"
 #include "ObjectConstructor.h"
 #include "OpcodeInlines.h"
 #include "PreciseJumpTargets.h"
 #include "PutByIdFlags.h"
 #include "PutByIdStatus.h"
-#include "PutByValFlags.h"
 #include "RegExpPrototype.h"
 #include "StackAlignment.h"
 #include "StringConstructor.h"
 #include "StructureStubInfo.h"
 #include "SymbolConstructor.h"
+#include "Watchdog.h"
 #include <wtf/CommaPrinter.h>
 #include <wtf/HashMap.h>
+#include <wtf/MathExtras.h>
+#include <wtf/Scope.h>
 #include <wtf/SetForScope.h>
 #include <wtf/StdLibExtras.h>
 
@@ -108,7 +105,7 @@ public:
         , m_codeBlock(graph.m_codeBlock)
         , m_profiledBlock(graph.m_profiledBlock)
         , m_graph(graph)
-        , m_currentBlock(nullptr)
+        , m_currentBlock(0)
         , m_currentIndex(0)
         , m_constantUndefined(graph.freeze(jsUndefined()))
         , m_constantNull(graph.freeze(jsNull()))
@@ -119,8 +116,8 @@ public:
         , m_numTmps(m_codeBlock->numTmps())
         , m_parameterSlots(0)
         , m_numPassedVarArgs(0)
-        , m_inlineStackTop(nullptr)
-        , m_currentInstruction(nullptr)
+        , m_inlineStackTop(0)
+        , m_currentInstruction(0)
         , m_hasDebuggerEnabled(graph.hasDebuggerEnabled())
     {
         ASSERT(m_profiledBlock);
@@ -158,7 +155,7 @@ private:
 
     // Helper for min and max.
     template<typename ChecksFunctor>
-    bool handleMinMax(Operand result, NodeType op, int registerOffset, int argumentCountIncludingThis, const ChecksFunctor& insertChecks);
+    bool handleMinMax(VirtualRegister result, NodeType op, int registerOffset, int argumentCountIncludingThis, const ChecksFunctor& insertChecks);
 
     void refineStatically(CallLinkStatus&, Node* callTarget);
     // Blocks can either be targetable (i.e. in the m_blockLinkingTargets of one InlineStackEntry) with a well-defined bytecodeBegin,
@@ -175,11 +172,11 @@ private:
     // Handle calls. This resolves issues surrounding inlining and intrinsics.
     enum Terminality { Terminal, NonTerminal };
     Terminality handleCall(
-        Operand result, NodeType op, InlineCallFrame::Kind, BytecodeIndex osrExitIndex,
+        VirtualRegister result, NodeType op, InlineCallFrame::Kind, unsigned instructionSize,
         Node* callTarget, int argumentCountIncludingThis, int registerOffset, CallLinkStatus,
-        SpeculatedType prediction, ECMAMode = ECMAMode::strict());
+        SpeculatedType prediction);
     template<typename CallOp>
-    Terminality handleCall(const Instruction* pc, NodeType op, CallMode, BytecodeIndex osrExitIndex);
+    Terminality handleCall(const Instruction* pc, NodeType op, CallMode);
     template<typename CallOp>
     Terminality handleVarargsCall(const Instruction* pc, NodeType op, CallMode);
     void emitFunctionChecks(CallVariant, Node* callTarget, VirtualRegister thisArgumnt);
@@ -189,31 +186,31 @@ private:
     bool handleRecursiveTailCall(Node* callTargetNode, CallVariant, int registerOffset, int argumentCountIncludingThis, const ChecksFunctor& emitFunctionCheckIfNeeded);
     unsigned inliningCost(CallVariant, int argumentCountIncludingThis, InlineCallFrame::Kind); // Return UINT_MAX if it's not an inlining candidate. By convention, intrinsics have a cost of 1.
     // Handle inlining. Return true if it succeeded, false if we need to plant a call.
-    bool handleVarargsInlining(Node* callTargetNode, Operand result, const CallLinkStatus&, int registerOffset, VirtualRegister thisArgument, VirtualRegister argumentsArgument, unsigned argumentsOffset, NodeType callOp, InlineCallFrame::Kind);
+    bool handleVarargsInlining(Node* callTargetNode, VirtualRegister result, const CallLinkStatus&, int registerOffset, VirtualRegister thisArgument, VirtualRegister argumentsArgument, unsigned argumentsOffset, NodeType callOp, InlineCallFrame::Kind);
     unsigned getInliningBalance(const CallLinkStatus&, CodeSpecializationKind);
     enum class CallOptimizationResult { OptimizedToJump, Inlined, DidNothing };
-    CallOptimizationResult handleCallVariant(Node* callTargetNode, Operand result, CallVariant, int registerOffset, VirtualRegister thisArgument, int argumentCountIncludingThis, BytecodeIndex osrExitIndex, InlineCallFrame::Kind, SpeculatedType prediction, unsigned& inliningBalance, BasicBlock* continuationBlock, bool needsToCheckCallee);
-    CallOptimizationResult handleInlining(Node* callTargetNode, Operand result, const CallLinkStatus&, int registerOffset, VirtualRegister thisArgument, int argumentCountIncludingThis, BytecodeIndex osrExitIndex, NodeType callOp, InlineCallFrame::Kind, SpeculatedType prediction, ECMAMode);
+    CallOptimizationResult handleCallVariant(Node* callTargetNode, VirtualRegister result, CallVariant, int registerOffset, VirtualRegister thisArgument, int argumentCountIncludingThis, BytecodeIndex nextIndex, InlineCallFrame::Kind, SpeculatedType prediction, unsigned& inliningBalance, BasicBlock* continuationBlock, bool needsToCheckCallee);
+    CallOptimizationResult handleInlining(Node* callTargetNode, VirtualRegister result, const CallLinkStatus&, int registerOffset, VirtualRegister thisArgument, int argumentCountIncludingThis, BytecodeIndex nextIndex, NodeType callOp, InlineCallFrame::Kind, SpeculatedType prediction);
     template<typename ChecksFunctor>
-    void inlineCall(Node* callTargetNode, Operand result, CallVariant, int registerOffset, int argumentCountIncludingThis, InlineCallFrame::Kind, BasicBlock* continuationBlock, const ChecksFunctor& insertChecks);
+    void inlineCall(Node* callTargetNode, VirtualRegister result, CallVariant, int registerOffset, int argumentCountIncludingThis, InlineCallFrame::Kind, BasicBlock* continuationBlock, const ChecksFunctor& insertChecks);
     // Handle intrinsic functions. Return true if it succeeded, false if we need to plant a call.
     template<typename ChecksFunctor>
-    bool handleIntrinsicCall(Node* callee, Operand result, Intrinsic, int registerOffset, int argumentCountIncludingThis, SpeculatedType prediction, const ChecksFunctor& insertChecks);
+    bool handleIntrinsicCall(Node* callee, VirtualRegister result, Intrinsic, int registerOffset, int argumentCountIncludingThis, SpeculatedType prediction, const ChecksFunctor& insertChecks);
     template<typename ChecksFunctor>
-    bool handleDOMJITCall(Node* callee, Operand result, const DOMJIT::Signature*, int registerOffset, int argumentCountIncludingThis, SpeculatedType prediction, const ChecksFunctor& insertChecks);
+    bool handleDOMJITCall(Node* callee, VirtualRegister result, const DOMJIT::Signature*, int registerOffset, int argumentCountIncludingThis, SpeculatedType prediction, const ChecksFunctor& insertChecks);
     template<typename ChecksFunctor>
-    bool handleIntrinsicGetter(Operand result, SpeculatedType prediction, const GetByIdVariant& intrinsicVariant, Node* thisNode, const ChecksFunctor& insertChecks);
+    bool handleIntrinsicGetter(VirtualRegister result, SpeculatedType prediction, const GetByIdVariant& intrinsicVariant, Node* thisNode, const ChecksFunctor& insertChecks);
     template<typename ChecksFunctor>
-    bool handleTypedArrayConstructor(Operand result, InternalFunction*, int registerOffset, int argumentCountIncludingThis, TypedArrayType, const ChecksFunctor& insertChecks);
+    bool handleTypedArrayConstructor(VirtualRegister result, InternalFunction*, int registerOffset, int argumentCountIncludingThis, TypedArrayType, const ChecksFunctor& insertChecks);
     template<typename ChecksFunctor>
-    bool handleConstantInternalFunction(Node* callTargetNode, Operand result, InternalFunction*, int registerOffset, int argumentCountIncludingThis, CodeSpecializationKind, SpeculatedType, const ChecksFunctor& insertChecks);
+    bool handleConstantInternalFunction(Node* callTargetNode, VirtualRegister result, InternalFunction*, int registerOffset, int argumentCountIncludingThis, CodeSpecializationKind, SpeculatedType, const ChecksFunctor& insertChecks);
     Node* handlePutByOffset(Node* base, unsigned identifier, PropertyOffset, Node* value);
     Node* handleGetByOffset(SpeculatedType, Node* base, unsigned identifierNumber, PropertyOffset, NodeType = GetByOffset);
-    bool handleDOMJITGetter(Operand result, const GetByIdVariant&, Node* thisNode, unsigned identifierNumber, SpeculatedType prediction);
+    bool handleDOMJITGetter(VirtualRegister result, const GetByIdVariant&, Node* thisNode, unsigned identifierNumber, SpeculatedType prediction);
     bool handleModuleNamespaceLoad(VirtualRegister result, SpeculatedType, Node* base, GetByStatus);
 
     template<typename Bytecode>
-    void handlePutByVal(Bytecode, BytecodeIndex osrExitIndex);
+    void handlePutByVal(Bytecode, unsigned instructionSize);
     template <typename Bytecode>
     void handlePutAccessorById(NodeType, Bytecode);
     template <typename Bytecode>
@@ -245,15 +242,12 @@ private:
     template<typename Op>
     void parseGetById(const Instruction*);
     void handleGetById(
-        VirtualRegister destination, SpeculatedType, Node* base, CacheableIdentifier, unsigned identifierNumber, GetByStatus, AccessType, BytecodeIndex osrExitIndex);
+        VirtualRegister destination, SpeculatedType, Node* base, unsigned identifierNumber, GetByStatus, AccessType, unsigned instructionSize);
     void emitPutById(
-        Node* base, CacheableIdentifier, Node* value,  const PutByIdStatus&, bool isDirect, ECMAMode);
+        Node* base, unsigned identifierNumber, Node* value,  const PutByIdStatus&, bool isDirect);
     void handlePutById(
-        Node* base, CacheableIdentifier, unsigned identifierNumber, Node* value, const PutByIdStatus&,
-        bool isDirect, BytecodeIndex osrExitIndex, ECMAMode);
-
-    void handleDeleteById(
-        VirtualRegister destination, Node* base, CacheableIdentifier, unsigned identifierNumber, DeleteByStatus, ECMAMode);
+        Node* base, unsigned identifierNumber, Node* value, const PutByIdStatus&,
+        bool isDirect, unsigned intructionSize);
 
     // Either register a watchpoint or emit a check for this condition. Returns false if the
     // condition no longer holds, and therefore no reasonable check can be emitted.
@@ -290,14 +284,13 @@ private:
     void linkBlock(BasicBlock*, Vector<BasicBlock*>& possibleTargets);
     void linkBlocks(Vector<BasicBlock*>& unlinkedBlocks, Vector<BasicBlock*>& possibleTargets);
 
-    BytecodeIndex nextOpcodeIndex() const { return BytecodeIndex(m_currentIndex.offset() + m_currentInstruction->size()); }
-    BytecodeIndex nextCheckpoint() const { return m_currentIndex.withCheckpoint(m_currentIndex.checkpoint() + 1); }
-
     void progressToNextCheckpoint()
     {
-        m_currentIndex = nextCheckpoint();
+        m_currentIndex = BytecodeIndex(m_currentIndex.offset(), m_currentIndex.checkpoint() + 1);
         // At this point, it's again OK to OSR exit.
         m_exitOK = true;
+        addToGraph(ExitOK);
+
         processSetLocalQueue();
     }
 
@@ -320,15 +313,15 @@ private:
         return getLocalOrTmp(operand);
     }
 
-    Node* get(Operand operand)
+    Node* get(VirtualRegister operand)
     {
         if (operand.isConstant()) {
-            unsigned constantIndex = operand.virtualRegister().toConstantIndex();
+            unsigned constantIndex = operand.toConstantIndex();
             unsigned oldSize = m_constants.size();
             if (constantIndex >= oldSize || !m_constants[constantIndex]) {
                 const CodeBlock& codeBlock = *m_inlineStackTop->m_codeBlock;
-                JSValue value = codeBlock.getConstant(operand.virtualRegister());
-                SourceCodeRepresentation sourceCodeRepresentation = codeBlock.constantSourceCodeRepresentation(operand.virtualRegister());
+                JSValue value = codeBlock.getConstant(operand);
+                SourceCodeRepresentation sourceCodeRepresentation = codeBlock.constantSourceCodeRepresentation(operand);
                 if (constantIndex >= oldSize) {
                     m_constants.grow(constantIndex + 1);
                     for (unsigned i = oldSize; i < m_constants.size(); ++i)
@@ -349,10 +342,10 @@ private:
         if (inlineCallFrame()) {
             if (!inlineCallFrame()->isClosureCall) {
                 JSFunction* callee = inlineCallFrame()->calleeConstant();
-                if (operand == VirtualRegister(CallFrameSlot::callee))
+                if (operand.offset() == CallFrameSlot::callee)
                     return weakJSConstant(callee);
             }
-        } else if (operand == VirtualRegister(CallFrameSlot::callee)) {
+        } else if (operand.offset() == CallFrameSlot::callee) {
             // We have to do some constant-folding here because this enables CreateThis folding. Note
             // that we don't have such watchpoint-based folding for inlined uses of Callee, since in that
             // case if the function is a singleton then we already know it.
@@ -412,7 +405,7 @@ private:
         m_setLocalQueue.shrink(0);
     }
 
-    Node* set(Operand operand, Node* value, SetMode setMode = NormalSet)
+    Node* set(VirtualRegister operand, Node* value, SetMode setMode = NormalSet)
     {
         return setDirect(m_inlineStackTop->remapOperand(operand), value, setMode);
     }
@@ -693,20 +686,15 @@ private:
         flushForTerminal();
     }
 
-    Node* jsConstant(FrozenValue* constantValue)
-    {
-        return addToGraph(JSConstant, OpInfo(constantValue));
-    }
-
     // Assumes that the constant should be strongly marked.
     Node* jsConstant(JSValue constantValue)
     {
-        return jsConstant(m_graph.freezeStrong(constantValue));
+        return addToGraph(JSConstant, OpInfo(m_graph.freezeStrong(constantValue)));
     }
 
     Node* weakJSConstant(JSValue constantValue)
     {
-        return jsConstant(m_graph.freeze(constantValue));
+        return addToGraph(JSConstant, OpInfo(m_graph.freeze(constantValue)));
     }
 
     // Helper functions to get/set the this value.
@@ -772,7 +760,7 @@ private:
         return node;
     }
 
-    Node* addToGraph(NodeType op, Node* child1 = nullptr, Node* child2 = nullptr, Node* child3 = nullptr)
+    Node* addToGraph(NodeType op, Node* child1 = 0, Node* child2 = 0, Node* child3 = 0)
     {
         Node* result = m_graph.addNode(
             op, currentNodeOrigin(), Edge(child1), Edge(child2),
@@ -785,7 +773,7 @@ private:
             op, currentNodeOrigin(), child1, child2, child3);
         return addToGraph(result);
     }
-    Node* addToGraph(NodeType op, OpInfo info, Node* child1 = nullptr, Node* child2 = nullptr, Node* child3 = nullptr)
+    Node* addToGraph(NodeType op, OpInfo info, Node* child1 = 0, Node* child2 = 0, Node* child3 = 0)
     {
         Node* result = m_graph.addNode(
             op, currentNodeOrigin(), info, Edge(child1), Edge(child2),
@@ -797,7 +785,7 @@ private:
         Node* result = m_graph.addNode(op, currentNodeOrigin(), info, child1, child2, child3);
         return addToGraph(result);
     }
-    Node* addToGraph(NodeType op, OpInfo info1, OpInfo info2, Node* child1 = nullptr, Node* child2 = nullptr, Node* child3 = nullptr)
+    Node* addToGraph(NodeType op, OpInfo info1, OpInfo info2, Node* child1 = 0, Node* child2 = 0, Node* child3 = 0)
     {
         Node* result = m_graph.addNode(
             op, currentNodeOrigin(), info1, info2,
@@ -857,18 +845,18 @@ private:
     }
 
     Node* addCall(
-        Operand result, NodeType op, OpInfo opInfo, Node* callee, int argCount, int registerOffset,
+        VirtualRegister result, NodeType op, const DOMJIT::Signature* signature, Node* callee, int argCount, int registerOffset,
         SpeculatedType prediction)
     {
         if (op == TailCall) {
             if (allInlineFramesAreTailCalls())
-                return addCallWithoutSettingResult(op, opInfo, callee, argCount, registerOffset, OpInfo());
+                return addCallWithoutSettingResult(op, OpInfo(signature), callee, argCount, registerOffset, OpInfo());
             op = TailCallInlinedCaller;
         }
 
 
         Node* call = addCallWithoutSettingResult(
-            op, opInfo, callee, argCount, registerOffset, OpInfo(prediction));
+            op, OpInfo(signature), callee, argCount, registerOffset, OpInfo(prediction));
         if (result.isValid())
             set(result, call);
         return call;
@@ -1009,10 +997,8 @@ private:
                 node->mergeFlags(NodeMayHaveDoubleResult);
             if (observed.didObserveNonNumeric())
                 node->mergeFlags(NodeMayHaveNonNumericResult);
-            if (observed.didObserveBigInt32())
-                node->mergeFlags(NodeMayHaveBigInt32Result);
-            if (observed.didObserveHeapBigInt() || m_inlineStackTop->m_exitProfile.hasExitSite(m_currentIndex, BigInt32Overflow))
-                node->mergeFlags(NodeMayHaveHeapBigIntResult);
+            if (observed.didObserveBigInt())
+                node->mergeFlags(NodeMayHaveBigIntResult);
             break;
         }
         case ValueMul:
@@ -1030,10 +1016,8 @@ private:
                 node->mergeFlags(NodeMayHaveDoubleResult);
             if (arithProfile->didObserveNonNumeric())
                 node->mergeFlags(NodeMayHaveNonNumericResult);
-            if (arithProfile->didObserveBigInt32())
-                node->mergeFlags(NodeMayHaveBigInt32Result);
-            if (arithProfile->didObserveHeapBigInt() || m_inlineStackTop->m_exitProfile.hasExitSite(m_currentIndex, BigInt32Overflow))
-                node->mergeFlags(NodeMayHaveHeapBigIntResult);
+            if (arithProfile->didObserveBigInt())
+                node->mergeFlags(NodeMayHaveBigIntResult);
             break;
         }
         case ValueNegate:
@@ -1051,10 +1035,8 @@ private:
                 node->mergeFlags(NodeMayOverflowInt32InBaseline);
             if (arithProfile->didObserveNonNumeric())
                 node->mergeFlags(NodeMayHaveNonNumericResult);
-            if (arithProfile->didObserveBigInt32())
-                node->mergeFlags(NodeMayHaveBigInt32Result);
-            if (arithProfile->didObserveHeapBigInt() || m_inlineStackTop->m_exitProfile.hasExitSite(m_currentIndex, BigInt32Overflow))
-                node->mergeFlags(NodeMayHaveHeapBigIntResult);
+            if (arithProfile->didObserveBigInt())
+                node->mergeFlags(NodeMayHaveBigIntResult);
             break;
         }
 
@@ -1103,11 +1085,8 @@ private:
         node->mergeFlags(NodeMayOverflowInt32InBaseline | NodeMayNegZeroInBaseline);
 
         BinaryArithProfile* arithProfile = m_inlineStackTop->m_profiledBlock->binaryArithProfileForBytecodeIndex(m_currentIndex);
-
-        if (arithProfile->didObserveBigInt32())
-            node->mergeFlags(NodeMayHaveBigInt32Result);
-        if (arithProfile->didObserveHeapBigInt() || m_inlineStackTop->m_exitProfile.hasExitSite(m_currentIndex, BigInt32Overflow))
-            node->mergeFlags(NodeMayHaveHeapBigIntResult);
+        if (arithProfile->didObserveBigInt())
+            node->mergeFlags(NodeMayHaveBigIntResult);
 
         return node;
     }
@@ -1144,7 +1123,7 @@ private:
     FrozenValue* m_constantOne;
     Vector<Node*, 16> m_constants;
 
-    HashMap<InlineCallFrame*, Vector<ArgumentPosition*>, WTF::DefaultHash<InlineCallFrame*>, WTF::NullableHashTraits<InlineCallFrame*>> m_inlineCallFrameToArgumentPositions;
+    HashMap<InlineCallFrame*, Vector<ArgumentPosition*>, WTF::DefaultHash<InlineCallFrame*>::Hash, WTF::NullableHashTraits<InlineCallFrame*>> m_inlineCallFrameToArgumentPositions;
 
     // The number of arguments passed to the function.
     unsigned m_numArguments;
@@ -1190,7 +1169,7 @@ private:
         // Optional: a continuation block for returns to jump to. It is set by early returns if it does not exist.
         BasicBlock* m_continuationBlock;
 
-        Operand m_returnValue;
+        VirtualRegister m_returnValue;
 
         // Speculations about variable types collected from the profiled code block,
         // which are based on OSR exit profiles that past DFG compilations of this
@@ -1210,7 +1189,7 @@ private:
             CodeBlock*,
             CodeBlock* profiledBlock,
             JSFunction* callee, // Null if this is a closure call.
-            Operand returnValue,
+            VirtualRegister returnValueVR,
             VirtualRegister inlineCallFrameStart,
             int argumentCountIncludingThis,
             InlineCallFrame::Kind,
@@ -1267,18 +1246,6 @@ private:
     bool m_hasAnyForceOSRExits { false };
 };
 
-template<typename Bytecode>
-ECMAMode ecmaMode(Bytecode bytecode)
-{
-    return bytecode.m_ecmaMode;
-}
-
-template<>
-ALWAYS_INLINE ECMAMode ecmaMode<OpPutByValDirect>(OpPutByValDirect bytecode)
-{
-    return bytecode.m_flags.ecmaMode();
-}
-
 BasicBlock* ByteCodeParser::allocateTargetableBlock(BytecodeIndex bytecodeIndex)
 {
     ASSERT(bytecodeIndex);
@@ -1297,7 +1264,6 @@ BasicBlock* ByteCodeParser::allocateUntargetableBlock()
     Ref<BasicBlock> block = adoptRef(*new BasicBlock(BytecodeIndex(), m_numArguments, m_numLocals, m_numTmps, 1));
     BasicBlock* blockPtr = block.ptr();
     m_graph.appendBlock(WTFMove(block));
-    VERBOSE_LOG("Adding new untargetable block: ", blockPtr->index, "\n");
     return blockPtr;
 }
 
@@ -1327,21 +1293,20 @@ void ByteCodeParser::addJumpTo(unsigned bytecodeIndex)
 }
 
 template<typename CallOp>
-ByteCodeParser::Terminality ByteCodeParser::handleCall(const Instruction* pc, NodeType op, CallMode callMode, BytecodeIndex osrExitIndex)
+ByteCodeParser::Terminality ByteCodeParser::handleCall(const Instruction* pc, NodeType op, CallMode callMode)
 {
     auto bytecode = pc->as<CallOp>();
-    Node* callTarget = get(calleeFor(bytecode, m_currentIndex.checkpoint()));
-    int registerOffset = -static_cast<int>(stackOffsetInRegistersForCall(bytecode, m_currentIndex.checkpoint()));
+    Node* callTarget = get(bytecode.m_callee);
+    int registerOffset = -static_cast<int>(bytecode.m_argv);
 
     CallLinkStatus callLinkStatus = CallLinkStatus::computeFor(
         m_inlineStackTop->m_profiledBlock, currentCodeOrigin(),
         m_inlineStackTop->m_baselineMap, m_icContextStack);
 
     InlineCallFrame::Kind kind = InlineCallFrame::kindFor(callMode);
-    ASSERT(osrExitIndex);
 
-    return handleCall(destinationFor(bytecode, m_currentIndex.checkpoint(), JITType::DFGJIT), op, kind, osrExitIndex, callTarget,
-        argumentCountIncludingThisFor(bytecode, m_currentIndex.checkpoint()), registerOffset, callLinkStatus, getPrediction());
+    return handleCall(bytecode.m_dst, op, kind, pc->size(), callTarget,
+        bytecode.m_argc, registerOffset, callLinkStatus, getPrediction());
 }
 
 void ByteCodeParser::refineStatically(CallLinkStatus& callLinkStatus, Node* callTarget)
@@ -1351,9 +1316,9 @@ void ByteCodeParser::refineStatically(CallLinkStatus& callLinkStatus, Node* call
 }
 
 ByteCodeParser::Terminality ByteCodeParser::handleCall(
-    Operand result, NodeType op, InlineCallFrame::Kind kind, BytecodeIndex osrExitIndex,
+    VirtualRegister result, NodeType op, InlineCallFrame::Kind kind, unsigned instructionSize,
     Node* callTarget, int argumentCountIncludingThis, int registerOffset,
-    CallLinkStatus callLinkStatus, SpeculatedType prediction, ECMAMode ecmaMode)
+    CallLinkStatus callLinkStatus, SpeculatedType prediction)
 {
     ASSERT(registerOffset <= 0);
 
@@ -1368,7 +1333,7 @@ ByteCodeParser::Terminality ByteCodeParser::handleCall(
 
         VirtualRegister thisArgument = virtualRegisterForArgumentIncludingThis(0, registerOffset);
         auto optimizationResult = handleInlining(callTarget, result, callLinkStatus, registerOffset, thisArgument,
-            argumentCountIncludingThis, osrExitIndex, op, kind, prediction, ecmaMode);
+            argumentCountIncludingThis, BytecodeIndex(m_currentIndex.offset() + instructionSize), op, kind, prediction);
         if (optimizationResult == CallOptimizationResult::OptimizedToJump)
             return Terminal;
         if (optimizationResult == CallOptimizationResult::Inlined) {
@@ -1378,9 +1343,7 @@ ByteCodeParser::Terminality ByteCodeParser::handleCall(
         }
     }
 
-    if (kind == InlineCallFrame::SetterCall && ecmaMode.isStrict())
-        addToGraph(CheckNotJSCast, OpInfo(NullSetterFunction::info()), callTarget);
-    Node* callNode = addCall(result, op, OpInfo(), callTarget, argumentCountIncludingThis, registerOffset, prediction);
+    Node* callNode = addCall(result, op, nullptr, callTarget, argumentCountIncludingThis, registerOffset, prediction);
     ASSERT(callNode->op() != TailCallVarargs && callNode->op() != TailCallForwardVarargs);
     return callNode->op() == TailCall ? Terminal : NonTerminal;
 }
@@ -1457,7 +1420,7 @@ void ByteCodeParser::emitFunctionChecks(CallVariant callee, Node* callTarget, Vi
     }
 
     ASSERT(calleeCell);
-    addToGraph(CheckIsConstant, OpInfo(m_graph.freeze(calleeCell)), callTargetForCheck);
+    addToGraph(CheckCell, OpInfo(m_graph.freeze(calleeCell)), callTargetForCheck);
     if (thisArgument)
         addToGraph(Phantom, thisArgument);
 }
@@ -1669,7 +1632,7 @@ unsigned ByteCodeParser::inliningCost(CallVariant callee, int argumentCountInclu
 }
 
 template<typename ChecksFunctor>
-void ByteCodeParser::inlineCall(Node* callTargetNode, Operand result, CallVariant callee, int registerOffset, int argumentCountIncludingThis, InlineCallFrame::Kind kind, BasicBlock* continuationBlock, const ChecksFunctor& insertChecks)
+void ByteCodeParser::inlineCall(Node* callTargetNode, VirtualRegister result, CallVariant callee, int registerOffset, int argumentCountIncludingThis, InlineCallFrame::Kind kind, BasicBlock* continuationBlock, const ChecksFunctor& insertChecks)
 {
     const Instruction* savedCurrentInstruction = m_currentInstruction;
     CodeSpecializationKind specializationKind = InlineCallFrame::specializationKindFor(kind);
@@ -1703,7 +1666,7 @@ void ByteCodeParser::inlineCall(Node* callTargetNode, Operand result, CallVarian
     size_t argumentPositionStart = m_graph.m_argumentPositions.size();
 
     if (result.isValid())
-        result = m_inlineStackTop->remapOperand(result);
+        result = m_inlineStackTop->remapOperand(result).virtualRegister();
 
     VariableAccessData* calleeVariable = nullptr;
     if (callee.isClosureCall()) {
@@ -1823,7 +1786,7 @@ void ByteCodeParser::inlineCall(Node* callTargetNode, Operand result, CallVarian
     InlineVariableData inlineVariableData;
     inlineVariableData.inlineCallFrame = m_inlineStackTop->m_inlineCallFrame;
     inlineVariableData.argumentPositionStart = argumentPositionStart;
-    inlineVariableData.calleeVariable = nullptr;
+    inlineVariableData.calleeVariable = 0;
 
     RELEASE_ASSERT(
         m_inlineStackTop->m_inlineCallFrame->isClosureCall
@@ -1855,7 +1818,7 @@ void ByteCodeParser::inlineCall(Node* callTargetNode, Operand result, CallVarian
     m_currentInstruction = savedCurrentInstruction;
 }
 
-ByteCodeParser::CallOptimizationResult ByteCodeParser::handleCallVariant(Node* callTargetNode, Operand result, CallVariant callee, int registerOffset, VirtualRegister thisArgument, int argumentCountIncludingThis, BytecodeIndex osrExitIndex, InlineCallFrame::Kind kind, SpeculatedType prediction, unsigned& inliningBalance, BasicBlock* continuationBlock, bool needsToCheckCallee)
+ByteCodeParser::CallOptimizationResult ByteCodeParser::handleCallVariant(Node* callTargetNode, VirtualRegister result, CallVariant callee, int registerOffset, VirtualRegister thisArgument, int argumentCountIncludingThis, BytecodeIndex nextIndex, InlineCallFrame::Kind kind, SpeculatedType prediction, unsigned& inliningBalance, BasicBlock* continuationBlock, bool needsToCheckCallee)
 {
     VERBOSE_LOG("    Considering callee ", callee, "\n");
 
@@ -1883,7 +1846,7 @@ ByteCodeParser::CallOptimizationResult ByteCodeParser::handleCallVariant(Node* c
         emitArgumentPhantoms(registerOffset, argumentCountIncludingThis);
         inliningBalance--;
         if (continuationBlock) {
-            m_currentIndex = osrExitIndex;
+            m_currentIndex = nextIndex;
             m_exitOK = true;
             processSetLocalQueue();
             addJumpTo(continuationBlock);
@@ -1932,18 +1895,12 @@ ByteCodeParser::CallOptimizationResult ByteCodeParser::handleCallVariant(Node* c
     return CallOptimizationResult::Inlined;
 }
 
-bool ByteCodeParser::handleVarargsInlining(Node* callTargetNode, Operand result,
+bool ByteCodeParser::handleVarargsInlining(Node* callTargetNode, VirtualRegister result,
     const CallLinkStatus& callLinkStatus, int firstFreeReg, VirtualRegister thisArgument,
     VirtualRegister argumentsArgument, unsigned argumentsOffset,
     NodeType callOp, InlineCallFrame::Kind kind)
 {
     VERBOSE_LOG("Handling inlining (Varargs)...\nStack: ", currentCodeOrigin(), "\n");
-
-    StackCheck::Scope stackChecker(m_graph.m_stackChecker);
-    if (!stackChecker.isSafeToRecurse()) {
-        VERBOSE_LOG("Bailing inlining (compiler thread stack overflow eminent).\nStack: ", currentCodeOrigin(), "\n");
-        return false;
-    }
     if (callLinkStatus.maxArgumentCountIncludingThis() > Options::maximumVarargsForInlining()) {
         VERBOSE_LOG("Bailing inlining: too many arguments for varargs inlining.\n");
         return false;
@@ -2082,18 +2039,12 @@ unsigned ByteCodeParser::getInliningBalance(const CallLinkStatus& callLinkStatus
 }
 
 ByteCodeParser::CallOptimizationResult ByteCodeParser::handleInlining(
-    Node* callTargetNode, Operand result, const CallLinkStatus& callLinkStatus,
+    Node* callTargetNode, VirtualRegister result, const CallLinkStatus& callLinkStatus,
     int registerOffset, VirtualRegister thisArgument,
     int argumentCountIncludingThis,
-    BytecodeIndex osrExitIndex, NodeType callOp, InlineCallFrame::Kind kind, SpeculatedType prediction, ECMAMode ecmaMode)
+    BytecodeIndex nextIndex, NodeType callOp, InlineCallFrame::Kind kind, SpeculatedType prediction)
 {
     VERBOSE_LOG("Handling inlining...\nStack: ", currentCodeOrigin(), "\n");
-
-    StackCheck::Scope stackChecker(m_graph.m_stackChecker);
-    if (!stackChecker.isSafeToRecurse()) {
-        VERBOSE_LOG("Bailing inlining (compiler thread stack overflow eminent).\nStack: ", currentCodeOrigin(), "\n");
-        return CallOptimizationResult::DidNothing;
-    }
 
     CodeSpecializationKind specializationKind = InlineCallFrame::specializationKindFor(kind);
     unsigned inliningBalance = getInliningBalance(callLinkStatus, specializationKind);
@@ -2104,7 +2055,7 @@ ByteCodeParser::CallOptimizationResult ByteCodeParser::handleInlining(
     if (!callLinkStatus.couldTakeSlowPath() && callLinkStatus.size() == 1) {
         return handleCallVariant(
             callTargetNode, result, callLinkStatus[0], registerOffset, thisArgument,
-            argumentCountIncludingThis, osrExitIndex, kind, prediction, inliningBalance, nullptr, true);
+            argumentCountIncludingThis, nextIndex, kind, prediction, inliningBalance, nullptr, true);
     }
 
     // We need to create some kind of switch over callee. For now we only do this if we believe that
@@ -2194,7 +2145,7 @@ ByteCodeParser::CallOptimizationResult ByteCodeParser::handleInlining(
 
         auto inliningResult = handleCallVariant(
             myCallTargetNode, result, callLinkStatus[i], registerOffset,
-            thisArgument, argumentCountIncludingThis, osrExitIndex, kind, prediction,
+            thisArgument, argumentCountIncludingThis, nextIndex, kind, prediction,
             inliningBalance, continuationBlock, false);
 
         if (inliningResult == CallOptimizationResult::DidNothing) {
@@ -2229,14 +2180,12 @@ ByteCodeParser::CallOptimizationResult ByteCodeParser::handleInlining(
     prepareToParseBlock();
     Node* myCallTargetNode = getDirect(calleeReg);
     if (couldTakeSlowPath) {
-        if (kind == InlineCallFrame::SetterCall && ecmaMode.isStrict())
-            addToGraph(CheckNotJSCast, OpInfo(NullSetterFunction::info()), myCallTargetNode);
         addCall(
-            result, callOp, OpInfo(), myCallTargetNode, argumentCountIncludingThis,
+            result, callOp, nullptr, myCallTargetNode, argumentCountIncludingThis,
             registerOffset, prediction);
         VERBOSE_LOG("We added a call in the slow path\n");
     } else {
-        addToGraph(CheckBadValue);
+        addToGraph(CheckBadCell);
         addToGraph(Phantom, myCallTargetNode);
         emitArgumentPhantoms(registerOffset, argumentCountIncludingThis);
 
@@ -2245,7 +2194,7 @@ ByteCodeParser::CallOptimizationResult ByteCodeParser::handleInlining(
         VERBOSE_LOG("couldTakeSlowPath was false\n");
     }
 
-    m_currentIndex = osrExitIndex;
+    m_currentIndex = nextIndex;
     m_exitOK = true; // Origin changed, so it's fine to exit again.
     processSetLocalQueue();
 
@@ -2266,7 +2215,7 @@ ByteCodeParser::CallOptimizationResult ByteCodeParser::handleInlining(
 }
 
 template<typename ChecksFunctor>
-bool ByteCodeParser::handleMinMax(Operand result, NodeType op, int registerOffset, int argumentCountIncludingThis, const ChecksFunctor& insertChecks)
+bool ByteCodeParser::handleMinMax(VirtualRegister result, NodeType op, int registerOffset, int argumentCountIncludingThis, const ChecksFunctor& insertChecks)
 {
     ASSERT(op == ArithMin || op == ArithMax);
 
@@ -2296,7 +2245,7 @@ bool ByteCodeParser::handleMinMax(Operand result, NodeType op, int registerOffse
 }
 
 template<typename ChecksFunctor>
-bool ByteCodeParser::handleIntrinsicCall(Node* callee, Operand result, Intrinsic intrinsic, int registerOffset, int argumentCountIncludingThis, SpeculatedType prediction, const ChecksFunctor& insertChecks)
+bool ByteCodeParser::handleIntrinsicCall(Node* callee, VirtualRegister result, Intrinsic intrinsic, int registerOffset, int argumentCountIncludingThis, SpeculatedType prediction, const ChecksFunctor& insertChecks)
 {
     VERBOSE_LOG("       The intrinsic is ", intrinsic, "\n");
 
@@ -2435,18 +2384,34 @@ bool ByteCodeParser::handleIntrinsicCall(Node* callee, Operand result, Intrinsic
         case ArrayValuesIntrinsic: {
             insertChecks();
 
-            Optional<IterationKind> kind = interationKindForIntrinsic(intrinsic);
-            RELEASE_ASSERT(!!kind);
+            IterationKind kind;
+            switch (intrinsic) {
+            case ArrayValuesIntrinsic:
+            case TypedArrayValuesIntrinsic:
+                kind = IterationKind::Values;
+                break;
+            case ArrayKeysIntrinsic:
+            case TypedArrayKeysIntrinsic:
+                kind = IterationKind::Keys;
+                break;
+            case ArrayEntriesIntrinsic:
+            case TypedArrayEntriesIntrinsic:
+                kind = IterationKind::Entries;
+                break;
+            default:
+                RELEASE_ASSERT_NOT_REACHED();
+                break;
+            }
 
             // Add the constant before exit becomes invalid because we may want to insert (redundant) checks on it in Fixup.
-            Node* kindNode = jsConstant(jsNumber(static_cast<uint32_t>(*kind)));
+            Node* kindNode = jsConstant(jsNumber(static_cast<uint32_t>(kind)));
 
             // We don't have an existing error string.
             unsigned errorStringIndex = UINT32_MAX;
             Node* object = addToGraph(ToObject, OpInfo(errorStringIndex), OpInfo(SpecNone), get(virtualRegisterForArgumentIncludingThis(0, registerOffset)));
 
             JSGlobalObject* globalObject = m_graph.globalObjectFor(currentNodeOrigin().semantic);
-            Node* iterator = addToGraph(NewInternalFieldObject, OpInfo(m_graph.registerStructure(globalObject->arrayIteratorStructure())));
+            Node* iterator = addToGraph(NewArrayIterator, OpInfo(m_graph.registerStructure(globalObject->arrayIteratorStructure())));
 
             addToGraph(PutInternalField, OpInfo(static_cast<uint32_t>(JSArrayIterator::Field::IteratedObject)), iterator, object);
             addToGraph(PutInternalField, OpInfo(static_cast<uint32_t>(JSArrayIterator::Field::Kind)), iterator, kindNode);
@@ -2526,7 +2491,7 @@ bool ByteCodeParser::handleIntrinsicCall(Node* callee, Operand result, Intrinsic
                     // 1. We ensure that the "constructor" property hasn't been changed (because the observable
                     // effects of slice require that we perform a Get(array, "constructor") and we can skip
                     // that if we're an original array structure. (We can relax this in the future by using
-                    // TryGetById and CheckIsConstant).
+                    // TryGetById and CheckCell).
                     //
                     // 2. We check that the array we're calling slice on has the same global object as the lexical
                     // global object that this code is running in. This requirement is necessary because we setup the
@@ -2747,7 +2712,7 @@ bool ByteCodeParser::handleIntrinsicCall(Node* callee, Operand result, Intrinsic
             if (argumentCountIncludingThis < 2)
                 return false;
 
-            if (m_inlineStackTop->m_exitProfile.hasExitSite(m_currentIndex, BadConstantValue) || m_inlineStackTop->m_exitProfile.hasExitSite(m_currentIndex, BadType))
+            if (m_inlineStackTop->m_exitProfile.hasExitSite(m_currentIndex, BadCell) || m_inlineStackTop->m_exitProfile.hasExitSite(m_currentIndex, BadType))
                 return false;
 
             insertChecks();
@@ -2859,7 +2824,7 @@ bool ByteCodeParser::handleIntrinsicCall(Node* callee, Operand result, Intrinsic
 
             if (intrinsic == RegExpTestIntrinsic) {
                 // Don't inline intrinsic if we exited due to one of the primordial RegExp checks failing.
-                if (m_inlineStackTop->m_exitProfile.hasExitSite(m_currentIndex, BadConstantValue))
+                if (m_inlineStackTop->m_exitProfile.hasExitSite(m_currentIndex, BadCell))
                     return false;
 
                 JSGlobalObject* globalObject = m_inlineStackTop->m_codeBlock->globalObject();
@@ -2889,10 +2854,10 @@ bool ByteCodeParser::handleIntrinsicCall(Node* callee, Operand result, Intrinsic
 
                 // Check that regExpObject's exec is actually the primodial RegExp.prototype.exec.
                 UniquedStringImpl* execPropertyID = m_vm->propertyNames->exec.impl();
-                m_graph.identifiers().ensure(execPropertyID);
-                Node* actualProperty = addToGraph(TryGetById, OpInfo(CacheableIdentifier::createFromImmortalIdentifier(execPropertyID)), OpInfo(SpecFunction), Edge(regExpObject, CellUse));
+                unsigned execIndex = m_graph.identifiers().ensure(execPropertyID);
+                Node* actualProperty = addToGraph(TryGetById, OpInfo(execIndex), OpInfo(SpecFunction), Edge(regExpObject, CellUse));
                 FrozenValue* regExpPrototypeExec = m_graph.freeze(globalObject->regExpProtoExecFunction());
-                addToGraph(CheckIsConstant, OpInfo(regExpPrototypeExec), Edge(actualProperty, CellUse));
+                addToGraph(CheckCell, OpInfo(regExpPrototypeExec), Edge(actualProperty, CellUse));
             }
 
             insertChecks();
@@ -2981,7 +2946,7 @@ bool ByteCodeParser::handleIntrinsicCall(Node* callee, Operand result, Intrinsic
                 return false;
 
             // Don't inline intrinsic if we exited due to one of the primordial RegExp checks failing.
-            if (m_inlineStackTop->m_exitProfile.hasExitSite(m_currentIndex, BadConstantValue))
+            if (m_inlineStackTop->m_exitProfile.hasExitSite(m_currentIndex, BadCell))
                 return false;
 
             JSGlobalObject* globalObject = m_inlineStackTop->m_codeBlock->globalObject();
@@ -3208,68 +3173,6 @@ bool ByteCodeParser::handleIntrinsicCall(Node* callee, Operand result, Intrinsic
             addVarArgChild(hash);
             addToGraph(Node::VarArg, MapSet, OpInfo(0), OpInfo(0));
             setResult(base);
-            return true;
-        }
-
-        case JSMapEntriesIntrinsic:
-        case JSMapKeysIntrinsic:
-        case JSMapValuesIntrinsic:
-        case JSSetEntriesIntrinsic:
-        case JSSetValuesIntrinsic: {
-            if (m_inlineStackTop->m_exitProfile.hasExitSite(m_currentIndex, BadConstantValue) || m_inlineStackTop->m_exitProfile.hasExitSite(m_currentIndex, BadType))
-                return false;
-
-            insertChecks();
-
-            IterationKind kind = IterationKind::Values;
-            UseKind useKind = MapObjectUse;
-            switch (intrinsic) {
-            case JSMapValuesIntrinsic:
-                kind = IterationKind::Values;
-                useKind = MapObjectUse;
-                break;
-            case JSMapKeysIntrinsic:
-                kind = IterationKind::Keys;
-                useKind = MapObjectUse;
-                break;
-            case JSMapEntriesIntrinsic:
-                kind = IterationKind::Entries;
-                useKind = MapObjectUse;
-                break;
-            case JSSetValuesIntrinsic:
-                kind = IterationKind::Values;
-                useKind = SetObjectUse;
-                break;
-            case JSSetEntriesIntrinsic:
-                kind = IterationKind::Entries;
-                useKind = SetObjectUse;
-                break;
-            default:
-                RELEASE_ASSERT_NOT_REACHED();
-                break;
-            }
-
-            Node* base = get(virtualRegisterForArgumentIncludingThis(0, registerOffset));
-            addToGraph(Check, Edge(base, useKind));
-            Node* bucket = addToGraph(GetMapBucketHead, Edge(base, useKind));
-
-            Node* kindNode = jsConstant(jsNumber(static_cast<uint32_t>(kind)));
-
-            JSGlobalObject* globalObject = m_graph.globalObjectFor(currentNodeOrigin().semantic);
-            Node* iterator = nullptr;
-            if (useKind == MapObjectUse) {
-                iterator = addToGraph(NewInternalFieldObject, OpInfo(m_graph.registerStructure(globalObject->mapIteratorStructure())));
-                addToGraph(PutInternalField, OpInfo(static_cast<uint32_t>(JSMapIterator::Field::MapBucket)), iterator, bucket);
-                addToGraph(PutInternalField, OpInfo(static_cast<uint32_t>(JSMapIterator::Field::IteratedObject)), iterator, base);
-                addToGraph(PutInternalField, OpInfo(static_cast<uint32_t>(JSMapIterator::Field::Kind)), iterator, kindNode);
-            } else {
-                iterator = addToGraph(NewInternalFieldObject, OpInfo(m_graph.registerStructure(globalObject->setIteratorStructure())));
-                addToGraph(PutInternalField, OpInfo(static_cast<uint32_t>(JSSetIterator::Field::SetBucket)), iterator, bucket);
-                addToGraph(PutInternalField, OpInfo(static_cast<uint32_t>(JSSetIterator::Field::IteratedObject)), iterator, base);
-                addToGraph(PutInternalField, OpInfo(static_cast<uint32_t>(JSSetIterator::Field::Kind)), iterator, kindNode);
-            }
-
-            setResult(iterator);
             return true;
         }
 
@@ -3513,22 +3416,22 @@ bool ByteCodeParser::handleIntrinsicCall(Node* callee, Operand result, Intrinsic
                 RELEASE_ASSERT_NOT_REACHED();
             }
 
-            TriState isLittleEndian = TriState::Indeterminate;
+            TriState isLittleEndian = MixedTriState;
             Node* littleEndianChild = nullptr;
             if (byteSize > 1) {
                 if (argumentCountIncludingThis < 3)
-                    isLittleEndian = TriState::False;
+                    isLittleEndian = FalseTriState;
                 else {
                     littleEndianChild = get(virtualRegisterForArgumentIncludingThis(2, registerOffset));
                     if (littleEndianChild->hasConstant()) {
                         JSValue constant = littleEndianChild->constant()->value();
                         if (constant) {
                             isLittleEndian = constant.pureToBoolean();
-                            if (isLittleEndian != TriState::Indeterminate)
+                            if (isLittleEndian != MixedTriState)
                                 littleEndianChild = nullptr;
                         }
                     } else
-                        isLittleEndian = TriState::Indeterminate;
+                        isLittleEndian = MixedTriState;
                 }
             }
 
@@ -3598,22 +3501,22 @@ bool ByteCodeParser::handleIntrinsicCall(Node* callee, Operand result, Intrinsic
                 RELEASE_ASSERT_NOT_REACHED();
             }
 
-            TriState isLittleEndian = TriState::Indeterminate;
+            TriState isLittleEndian = MixedTriState;
             Node* littleEndianChild = nullptr;
             if (byteSize > 1) {
                 if (argumentCountIncludingThis < 4)
-                    isLittleEndian = TriState::False;
+                    isLittleEndian = FalseTriState;
                 else {
                     littleEndianChild = get(virtualRegisterForArgumentIncludingThis(3, registerOffset));
                     if (littleEndianChild->hasConstant()) {
                         JSValue constant = littleEndianChild->constant()->value();
                         if (constant) {
                             isLittleEndian = constant.pureToBoolean();
-                            if (isLittleEndian != TriState::Indeterminate)
+                            if (isLittleEndian != MixedTriState)
                                 littleEndianChild = nullptr;
                         }
                     } else
-                        isLittleEndian = TriState::Indeterminate;
+                        isLittleEndian = MixedTriState;
                 }
             }
 
@@ -3739,7 +3642,7 @@ bool ByteCodeParser::handleIntrinsicCall(Node* callee, Operand result, Intrinsic
 }
 
 template<typename ChecksFunctor>
-bool ByteCodeParser::handleDOMJITCall(Node* callTarget, Operand result, const DOMJIT::Signature* signature, int registerOffset, int argumentCountIncludingThis, SpeculatedType prediction, const ChecksFunctor& insertChecks)
+bool ByteCodeParser::handleDOMJITCall(Node* callTarget, VirtualRegister result, const DOMJIT::Signature* signature, int registerOffset, int argumentCountIncludingThis, SpeculatedType prediction, const ChecksFunctor& insertChecks)
 {
     if (argumentCountIncludingThis != static_cast<int>(1 + signature->argumentCount))
         return false;
@@ -3752,13 +3655,13 @@ bool ByteCodeParser::handleDOMJITCall(Node* callTarget, Operand result, const DO
     ASSERT_WITH_MESSAGE(argumentCountIncludingThis <= JSC_DOMJIT_SIGNATURE_MAX_ARGUMENTS_INCLUDING_THIS, "Currently CallDOM does not support an arbitrary length arguments.");
 
     insertChecks();
-    addCall(result, Call, OpInfo(signature), callTarget, argumentCountIncludingThis, registerOffset, prediction);
+    addCall(result, Call, signature, callTarget, argumentCountIncludingThis, registerOffset, prediction);
     return true;
 }
 
 
 template<typename ChecksFunctor>
-bool ByteCodeParser::handleIntrinsicGetter(Operand result, SpeculatedType prediction, const GetByIdVariant& variant, Node* thisNode, const ChecksFunctor& insertChecks)
+bool ByteCodeParser::handleIntrinsicGetter(VirtualRegister result, SpeculatedType prediction, const GetByIdVariant& variant, Node* thisNode, const ChecksFunctor& insertChecks)
 {
     switch (variant.intrinsic()) {
     case TypedArrayByteLengthIntrinsic: {
@@ -3776,10 +3679,6 @@ bool ByteCodeParser::handleIntrinsicGetter(Operand result, SpeculatedType predic
         });
 
         Node* lengthNode = addToGraph(GetArrayLength, OpInfo(ArrayMode(arrayType, Array::Read).asWord()), thisNode);
-        // Our ArrayMode shouldn't cause us to exit here so we should be ok to exit without effects.
-        m_exitOK = true;
-        addToGraph(ExitOK);
-
 
         if (!logSize) {
             set(result, lengthNode);
@@ -3835,7 +3734,9 @@ bool ByteCodeParser::handleIntrinsicGetter(Operand result, SpeculatedType predic
         bool canFold = !variant.structureSet().isEmpty();
         JSValue prototype;
         variant.structureSet().forEach([&] (Structure* structure) {
-            if (structure->typeInfo().overridesGetPrototype()) {
+            auto getPrototypeMethod = structure->classInfo()->methodTable.getPrototype;
+            MethodTable::GetPrototypeFunctionPtr defaultGetPrototype = JSObject::getPrototype;
+            if (getPrototypeMethod != defaultGetPrototype) {
                 canFold = false;
                 return;
             }
@@ -3874,7 +3775,7 @@ static void blessCallDOMGetter(Node* node)
         node->clearFlags(NodeMustGenerate);
 }
 
-bool ByteCodeParser::handleDOMJITGetter(Operand result, const GetByIdVariant& variant, Node* thisNode, unsigned identifierNumber, SpeculatedType prediction)
+bool ByteCodeParser::handleDOMJITGetter(VirtualRegister result, const GetByIdVariant& variant, Node* thisNode, unsigned identifierNumber, SpeculatedType prediction)
 {
     if (!variant.domAttribute())
         return false;
@@ -3887,8 +3788,8 @@ bool ByteCodeParser::handleDOMJITGetter(Operand result, const GetByIdVariant& va
         return false;
     addToGraph(CheckStructure, OpInfo(m_graph.addStructureSet(variant.structureSet())), thisNode);
 
-    // We do not need to emit CheckIsConstant thingy here. When the custom accessor is replaced to different one, Structure transition occurs.
-    addToGraph(CheckJSCast, OpInfo(domAttribute->classInfo), thisNode);
+    // We do not need to emit CheckCell thingy here. When the custom accessor is replaced to different one, Structure transition occurs.
+    addToGraph(CheckSubClass, OpInfo(domAttribute->classInfo), thisNode);
 
     bool wasSeenInJIT = true;
     GetByStatus* status = m_graph.m_plan.recordedStatuses().addGetByStatus(currentCodeOrigin(), GetByStatus(GetByStatus::Custom, wasSeenInJIT));
@@ -3899,7 +3800,6 @@ bool ByteCodeParser::handleDOMJITGetter(Operand result, const GetByIdVariant& va
     CallDOMGetterData* callDOMGetterData = m_graph.m_callDOMGetterData.add();
     callDOMGetterData->customAccessorGetter = variant.customAccessorGetter();
     ASSERT(callDOMGetterData->customAccessorGetter);
-    callDOMGetterData->requiredClassInfo = domAttribute->classInfo;
 
     if (const auto* domJIT = domAttribute->domJIT) {
         callDOMGetterData->domJIT = domJIT;
@@ -3924,9 +3824,9 @@ bool ByteCodeParser::handleDOMJITGetter(Operand result, const GetByIdVariant& va
 
 bool ByteCodeParser::handleModuleNamespaceLoad(VirtualRegister result, SpeculatedType prediction, Node* base, GetByStatus getById)
 {
-    if (m_inlineStackTop->m_exitProfile.hasExitSite(m_currentIndex, BadConstantValue))
+    if (m_inlineStackTop->m_exitProfile.hasExitSite(m_currentIndex, BadCell))
         return false;
-    addToGraph(CheckIsConstant, OpInfo(m_graph.freeze(getById.moduleNamespaceObject())), Edge(base, CellUse));
+    addToGraph(CheckCell, OpInfo(m_graph.freeze(getById.moduleNamespaceObject())), Edge(base, CellUse));
 
     addToGraph(FilterGetByStatus, OpInfo(m_graph.m_plan.recordedStatuses().addGetByStatus(currentCodeOrigin(), getById)), base);
 
@@ -3954,7 +3854,7 @@ bool ByteCodeParser::handleModuleNamespaceLoad(VirtualRegister result, Speculate
 
 template<typename ChecksFunctor>
 bool ByteCodeParser::handleTypedArrayConstructor(
-    Operand result, InternalFunction* function, int registerOffset,
+    VirtualRegister result, InternalFunction* function, int registerOffset,
     int argumentCountIncludingThis, TypedArrayType type, const ChecksFunctor& insertChecks)
 {
     if (!isTypedView(type))
@@ -4011,7 +3911,7 @@ bool ByteCodeParser::handleTypedArrayConstructor(
 
 template<typename ChecksFunctor>
 bool ByteCodeParser::handleConstantInternalFunction(
-    Node* callTargetNode, Operand result, InternalFunction* function, int registerOffset,
+    Node* callTargetNode, VirtualRegister result, InternalFunction* function, int registerOffset,
     int argumentCountIncludingThis, CodeSpecializationKind kind, SpeculatedType prediction, const ChecksFunctor& insertChecks)
 {
     VERBOSE_LOG("    Handling constant internal function ", JSValue(function), "\n");
@@ -4056,7 +3956,7 @@ bool ByteCodeParser::handleConstantInternalFunction(
         if (argumentCountIncludingThis <= 1)
             set(result, jsConstant(jsNumber(0)));
         else
-            set(result, addToGraph(CallNumberConstructor, OpInfo(0), OpInfo(prediction), get(virtualRegisterForArgumentIncludingThis(1, registerOffset))));
+            set(result, addToGraph(ToNumber, OpInfo(0), OpInfo(prediction), get(virtualRegisterForArgumentIncludingThis(1, registerOffset))));
 
         return true;
     }
@@ -4528,8 +4428,8 @@ Node* ByteCodeParser::store(Node* base, unsigned identifier, const PutByIdVarian
 }
 
 void ByteCodeParser::handleGetById(
-    VirtualRegister destination, SpeculatedType prediction, Node* base, CacheableIdentifier identifier, unsigned identifierNumber,
-    GetByStatus getByStatus, AccessType type, BytecodeIndex osrExitIndex)
+    VirtualRegister destination, SpeculatedType prediction, Node* base, unsigned identifierNumber,
+    GetByStatus getByStatus, AccessType type, unsigned instructionSize)
 {
     // Attempt to reduce the set of things in the GetByStatus.
     if (base->op() == NewObject) {
@@ -4580,7 +4480,7 @@ void ByteCodeParser::handleGetById(
     ASSERT(type == AccessType::GetById || type == AccessType::GetByIdDirect ||  !getByStatus.makesCalls());
     if (!getByStatus.isSimple() || !getByStatus.numVariants() || !Options::useAccessInlining()) {
         set(destination,
-            addToGraph(getById, OpInfo(identifier), OpInfo(prediction), base));
+            addToGraph(getById, OpInfo(identifierNumber), OpInfo(prediction), base));
         return;
     }
 
@@ -4593,7 +4493,7 @@ void ByteCodeParser::handleGetById(
             || !Options::usePolymorphicAccessInlining()
             || getByStatus.numVariants() > Options::maxPolymorphicAccessInliningListSize()) {
             set(destination,
-                addToGraph(getById, OpInfo(identifier), OpInfo(prediction), base));
+                addToGraph(getById, OpInfo(identifierNumber), OpInfo(prediction), base));
             return;
         }
 
@@ -4607,7 +4507,7 @@ void ByteCodeParser::handleGetById(
         for (const GetByIdVariant& variant : getByStatus.variants()) {
             if (variant.intrinsic() != NoIntrinsic) {
                 set(destination,
-                    addToGraph(getById, OpInfo(identifier), OpInfo(prediction), base));
+                    addToGraph(getById, OpInfo(identifierNumber), OpInfo(prediction), base));
                 return;
             }
 
@@ -4622,7 +4522,7 @@ void ByteCodeParser::handleGetById(
             GetByOffsetMethod method = planLoad(variant.conditionSet());
             if (!method) {
                 set(destination,
-                    addToGraph(getById, OpInfo(identifier), OpInfo(prediction), base));
+                    addToGraph(getById, OpInfo(identifierNumber), OpInfo(prediction), base));
                 return;
             }
 
@@ -4649,7 +4549,7 @@ void ByteCodeParser::handleGetById(
     Node* loadedValue = load(prediction, base, identifierNumber, variant);
     if (!loadedValue) {
         set(destination,
-            addToGraph(getById, OpInfo(identifier), OpInfo(prediction), base));
+            addToGraph(getById, OpInfo(identifierNumber), OpInfo(prediction), base));
         return;
     }
 
@@ -4666,7 +4566,7 @@ void ByteCodeParser::handleGetById(
 
     if (handleIntrinsicGetter(destination, prediction, variant, base,
             [&] () {
-                addToGraph(CheckIsConstant, OpInfo(m_graph.freeze(variant.intrinsicFunction())), getter);
+                addToGraph(CheckCell, OpInfo(m_graph.freeze(variant.intrinsicFunction())), getter);
             })) {
         addToGraph(Phantom, base);
         return;
@@ -4709,125 +4609,27 @@ void ByteCodeParser::handleGetById(
     addToGraph(ExitOK);
 
     handleCall(
-        destination, Call, InlineCallFrame::GetterCall, osrExitIndex,
+        destination, Call, InlineCallFrame::GetterCall, instructionSize,
         getter, numberOfParameters - 1, registerOffset, *variant.callLinkStatus(), prediction);
 }
 
-void ByteCodeParser::handleDeleteById(
-    VirtualRegister destination, Node* base, CacheableIdentifier identifier,
-    unsigned identifierNumber, DeleteByStatus deleteByStatus, ECMAMode ecmaMode)
-{
-    if (!deleteByStatus.isSimple() || !deleteByStatus.variants().size() || !Options::useAccessInlining()) {
-        set(destination,
-            addToGraph(DeleteById, OpInfo(identifier), OpInfo(ecmaMode), base));
-        return;
-    }
-
-    if (deleteByStatus.variants().size() > 1) {
-        if (!m_graph.m_plan.isFTL()
-            || !Options::usePolymorphicAccessInlining()
-            || deleteByStatus.variants().size() > Options::maxPolymorphicAccessInliningListSize()) {
-            set(destination,
-                addToGraph(DeleteById, OpInfo(identifier), OpInfo(ecmaMode), base));
-            return;
-        }
-
-        addToGraph(FilterDeleteByStatus, OpInfo(m_graph.m_plan.recordedStatuses().addDeleteByStatus(currentCodeOrigin(), deleteByStatus)), base);
-
-        bool hasHit = false;
-        bool hasMiss = false;
-        bool hasMissNonconfigurable = false;
-
-        for (const DeleteByIdVariant& variant : deleteByStatus.variants()) {
-            m_graph.registerStructure(variant.oldStructure());
-            if (variant.newStructure()) {
-                m_graph.registerStructure(variant.newStructure());
-                hasHit = true;
-            } else if (variant.result())
-                hasMiss = true;
-            else
-                hasMissNonconfigurable = true;
-        }
-
-        if (!hasHit) {
-            if ((hasMiss && !hasMissNonconfigurable) || (!hasMiss && hasMissNonconfigurable)) {
-                StructureSet baseSet;
-
-                for (const DeleteByIdVariant& variant : deleteByStatus.variants())
-                    baseSet.add(variant.oldStructure());
-
-                addToGraph(CheckStructure, OpInfo(m_graph.addStructureSet(baseSet)), base);
-                set(destination, jsConstant(jsBoolean(deleteByStatus.variants()[0].result())));
-                return;
-            }
-        }
-
-        MultiDeleteByOffsetData* data = m_graph.m_multiDeleteByOffsetData.add();
-        data->variants = deleteByStatus.variants();
-        data->identifierNumber = identifierNumber;
-        set(destination,
-            addToGraph(MultiDeleteByOffset, OpInfo(data), base));
-        return;
-    }
-
-    ASSERT(deleteByStatus.variants().size() == 1);
-    DeleteByIdVariant variant = deleteByStatus.variants()[0];
-
-    if (!variant.newStructure()) {
-        addToGraph(FilterDeleteByStatus, OpInfo(m_graph.m_plan.recordedStatuses().addDeleteByStatus(currentCodeOrigin(), deleteByStatus)), base);
-        addToGraph(CheckStructure, OpInfo(m_graph.addStructureSet(variant.oldStructure())), base);
-        set(destination, jsConstant(jsBoolean(variant.result())));
-        return;
-    }
-
-    addToGraph(FilterDeleteByStatus, OpInfo(m_graph.m_plan.recordedStatuses().addDeleteByStatus(currentCodeOrigin(), deleteByStatus)), base);
-    addToGraph(CheckStructure, OpInfo(m_graph.addStructureSet(variant.oldStructure())), base);
-    ASSERT(variant.oldStructure()->transitionWatchpointSetHasBeenInvalidated());
-    ASSERT(variant.newStructure());
-    ASSERT(isValidOffset(variant.offset()));
-
-    Node* propertyStorage;
-    Transition* transition = m_graph.m_transitions.add(
-        m_graph.registerStructure(variant.oldStructure()), m_graph.registerStructure(variant.newStructure()));
-
-    if (isInlineOffset(variant.offset()))
-        propertyStorage = base;
-    else
-        propertyStorage = addToGraph(GetButterfly, base);
-
-    StorageAccessData* data = m_graph.m_storageAccessData.add();
-    data->offset = variant.offset();
-    data->identifierNumber = identifierNumber;
-
-    addToGraph(
-        PutByOffset,
-        OpInfo(data),
-        propertyStorage,
-        base,
-        jsConstant(JSValue()));
-
-    addToGraph(PutStructure, OpInfo(transition), base);
-    set(destination, jsConstant(jsBoolean(variant.result())));
-    return;
-}
-
 void ByteCodeParser::emitPutById(
-    Node* base, CacheableIdentifier identifier, Node* value, const PutByIdStatus& putByIdStatus, bool isDirect, ECMAMode ecmaMode)
+    Node* base, unsigned identifierNumber, Node* value, const PutByIdStatus& putByIdStatus, bool isDirect)
 {
     if (isDirect)
-        addToGraph(PutByIdDirect, OpInfo(identifier), OpInfo(ecmaMode), base, value);
+        addToGraph(PutByIdDirect, OpInfo(identifierNumber), base, value);
     else
-        addToGraph(putByIdStatus.makesCalls() ? PutByIdFlush : PutById, OpInfo(identifier), OpInfo(ecmaMode), base, value);
+        addToGraph(putByIdStatus.makesCalls() ? PutByIdFlush : PutById, OpInfo(identifierNumber), base, value);
 }
 
 void ByteCodeParser::handlePutById(
-    Node* base, CacheableIdentifier identifier, unsigned identifierNumber, Node* value,
-    const PutByIdStatus& putByIdStatus, bool isDirect, BytecodeIndex osrExitIndex, ECMAMode ecmaMode)
+    Node* base, unsigned identifierNumber, Node* value,
+    const PutByIdStatus& putByIdStatus, bool isDirect, unsigned instructionSize)
 {
     if (!putByIdStatus.isSimple() || !putByIdStatus.numVariants() || !Options::useAccessInlining()) {
         if (!putByIdStatus.isSet())
             addToGraph(ForceOSRExit);
-        emitPutById(base, identifier, value, putByIdStatus, isDirect, ecmaMode);
+        emitPutById(base, identifierNumber, value, putByIdStatus, isDirect);
         return;
     }
 
@@ -4835,7 +4637,7 @@ void ByteCodeParser::handlePutById(
         if (!m_graph.m_plan.isFTL() || putByIdStatus.makesCalls()
             || !Options::usePolymorphicAccessInlining()
             || putByIdStatus.numVariants() > Options::maxPolymorphicAccessInliningListSize()) {
-            emitPutById(base, identifier, value, putByIdStatus, isDirect, ecmaMode);
+            emitPutById(base, identifierNumber, value, putByIdStatus, isDirect);
             return;
         }
 
@@ -4844,7 +4646,7 @@ void ByteCodeParser::handlePutById(
                 if (putByIdStatus[variantIndex].kind() != PutByIdVariant::Transition)
                     continue;
                 if (!check(putByIdStatus[variantIndex].conditionSet())) {
-                    emitPutById(base, identifier, value, putByIdStatus, isDirect, ecmaMode);
+                    emitPutById(base, identifierNumber, value, putByIdStatus, isDirect);
                     return;
                 }
             }
@@ -4887,7 +4689,7 @@ void ByteCodeParser::handlePutById(
 
         addToGraph(CheckStructure, OpInfo(m_graph.addStructureSet(variant.oldStructure())), base);
         if (!check(variant.conditionSet())) {
-            emitPutById(base, identifier, value, putByIdStatus, isDirect, ecmaMode);
+            emitPutById(base, identifierNumber, value, putByIdStatus, isDirect);
             return;
         }
 
@@ -4954,7 +4756,7 @@ void ByteCodeParser::handlePutById(
 
         Node* loadedValue = load(SpecCellOther, base, identifierNumber, variant);
         if (!loadedValue) {
-            emitPutById(base, identifier, value, putByIdStatus, isDirect, ecmaMode);
+            emitPutById(base, identifierNumber, value, putByIdStatus, isDirect);
             return;
         }
 
@@ -4992,13 +4794,13 @@ void ByteCodeParser::handlePutById(
 
         handleCall(
             VirtualRegister(), Call, InlineCallFrame::SetterCall,
-            osrExitIndex, setter, numberOfParameters - 1, registerOffset,
-            *variant.callLinkStatus(), SpecOther, ecmaMode);
+            instructionSize, setter, numberOfParameters - 1, registerOffset,
+            *variant.callLinkStatus(), SpecOther);
         return;
     }
 
     default: {
-        emitPutById(base, identifier, value, putByIdStatus, isDirect, ecmaMode);
+        emitPutById(base, identifierNumber, value, putByIdStatus, isDirect);
         return;
     } }
 }
@@ -5022,9 +4824,9 @@ void ByteCodeParser::parseGetById(const Instruction* currentInstruction)
 
     Node* base = get(bytecode.m_base);
     unsigned identifierNumber = m_inlineStackTop->m_identifierRemap[bytecode.m_property];
-    UniquedStringImpl* uid = m_graph.identifiers()[identifierNumber];
 
     AccessType type = AccessType::GetById;
+    unsigned opcodeLength = currentInstruction->size();
     if (Op::opcodeID == op_try_get_by_id)
         type = AccessType::TryGetById;
     else if (Op::opcodeID == op_get_by_id_direct)
@@ -5035,7 +4837,8 @@ void ByteCodeParser::parseGetById(const Instruction* currentInstruction)
         m_inlineStackTop->m_baselineMap, m_icContextStack,
         currentCodeOrigin());
 
-    handleGetById(bytecode.m_dst, prediction, base, CacheableIdentifier::createFromIdentifierOwnedByCodeBlock(m_inlineStackTop->m_profiledBlock, uid), identifierNumber, getByStatus, type, nextOpcodeIndex());
+    handleGetById(
+        bytecode.m_dst, prediction, base, identifierNumber, getByStatus, type, opcodeLength);
 }
 
 static uint64_t makeDynamicVarOpInfo(unsigned identifierNumber, unsigned getPutInfo)
@@ -5169,8 +4972,7 @@ void ByteCodeParser::parseBlock(unsigned limit)
 
         case op_to_this: {
             Node* op1 = getThis();
-            auto bytecode = currentInstruction->as<OpToThis>();
-            auto& metadata = bytecode.metadata(codeBlock);
+            auto& metadata = currentInstruction->as<OpToThis>().metadata(codeBlock);
             StructureID cachedStructureID = metadata.m_cachedStructureID;
             Structure* cachedStructure = nullptr;
             if (cachedStructureID)
@@ -5181,7 +4983,7 @@ void ByteCodeParser::parseBlock(unsigned limit)
                 || m_inlineStackTop->m_profiledBlock->couldTakeSlowCase(m_currentIndex)
                 || m_inlineStackTop->m_exitProfile.hasExitSite(m_currentIndex, BadCache)
                 || (op1->op() == GetLocal && op1->variableAccessData()->structureCheckHoistingFailed())) {
-                setThis(addToGraph(ToThis, OpInfo(bytecode.m_ecmaMode), OpInfo(getPrediction()), op1));
+                setThis(addToGraph(ToThis, OpInfo(), OpInfo(getPrediction()), op1));
             } else {
                 addToGraph(
                     CheckStructure,
@@ -5200,11 +5002,11 @@ void ByteCodeParser::parseBlock(unsigned limit)
                 JSCell* cachedFunction = bytecode.metadata(codeBlock).m_cachedCallee.unvalidatedGet();
                 if (cachedFunction
                     && cachedFunction != JSCell::seenMultipleCalleeObjects()
-                    && !m_inlineStackTop->m_exitProfile.hasExitSite(m_currentIndex, BadConstantValue)) {
+                    && !m_inlineStackTop->m_exitProfile.hasExitSite(m_currentIndex, BadCell)) {
                     ASSERT(cachedFunction->inherits<JSFunction>(*m_vm));
 
                     FrozenValue* frozen = m_graph.freeze(cachedFunction);
-                    addToGraph(CheckIsConstant, OpInfo(frozen), callee);
+                    addToGraph(CheckCell, OpInfo(frozen), callee);
 
                     function = static_cast<JSFunction*>(cachedFunction);
                 }
@@ -5260,18 +5062,17 @@ void ByteCodeParser::parseBlock(unsigned limit)
                     JSCell* cachedFunction = bytecode.metadata(codeBlock).m_cachedCallee.unvalidatedGet();
                     if (cachedFunction
                         && cachedFunction != JSCell::seenMultipleCalleeObjects()
-                        && !m_inlineStackTop->m_exitProfile.hasExitSite(m_currentIndex, BadConstantValue)
+                        && !m_inlineStackTop->m_exitProfile.hasExitSite(m_currentIndex, BadCell)
                         && cachedFunction == (bytecode.m_isInternalPromise ? globalObject->internalPromiseConstructor() : globalObject->promiseConstructor())) {
                         FrozenValue* frozen = m_graph.freeze(cachedFunction);
-                        addToGraph(CheckIsConstant, OpInfo(frozen), callee);
+                        addToGraph(CheckCell, OpInfo(frozen), callee);
 
                         promiseConstructor = jsCast<JSPromiseConstructor*>(cachedFunction);
                     }
                 }
                 if (promiseConstructor) {
                     addToGraph(Phantom, callee);
-                    Node* promise = addToGraph(NewInternalFieldObject, OpInfo(m_graph.registerStructure(bytecode.m_isInternalPromise ? globalObject->internalPromiseStructure() : globalObject->promiseStructure())));
-                    set(VirtualRegister(bytecode.m_dst), promise);
+                    set(VirtualRegister(bytecode.m_dst), addToGraph(NewPromise, OpInfo(m_graph.registerStructure(bytecode.m_isInternalPromise ? globalObject->internalPromiseStructure() : globalObject->promiseStructure())), OpInfo(bytecode.m_isInternalPromise)));
                     alreadyEmitted = true;
                 }
             }
@@ -5283,11 +5084,11 @@ void ByteCodeParser::parseBlock(unsigned limit)
                     JSCell* cachedFunction = bytecode.metadata(codeBlock).m_cachedCallee.unvalidatedGet();
                     if (cachedFunction
                         && cachedFunction != JSCell::seenMultipleCalleeObjects()
-                        && !m_inlineStackTop->m_exitProfile.hasExitSite(m_currentIndex, BadConstantValue)) {
+                        && !m_inlineStackTop->m_exitProfile.hasExitSite(m_currentIndex, BadCell)) {
                         ASSERT(cachedFunction->inherits<JSFunction>(*m_vm));
 
                         FrozenValue* frozen = m_graph.freeze(cachedFunction);
-                        addToGraph(CheckIsConstant, OpInfo(frozen), callee);
+                        addToGraph(CheckCell, OpInfo(frozen), callee);
 
                         function = static_cast<JSFunction*>(cachedFunction);
                     }
@@ -5304,8 +5105,7 @@ void ByteCodeParser::parseBlock(unsigned limit)
                                 m_graph.freeze(rareData);
                                 m_graph.watchpoints().addLazily(rareData->allocationProfileWatchpointSet());
 
-                                Node* promise = addToGraph(NewInternalFieldObject, OpInfo(m_graph.registerStructure(structure)));
-                                set(VirtualRegister(bytecode.m_dst), promise);
+                                set(VirtualRegister(bytecode.m_dst), addToGraph(NewPromise, OpInfo(m_graph.registerStructure(structure)), OpInfo(bytecode.m_isInternalPromise)));
                                 // The callee is still live up to this point.
                                 addToGraph(Phantom, callee);
                                 alreadyEmitted = true;
@@ -5340,8 +5140,7 @@ void ByteCodeParser::parseBlock(unsigned limit)
         case op_new_promise: {
             auto bytecode = currentInstruction->as<OpNewPromise>();
             JSGlobalObject* globalObject = m_graph.globalObjectFor(currentNodeOrigin().semantic);
-            Node* promise = addToGraph(NewInternalFieldObject, OpInfo(m_graph.registerStructure(bytecode.m_isInternalPromise ? globalObject->internalPromiseStructure() : globalObject->promiseStructure())));
-            set(bytecode.m_dst, promise);
+            set(bytecode.m_dst, addToGraph(NewPromise, OpInfo(m_graph.registerStructure(bytecode.m_isInternalPromise ? globalObject->internalPromiseStructure() : globalObject->promiseStructure())), OpInfo(bytecode.m_isInternalPromise)));
             NEXT_OPCODE(op_new_promise);
         }
 
@@ -5693,7 +5492,7 @@ void ByteCodeParser::parseBlock(unsigned limit)
             // absence of any information, it's better to avoid making this be the cause of a
             // recompilation.
             if (JSObject* commonPrototype = status.commonPrototype()) {
-                addToGraph(CheckIsConstant, OpInfo(m_graph.freeze(commonPrototype)), prototype);
+                addToGraph(CheckCell, OpInfo(m_graph.freeze(commonPrototype)), prototype);
 
                 bool allOK = true;
                 MatchStructureData* data = m_graph.m_matchStructureData.add();
@@ -5736,10 +5535,10 @@ void ByteCodeParser::parseBlock(unsigned limit)
             set(bytecode.m_dst, addToGraph(IsEmpty, value));
             NEXT_OPCODE(op_is_empty);
         }
-        case op_typeof_is_undefined: {
-            auto bytecode = currentInstruction->as<OpTypeofIsUndefined>();
+        case op_is_undefined: {
+            auto bytecode = currentInstruction->as<OpIsUndefined>();
             Node* value = get(bytecode.m_operand);
-            set(bytecode.m_dst, addToGraph(TypeOfIsUndefined, value));
+            set(bytecode.m_dst, addToGraph(IsUndefined, value));
             NEXT_OPCODE(op_is_undefined);
         }
         case op_is_undefined_or_null: {
@@ -5761,17 +5560,6 @@ void ByteCodeParser::parseBlock(unsigned limit)
             Node* value = get(bytecode.m_operand);
             set(bytecode.m_dst, addToGraph(IsNumber, value));
             NEXT_OPCODE(op_is_number);
-        }
-
-        case op_is_big_int: {
-#if USE(BIGINT32)
-            auto bytecode = currentInstruction->as<OpIsBigInt>();
-            Node* value = get(bytecode.m_operand);
-            set(bytecode.m_dst, addToGraph(IsBigInt, value));
-            NEXT_OPCODE(op_is_big_int);
-#else
-            RELEASE_ASSERT_NOT_REACHED();
-#endif
         }
 
         case op_is_cell_with_type: {
@@ -5800,13 +5588,6 @@ void ByteCodeParser::parseBlock(unsigned limit)
             Node* value = get(bytecode.m_operand);
             set(bytecode.m_dst, addToGraph(IsFunction, value));
             NEXT_OPCODE(op_is_function);
-        }
-
-        case op_is_constructor: {
-            auto bytecode = currentInstruction->as<OpIsConstructor>();
-            Node* value = get(bytecode.m_operand);
-            set(bytecode.m_dst, addToGraph(IsConstructor, value));
-            NEXT_OPCODE(op_is_constructor);
         }
 
         case op_not: {
@@ -5838,12 +5619,12 @@ void ByteCodeParser::parseBlock(unsigned limit)
             Node* operands[AdjacencyList::Size];
             unsigned indexInOperands = 0;
             for (unsigned i = 0; i < AdjacencyList::Size; ++i)
-                operands[i] = nullptr;
+                operands[i] = 0;
             for (int operandIdx = 0; operandIdx < numOperands; ++operandIdx) {
                 if (indexInOperands == maxArguments) {
                     operands[0] = addToGraph(StrCat, operands[0], operands[1], operands[2]);
                     for (unsigned i = 1; i < AdjacencyList::Size; ++i)
-                        operands[i] = nullptr;
+                        operands[i] = 0;
                     indexInOperands = 1;
                 }
 
@@ -5963,24 +5744,23 @@ void ByteCodeParser::parseBlock(unsigned limit)
             Node* property = get(bytecode.m_property);
             bool shouldCompileAsGetById = false;
             GetByStatus getByStatus = GetByStatus::computeFor(m_inlineStackTop->m_profiledBlock, m_inlineStackTop->m_baselineMap, m_icContextStack, currentCodeOrigin());
+
             unsigned identifierNumber = 0;
 
-            CacheableIdentifier identifier;
             if (!m_inlineStackTop->m_exitProfile.hasExitSite(m_currentIndex, BadIdent)
                 && !m_inlineStackTop->m_exitProfile.hasExitSite(m_currentIndex, BadType)
-                && !m_inlineStackTop->m_exitProfile.hasExitSite(m_currentIndex, BadConstantValue)) {
+                && !m_inlineStackTop->m_exitProfile.hasExitSite(m_currentIndex, BadCell)) {
 
                 // FIXME: In the future, we should be able to do something like MultiGetByOffset in a multi identifier mode.
                 // That way, we could both switch on multiple structures and multiple identifiers (or int 32 properties).
                 // https://bugs.webkit.org/show_bug.cgi?id=204216
-                identifier = getByStatus.singleIdentifier();
-                if (identifier) {
+                if (CacheableIdentifier identifier = getByStatus.singleIdentifier()) {
                     UniquedStringImpl* uid = identifier.uid();
                     identifierNumber = m_graph.identifiers().ensure(identifier.uid());
                     if (identifier.isCell()) {
                         FrozenValue* frozen = m_graph.freezeStrong(identifier.cell());
                         if (identifier.isSymbolCell())
-                            addToGraph(CheckIsConstant, OpInfo(frozen), property);
+                            addToGraph(CheckCell, OpInfo(frozen), property);
                         else
                             addToGraph(CheckIdent, OpInfo(uid), property);
                     } else
@@ -5990,7 +5770,7 @@ void ByteCodeParser::parseBlock(unsigned limit)
             }
 
             if (shouldCompileAsGetById)
-                handleGetById(bytecode.m_dst, prediction, base, identifier, identifierNumber, getByStatus, AccessType::GetById, nextOpcodeIndex());
+                handleGetById(bytecode.m_dst, prediction, base, identifierNumber, getByStatus, AccessType::GetById, currentInstruction->size());
             else {
                 ArrayMode arrayMode = getArrayMode(bytecode.metadata(codeBlock).m_arrayProfile, Array::Read);
                 // FIXME: We could consider making this not vararg, since it only uses three child
@@ -5998,7 +5778,7 @@ void ByteCodeParser::parseBlock(unsigned limit)
                 // https://bugs.webkit.org/show_bug.cgi?id=184192
                 addVarArgChild(base);
                 addVarArgChild(property);
-                addVarArgChild(nullptr); // Leave room for property storage.
+                addVarArgChild(0); // Leave room for property storage.
                 Node* getByVal = addToGraph(Node::VarArg, GetByVal, OpInfo(arrayMode.asWord()), OpInfo(prediction));
                 m_exitOK = false; // GetByVal must be treated as if it clobbers exit state, since FixupPhase may make it generic.
                 set(bytecode.m_dst, getByVal);
@@ -6023,11 +5803,11 @@ void ByteCodeParser::parseBlock(unsigned limit)
         }
 
         case op_put_by_val_direct:
-            handlePutByVal(currentInstruction->as<OpPutByValDirect>(), nextOpcodeIndex());
+            handlePutByVal(currentInstruction->as<OpPutByValDirect>(), currentInstruction->size());
             NEXT_OPCODE(op_put_by_val_direct);
 
         case op_put_by_val: {
-            handlePutByVal(currentInstruction->as<OpPutByVal>(), nextOpcodeIndex());
+            handlePutByVal(currentInstruction->as<OpPutByVal>(), currentInstruction->size());
             NEXT_OPCODE(op_put_by_val);
         }
 
@@ -6042,7 +5822,7 @@ void ByteCodeParser::parseBlock(unsigned limit)
             addVarArgChild(thisValue);
             addVarArgChild(property);
             addVarArgChild(value);
-            addToGraph(Node::VarArg, PutByValWithThis, OpInfo(bytecode.m_ecmaMode), OpInfo(0));
+            addToGraph(Node::VarArg, PutByValWithThis, OpInfo(0), OpInfo(0));
 
             NEXT_OPCODE(op_put_by_val_with_this);
         }
@@ -6100,33 +5880,25 @@ void ByteCodeParser::parseBlock(unsigned limit)
             Node* base = get(bytecode.m_base);
             Node* thisValue = get(bytecode.m_thisValue);
             unsigned identifierNumber = m_inlineStackTop->m_identifierRemap[bytecode.m_property];
-            UniquedStringImpl* uid = m_graph.identifiers()[identifierNumber];
 
-            set(bytecode.m_dst, addToGraph(GetByIdWithThis, OpInfo(CacheableIdentifier::createFromIdentifierOwnedByCodeBlock(m_inlineStackTop->m_profiledBlock, uid)), OpInfo(prediction), base, thisValue));
+            set(bytecode.m_dst,
+                addToGraph(GetByIdWithThis, OpInfo(identifierNumber), OpInfo(prediction), base, thisValue));
 
             NEXT_OPCODE(op_get_by_id_with_this);
         }
-
-        case op_get_prototype_of: {
-            auto bytecode = currentInstruction->as<OpGetPrototypeOf>();
-            set(bytecode.m_dst, addToGraph(GetPrototypeOf, OpInfo(0), OpInfo(getPrediction()), get(bytecode.m_value)));
-            NEXT_OPCODE(op_get_prototype_of);
-        }
-
         case op_put_by_id: {
             auto bytecode = currentInstruction->as<OpPutById>();
             Node* value = get(bytecode.m_value);
             Node* base = get(bytecode.m_base);
             unsigned identifierNumber = m_inlineStackTop->m_identifierRemap[bytecode.m_property];
-            UniquedStringImpl* uid = m_graph.identifiers()[identifierNumber];
-            bool direct = bytecode.m_flags.isDirect();
+            bool direct = !!(bytecode.m_flags & PutByIdIsDirect);
 
             PutByIdStatus putByIdStatus = PutByIdStatus::computeFor(
                 m_inlineStackTop->m_profiledBlock,
                 m_inlineStackTop->m_baselineMap, m_icContextStack,
                 currentCodeOrigin(), m_graph.identifiers()[identifierNumber]);
 
-            handlePutById(base, CacheableIdentifier::createFromIdentifierOwnedByCodeBlock(m_inlineStackTop->m_profiledBlock, uid), identifierNumber, value, putByIdStatus, direct, nextOpcodeIndex(), bytecode.m_flags.ecmaMode());
+            handlePutById(base, identifierNumber, value, putByIdStatus, direct, currentInstruction->size());
             NEXT_OPCODE(op_put_by_id);
         }
 
@@ -6136,8 +5908,8 @@ void ByteCodeParser::parseBlock(unsigned limit)
             Node* thisValue = get(bytecode.m_thisValue);
             Node* value = get(bytecode.m_value);
             unsigned identifierNumber = m_inlineStackTop->m_identifierRemap[bytecode.m_property];
-            UniquedStringImpl* uid = m_graph.identifiers()[identifierNumber];
-            addToGraph(PutByIdWithThis, OpInfo(CacheableIdentifier::createFromIdentifierOwnedByCodeBlock(m_inlineStackTop->m_profiledBlock, uid)), OpInfo(bytecode.m_ecmaMode), base, thisValue, value);
+
+            addToGraph(PutByIdWithThis, OpInfo(identifierNumber), base, thisValue, value);
             NEXT_OPCODE(op_put_by_id_with_this);
         }
 
@@ -6171,49 +5943,15 @@ void ByteCodeParser::parseBlock(unsigned limit)
             auto bytecode = currentInstruction->as<OpDelById>();
             Node* base = get(bytecode.m_base);
             unsigned identifierNumber = m_inlineStackTop->m_identifierRemap[bytecode.m_property];
-            DeleteByStatus deleteByStatus = DeleteByStatus::computeFor(
-                m_inlineStackTop->m_profiledBlock,
-                m_inlineStackTop->m_baselineMap, m_icContextStack,
-                currentCodeOrigin());
-            UniquedStringImpl* uid = m_graph.identifiers()[identifierNumber];
-            auto identifier = CacheableIdentifier::createFromIdentifierOwnedByCodeBlock(m_inlineStackTop->m_profiledBlock, uid);
-            handleDeleteById(bytecode.m_dst, base, identifier, identifierNumber, deleteByStatus, bytecode.m_ecmaMode);
+            set(bytecode.m_dst, addToGraph(DeleteById, OpInfo(identifierNumber), base));
             NEXT_OPCODE(op_del_by_id);
         }
 
         case op_del_by_val: {
             auto bytecode = currentInstruction->as<OpDelByVal>();
             Node* base = get(bytecode.m_base);
-            Node* property = get(bytecode.m_property);
-            bool shouldCompileAsDeleteById = false;
-            DeleteByStatus deleteByStatus = DeleteByStatus::computeFor(
-                m_inlineStackTop->m_profiledBlock,
-                m_inlineStackTop->m_baselineMap, m_icContextStack,
-                currentCodeOrigin());
-
-            if (!m_inlineStackTop->m_exitProfile.hasExitSite(m_currentIndex, BadIdent)
-                && !m_inlineStackTop->m_exitProfile.hasExitSite(m_currentIndex, BadType)
-                && !m_inlineStackTop->m_exitProfile.hasExitSite(m_currentIndex, BadConstantValue)) {
-
-                if (CacheableIdentifier identifier = deleteByStatus.singleIdentifier()) {
-                    UniquedStringImpl* uid = identifier.uid();
-                    unsigned identifierNumber = m_graph.identifiers().ensure(identifier.uid());
-                    if (identifier.isCell()) {
-                        FrozenValue* frozen = m_graph.freezeStrong(identifier.cell());
-                        if (identifier.isSymbolCell())
-                            addToGraph(CheckIsConstant, OpInfo(frozen), property);
-                        else
-                            addToGraph(CheckIdent, OpInfo(uid), property);
-                    } else
-                        addToGraph(CheckIdent, OpInfo(uid), property);
-
-                    handleDeleteById(bytecode.m_dst, base, identifier, identifierNumber, deleteByStatus, bytecode.m_ecmaMode);
-                    shouldCompileAsDeleteById = true;
-                }
-            }
-
-            if (!shouldCompileAsDeleteById)
-                set(bytecode.m_dst, addToGraph(DeleteByVal, OpInfo(bytecode.m_ecmaMode), base, property));
+            Node* key = get(bytecode.m_property);
+            set(bytecode.m_dst, addToGraph(DeleteByVal, base, key));
             NEXT_OPCODE(op_del_by_val);
         }
 
@@ -6669,13 +6407,13 @@ void ByteCodeParser::parseBlock(unsigned limit)
         }
 
         case op_call:
-            handleCall<OpCall>(currentInstruction, Call, CallMode::Regular, nextOpcodeIndex());
+            handleCall<OpCall>(currentInstruction, Call, CallMode::Regular);
             ASSERT_WITH_MESSAGE(m_currentInstruction == currentInstruction, "handleCall, which may have inlined the callee, trashed m_currentInstruction");
             NEXT_OPCODE(op_call);
 
         case op_tail_call: {
             flushForReturn();
-            Terminality terminality = handleCall<OpTailCall>(currentInstruction, TailCall, CallMode::Tail, nextOpcodeIndex());
+            Terminality terminality = handleCall<OpTailCall>(currentInstruction, TailCall, CallMode::Tail);
             ASSERT_WITH_MESSAGE(m_currentInstruction == currentInstruction, "handleCall, which may have inlined the callee, trashed m_currentInstruction");
             // If the call is terminal then we should not parse any further bytecodes as the TailCall will exit the function.
             // If the call is not terminal, however, then we want the subsequent op_ret/op_jmp to update metadata and clean
@@ -6688,7 +6426,7 @@ void ByteCodeParser::parseBlock(unsigned limit)
         }
 
         case op_construct:
-            handleCall<OpConstruct>(currentInstruction, Construct, CallMode::Construct, nextOpcodeIndex());
+            handleCall<OpConstruct>(currentInstruction, Construct, CallMode::Construct);
             ASSERT_WITH_MESSAGE(m_currentInstruction == currentInstruction, "handleCall, which may have inlined the callee, trashed m_currentInstruction");
             NEXT_OPCODE(op_construct);
 
@@ -6736,402 +6474,8 @@ void ByteCodeParser::parseBlock(unsigned limit)
         case op_call_eval: {
             auto bytecode = currentInstruction->as<OpCallEval>();
             int registerOffset = -bytecode.m_argv;
-            addCall(bytecode.m_dst, CallEval, OpInfo(bytecode.m_ecmaMode), get(bytecode.m_callee), bytecode.m_argc, registerOffset, getPrediction());
+            addCall(bytecode.m_dst, CallEval, nullptr, get(bytecode.m_callee), bytecode.m_argc, registerOffset, getPrediction());
             NEXT_OPCODE(op_call_eval);
-        }
-
-        case op_iterator_open: {
-            auto bytecode = currentInstruction->as<OpIteratorOpen>();
-            auto& metadata = bytecode.metadata(codeBlock);
-            uint32_t seenModes = metadata.m_iterationMetadata.seenModes;
-
-            unsigned numberOfRemainingModes = WTF::bitCount(seenModes);
-            ASSERT(numberOfRemainingModes <= numberOfIterationModes);
-            bool generatedCase = false;
-
-            JSGlobalObject* globalObject = m_inlineStackTop->m_codeBlock->globalObjectFor(currentCodeOrigin());
-            BasicBlock* genericBlock = nullptr;
-            BasicBlock* continuation = allocateUntargetableBlock();
-
-            BytecodeIndex startIndex = m_currentIndex;
-
-            Node* symbolIterator = get(bytecode.m_symbolIterator);
-            auto& arrayIteratorProtocolWatchpointSet = globalObject->arrayIteratorProtocolWatchpointSet();
-
-            if (seenModes & IterationMode::FastArray && arrayIteratorProtocolWatchpointSet.isStillValid()) {
-                // First set up the watchpoint conditions we need for correctness.
-                m_graph.watchpoints().addLazily(arrayIteratorProtocolWatchpointSet);
-
-                ASSERT_WITH_MESSAGE(globalObject->arrayProtoValuesFunctionConcurrently(), "The only way we could have seen FastArray is if we saw this function in the LLInt/Baseline so the iterator function should be allocated.");
-                FrozenValue* frozenSymbolIteratorFunction = m_graph.freeze(globalObject->arrayProtoValuesFunctionConcurrently());
-                numberOfRemainingModes--;
-                if (!numberOfRemainingModes) {
-                    addToGraph(CheckIsConstant, OpInfo(frozenSymbolIteratorFunction), symbolIterator);
-                    addToGraph(CheckJSCast, OpInfo(JSArray::info()), get(bytecode.m_iterable));
-                } else {
-                    BasicBlock* fastArrayBlock = allocateUntargetableBlock();
-                    genericBlock = allocateUntargetableBlock();
-
-                    Node* isKnownIterFunction = addToGraph(CompareEqPtr, OpInfo(frozenSymbolIteratorFunction), symbolIterator);
-                    Node* isArray = addToGraph(IsCellWithType, OpInfo(ArrayType), get(bytecode.m_iterable));
-
-                    BranchData* branchData = m_graph.m_branchData.add();
-                    branchData->taken = BranchTarget(fastArrayBlock);
-                    branchData->notTaken = BranchTarget(genericBlock);
-
-                    Node* andResult = addToGraph(ArithBitAnd, isArray, isKnownIterFunction);
-
-                    // We know the ArithBitAnd cannot have effects so it's ok to exit here.
-                    m_exitOK = true;
-                    addToGraph(ExitOK);
-
-                    addToGraph(Branch, OpInfo(branchData), andResult);
-                    flushForTerminal();
-
-                    m_currentBlock = fastArrayBlock;
-                    clearCaches();
-                }
-
-                Node* kindNode = jsConstant(jsNumber(static_cast<uint32_t>(IterationKind::Values)));
-                Node* next = jsConstant(JSValue());
-                Node* iterator = addToGraph(NewInternalFieldObject, OpInfo(m_graph.registerStructure(globalObject->arrayIteratorStructure())));
-                addToGraph(PutInternalField, OpInfo(static_cast<uint32_t>(JSArrayIterator::Field::IteratedObject)), iterator, get(bytecode.m_iterable));
-                addToGraph(PutInternalField, OpInfo(static_cast<uint32_t>(JSArrayIterator::Field::Kind)), iterator, kindNode);
-                set(bytecode.m_iterator, iterator);
-
-                // Set m_next to JSValue() so if we exit between here and iterator_next instruction it knows we are in the fast case.
-                set(bytecode.m_next, next);
-
-                // Do our set locals. We don't want to exit backwards so move our exit to the next bytecode.
-                m_currentIndex = nextOpcodeIndex();
-                m_exitOK = true;
-                processSetLocalQueue();
-
-                addToGraph(Jump, OpInfo(continuation));
-                generatedCase = true;
-            }
-
-            m_currentIndex = startIndex;
-
-            if (seenModes & IterationMode::Generic) {
-                ASSERT(numberOfRemainingModes);
-                if (genericBlock) {
-                    ASSERT(generatedCase);
-                    m_currentBlock = genericBlock;
-                    clearCaches();
-                } else
-                    ASSERT(!generatedCase);
-
-                Terminality terminality = handleCall<OpIteratorOpen>(currentInstruction, Call, CallMode::Regular, nextCheckpoint());
-                ASSERT_UNUSED(terminality, terminality == NonTerminal);
-                progressToNextCheckpoint();
-
-                Node* iterator = get(bytecode.m_iterator);
-                BasicBlock* notObjectBlock = allocateUntargetableBlock();
-                BasicBlock* isObjectBlock = allocateUntargetableBlock();
-                BranchData* branchData = m_graph.m_branchData.add();
-                branchData->taken = BranchTarget(isObjectBlock);
-                branchData->notTaken = BranchTarget(notObjectBlock);
-                addToGraph(Branch, OpInfo(branchData), addToGraph(IsObject, iterator));
-
-                {
-                    m_currentBlock = notObjectBlock;
-                    clearCaches();
-                    LazyJSValue errorString = LazyJSValue::newString(m_graph, "Iterator result interface is not an object."_s);
-                    OpInfo info = OpInfo(m_graph.m_lazyJSValues.add(errorString));
-                    Node* errorMessage = addToGraph(LazyJSConstant, info);
-                    addToGraph(ThrowStaticError, OpInfo(ErrorType::TypeError), errorMessage);
-                    flushForTerminal();
-                }
-
-                {
-                    m_currentBlock = isObjectBlock;
-                    clearCaches();
-                    SpeculatedType prediction = getPrediction();
-
-                    Node* base = get(bytecode.m_iterator);
-                    auto* nextImpl = m_vm->propertyNames->next.impl();
-                    unsigned identifierNumber = m_graph.identifiers().ensure(nextImpl);
-
-                    AccessType type = AccessType::GetById;
-
-                    GetByStatus getByStatus = GetByStatus::computeFor(
-                        m_inlineStackTop->m_profiledBlock,
-                        m_inlineStackTop->m_baselineMap, m_icContextStack,
-                        currentCodeOrigin());
-
-
-                    handleGetById(bytecode.m_next, prediction, base, CacheableIdentifier::createFromImmortalIdentifier(nextImpl), identifierNumber, getByStatus, type, nextOpcodeIndex());
-
-                    // Do our set locals. We don't want to run our get_by_id again so we move to the next bytecode.
-                    m_currentIndex = nextOpcodeIndex();
-                    m_exitOK = true;
-                    processSetLocalQueue();
-
-                    addToGraph(Jump, OpInfo(continuation));
-                }
-                generatedCase = true;
-            }
-
-            if (!generatedCase) {
-                Node* result = jsConstant(JSValue());
-                addToGraph(ForceOSRExit);
-                set(bytecode.m_iterator, result);
-                set(bytecode.m_next, result);
-
-                m_currentIndex = nextOpcodeIndex();
-                m_exitOK = true;
-                processSetLocalQueue();
-
-                addToGraph(Jump, OpInfo(continuation));
-            }
-
-            m_currentIndex = startIndex;
-            m_currentBlock = continuation;
-            clearCaches();
-
-            NEXT_OPCODE(op_iterator_open);
-        }
-
-        case op_iterator_next: {
-            auto bytecode = currentInstruction->as<OpIteratorNext>();
-            auto& metadata = bytecode.metadata(codeBlock);
-            uint32_t seenModes = metadata.m_iterationMetadata.seenModes;
-
-            unsigned numberOfRemainingModes = WTF::bitCount(seenModes);
-            ASSERT(numberOfRemainingModes <= numberOfIterationModes);
-            bool generatedCase = false;
-
-            BytecodeIndex startIndex = m_currentIndex;
-            JSGlobalObject* globalObject = m_inlineStackTop->m_codeBlock->globalObjectFor(currentCodeOrigin());
-            auto& arrayIteratorProtocolWatchpointSet = globalObject->arrayIteratorProtocolWatchpointSet();
-            BasicBlock* genericBlock = nullptr;
-            BasicBlock* continuation = allocateUntargetableBlock();
-
-            if (seenModes & IterationMode::FastArray && arrayIteratorProtocolWatchpointSet.isStillValid()) {
-                // First set up the watchpoint conditions we need for correctness.
-                m_graph.watchpoints().addLazily(arrayIteratorProtocolWatchpointSet);
-
-                if (numberOfRemainingModes != 1) {
-                    Node* hasNext = addToGraph(IsEmpty, get(bytecode.m_next));
-                    genericBlock = allocateUntargetableBlock();
-                    BasicBlock* fastArrayBlock = allocateUntargetableBlock();
-
-                    BranchData* branchData = m_graph.m_branchData.add();
-                    branchData->taken = BranchTarget(fastArrayBlock);
-                    branchData->notTaken = BranchTarget(genericBlock);
-                    addToGraph(Branch, OpInfo(branchData), hasNext);
-
-                    m_currentBlock = fastArrayBlock;
-                    clearCaches();
-                } else
-                    addToGraph(CheckIsConstant, OpInfo(m_graph.freeze(JSValue())), get(bytecode.m_next));
-
-                Node* iterator = get(bytecode.m_iterator);
-                addToGraph(CheckStructure, OpInfo(m_graph.addStructureSet(globalObject->arrayIteratorStructure())), iterator);
-
-                BasicBlock* isDoneBlock = allocateUntargetableBlock();
-                BasicBlock* doLoadBlock = allocateUntargetableBlock();
-
-                ArrayMode arrayMode = getArrayMode(metadata.m_iterableProfile, Array::Read);
-                auto prediction = getPredictionWithoutOSRExit(BytecodeIndex(m_currentIndex.offset(), OpIteratorNext::getValue));
-
-                {
-                    // FIXME: doneIndex is -1 so it seems like we should be able to do CompareBelow(index, length). See: https://bugs.webkit.org/show_bug.cgi?id=210927
-                    Node* doneIndex = jsConstant(jsNumber(JSArrayIterator::doneIndex));
-                    Node* index = addToGraph(GetInternalField, OpInfo(static_cast<uint32_t>(JSArrayIterator::Field::Index)), OpInfo(SpecInt32Only), iterator);
-                    Node* isDone = addToGraph(CompareStrictEq, index, doneIndex);
-
-                    Node* iterable = get(bytecode.m_iterable);
-                    Node* butterfly = addToGraph(GetButterfly, iterable);
-                    Node* length = addToGraph(GetArrayLength, OpInfo(arrayMode.asWord()), iterable, butterfly);
-                    // GetArrayLength is pessimized prior to fixup.
-                    m_exitOK = true;
-                    addToGraph(ExitOK);
-                    Node* isOutOfBounds = addToGraph(CompareGreaterEq, Edge(index, Int32Use), Edge(length, Int32Use));
-
-                    isDone = addToGraph(ArithBitOr, isDone, isOutOfBounds);
-                    // The above compare doesn't produce effects since we know the values are booleans. We don't set UseKinds because Fixup likes to add edges.
-                    m_exitOK = true;
-                    addToGraph(ExitOK);
-
-                    BranchData* branchData = m_graph.m_branchData.add();
-                    branchData->taken = BranchTarget(isDoneBlock);
-                    branchData->notTaken = BranchTarget(doLoadBlock);
-                    addToGraph(Branch, OpInfo(branchData), isDone);
-                }
-
-                {
-                    m_currentBlock = doLoadBlock;
-                    clearCaches();
-                    Node* index = addToGraph(GetInternalField, OpInfo(static_cast<uint32_t>(JSArrayIterator::Field::Index)), OpInfo(SpecInt32Only), get(bytecode.m_iterator));
-                    Node* one = jsConstant(jsNumber(1));
-                    Node* newIndex = makeSafe(addToGraph(ArithAdd, index, one));
-                    Node* falseNode = jsConstant(jsBoolean(false));
-
-
-                    // FIXME: We could consider making this not vararg, since it only uses three child
-                    // slots.
-                    // https://bugs.webkit.org/show_bug.cgi?id=184192
-                    addVarArgChild(get(bytecode.m_iterable));
-                    addVarArgChild(index);
-                    addVarArgChild(nullptr); // Leave room for property storage.
-                    Node* getByVal = addToGraph(Node::VarArg, GetByVal, OpInfo(arrayMode.asWord()), OpInfo(prediction));
-                    set(bytecode.m_value, getByVal);
-                    set(bytecode.m_done, falseNode);
-                    addToGraph(PutInternalField, OpInfo(static_cast<uint32_t>(JSArrayIterator::Field::Index)), get(bytecode.m_iterator), newIndex);
-
-                    // Do our set locals. We don't want to run our getByVal again so we move to the next bytecode.
-                    m_currentIndex = nextOpcodeIndex();
-                    m_exitOK = true;
-                    processSetLocalQueue();
-
-                    addToGraph(Jump, OpInfo(continuation));
-                }
-
-                // Roll back the checkpoint.
-                m_currentIndex = startIndex;
-
-                {
-                    m_currentBlock = isDoneBlock;
-                    clearCaches();
-                    Node* trueNode = jsConstant(jsBoolean(true));
-                    Node* doneIndex = jsConstant(jsNumber(-1));
-                    Node* bottomNode = jsConstant(m_graph.bottomValueMatchingSpeculation(prediction));
-
-                    set(bytecode.m_value, bottomNode);
-                    set(bytecode.m_done, trueNode);
-                    addToGraph(PutInternalField, OpInfo(static_cast<uint32_t>(JSArrayIterator::Field::Index)), get(bytecode.m_iterator), doneIndex);
-
-                    // Do our set locals. We don't want to run this again so we have to move the exit origin forward.
-                    m_currentIndex = nextOpcodeIndex();
-                    m_exitOK = true;
-                    processSetLocalQueue();
-
-                    addToGraph(Jump, OpInfo(continuation));
-                }
-
-                m_currentIndex = startIndex;
-                generatedCase = true;
-            }
-
-            if (seenModes & IterationMode::Generic) {
-                if (genericBlock) {
-                    ASSERT(generatedCase);
-                    m_currentBlock = genericBlock;
-                    clearCaches();
-                } else
-                    ASSERT(!generatedCase);
-
-                // Our profiling could have been incorrect when we got here. For instance, if we LoopHint OSR enter the first time we would
-                // have seen a fast path, next will be the empty value. When that happens we need to make sure the empty value doesn't flow
-                // into the Call node since call can't handle empty values.
-                addToGraph(CheckNotEmpty, get(bytecode.m_next));
-
-                Terminality terminality = handleCall<OpIteratorNext>(currentInstruction, Call, CallMode::Regular, nextCheckpoint());
-                ASSERT_UNUSED(terminality, terminality == NonTerminal);
-                progressToNextCheckpoint();
-
-                BasicBlock* notObjectBlock = allocateUntargetableBlock();
-                BasicBlock* isObjectBlock = allocateUntargetableBlock();
-                BasicBlock* notDoneBlock = allocateUntargetableBlock();
-
-                Operand nextResult = Operand::tmp(OpIteratorNext::nextResult);
-                {
-                    Node* iteratorResult = get(nextResult);
-                    BranchData* branchData = m_graph.m_branchData.add();
-                    branchData->taken = BranchTarget(isObjectBlock);
-                    branchData->notTaken = BranchTarget(notObjectBlock);
-                    addToGraph(Branch, OpInfo(branchData), addToGraph(IsObject, iteratorResult));
-                }
-
-                {
-                    m_currentBlock = notObjectBlock;
-                    clearCaches();
-                    LazyJSValue errorString = LazyJSValue::newString(m_graph, "Iterator result interface is not an object."_s);
-                    OpInfo info = OpInfo(m_graph.m_lazyJSValues.add(errorString));
-                    Node* errorMessage = addToGraph(LazyJSConstant, info);
-                    addToGraph(ThrowStaticError, OpInfo(ErrorType::TypeError), errorMessage);
-                    flushForTerminal();
-                }
-
-                auto valuePredicition = getPredictionWithoutOSRExit(m_currentIndex.withCheckpoint(OpIteratorNext::getValue));
-
-                {
-                    m_exitOK = true;
-                    m_currentBlock = isObjectBlock;
-                    clearCaches();
-                    SpeculatedType prediction = getPrediction();
-
-                    Node* base = get(nextResult);
-                    auto* doneImpl = m_vm->propertyNames->done.impl();
-                    unsigned identifierNumber = m_graph.identifiers().ensure(doneImpl);
-
-                    AccessType type = AccessType::GetById;
-
-                    GetByStatus getByStatus = GetByStatus::computeFor(
-                        m_inlineStackTop->m_profiledBlock,
-                        m_inlineStackTop->m_baselineMap, m_icContextStack,
-                        currentCodeOrigin());
-
-                    handleGetById(bytecode.m_done, prediction, base, CacheableIdentifier::createFromImmortalIdentifier(doneImpl), identifierNumber, getByStatus, type, nextCheckpoint());
-                    // Set a value for m_value so we don't exit on it differing from what we expected.
-                    set(bytecode.m_value, jsConstant(m_graph.bottomValueMatchingSpeculation(valuePredicition)));
-                    progressToNextCheckpoint();
-
-                    BranchData* branchData = m_graph.m_branchData.add();
-                    branchData->taken = BranchTarget(continuation);
-                    branchData->notTaken = BranchTarget(notDoneBlock);
-                    addToGraph(Branch, OpInfo(branchData), get(bytecode.m_done));
-                }
-
-                {
-                    m_currentBlock = notDoneBlock;
-                    clearCaches();
-
-                    Node* base = get(nextResult);
-                    auto* valueImpl = m_vm->propertyNames->value.impl();
-                    unsigned identifierNumber = m_graph.identifiers().ensure(valueImpl);
-
-                    AccessType type = AccessType::GetById;
-
-                    GetByStatus getByStatus = GetByStatus::computeFor(
-                        m_inlineStackTop->m_profiledBlock,
-                        m_inlineStackTop->m_baselineMap, m_icContextStack,
-                        currentCodeOrigin());
-
-                    handleGetById(bytecode.m_value, valuePredicition, base, CacheableIdentifier::createFromImmortalIdentifier(valueImpl), identifierNumber, getByStatus, type, nextOpcodeIndex());
-
-                    // We're done, exit forwards.
-                    m_currentIndex = nextOpcodeIndex();
-                    m_exitOK = true;
-                    processSetLocalQueue();
-
-                    addToGraph(Jump, OpInfo(continuation));
-                }
-
-                generatedCase = true;
-            }
-
-            if (!generatedCase) {
-                Node* result = jsConstant(JSValue());
-                addToGraph(ForceOSRExit);
-                set(bytecode.m_value, result);
-                set(bytecode.m_done, result);
-
-                // Do our set locals. We don't want to run our get by id again so we move to the next bytecode.
-                m_currentIndex = BytecodeIndex(m_currentIndex.offset() + currentInstruction->size());
-                m_exitOK = true;
-                processSetLocalQueue();
-
-                addToGraph(Jump, OpInfo(continuation));
-            }
-
-            m_currentIndex = startIndex;
-            m_currentBlock = continuation;
-            clearCaches();
-
-            NEXT_OPCODE(op_iterator_next);
         }
 
         case op_jneq_ptr: {
@@ -7144,7 +6488,7 @@ void ByteCodeParser::parseBlock(unsigned limit)
                 addToGraph(Branch, OpInfo(branchData(m_currentIndex.offset() + currentInstruction->size(), m_currentIndex.offset() + relativeOffset)), condition);
                 LAST_OPCODE(op_jneq_ptr);
             }
-            addToGraph(CheckIsConstant, OpInfo(frozenPointer), child);
+            addToGraph(CheckCell, OpInfo(frozenPointer), child);
             NEXT_OPCODE(op_jneq_ptr);
         }
 
@@ -7193,11 +6537,15 @@ void ByteCodeParser::parseBlock(unsigned limit)
             if (needsVarInjectionChecks(resolveType))
                 m_graph.watchpoints().addLazily(m_inlineStackTop->m_codeBlock->globalObject()->varInjectionWatchpoint());
 
-            if (resolveType == GlobalProperty || resolveType == GlobalPropertyWithVarInjectionChecks) {
-                JSGlobalObject* globalObject = m_inlineStackTop->m_codeBlock->globalObject();
-                unsigned identifierNumber = m_inlineStackTop->m_identifierRemap[bytecode.m_var];
-                if (!m_graph.watchGlobalProperty(globalObject, identifierNumber))
-                    addToGraph(ForceOSRExit);
+            // FIXME: Currently, module code do not query to JSGlobalLexicalEnvironment. So this case should be removed once it is fixed.
+            // https://bugs.webkit.org/show_bug.cgi?id=193347
+            if (m_inlineStackTop->m_codeBlock->scriptMode() != JSParserScriptMode::Module) {
+                if (resolveType == GlobalProperty || resolveType == GlobalPropertyWithVarInjectionChecks) {
+                    JSGlobalObject* globalObject = m_inlineStackTop->m_codeBlock->globalObject();
+                    unsigned identifierNumber = m_inlineStackTop->m_identifierRemap[bytecode.m_var];
+                    if (!m_graph.watchGlobalProperty(globalObject, identifierNumber))
+                        addToGraph(ForceOSRExit);
+                }
             }
 
             switch (resolveType) {
@@ -7276,8 +6624,8 @@ void ByteCodeParser::parseBlock(unsigned limit)
 
             ResolveType resolveType;
             GetPutInfo getPutInfo(0);
-            Structure* structure = nullptr;
-            WatchpointSet* watchpoints = nullptr;
+            Structure* structure = 0;
+            WatchpointSet* watchpoints = 0;
             uintptr_t operand;
             {
                 ConcurrentJSLocker locker(m_inlineStackTop->m_profiledBlock->m_lock);
@@ -7305,8 +6653,12 @@ void ByteCodeParser::parseBlock(unsigned limit)
             switch (resolveType) {
             case GlobalProperty:
             case GlobalPropertyWithVarInjectionChecks: {
-                if (!m_graph.watchGlobalProperty(globalObject, identifierNumber))
-                    addToGraph(ForceOSRExit);
+                // FIXME: Currently, module code do not query to JSGlobalLexicalEnvironment. So this case should be removed once it is fixed.
+                // https://bugs.webkit.org/show_bug.cgi?id=193347
+                if (m_inlineStackTop->m_codeBlock->scriptMode() != JSParserScriptMode::Module) {
+                    if (!m_graph.watchGlobalProperty(globalObject, identifierNumber))
+                        addToGraph(ForceOSRExit);
+                }
 
                 SpeculatedType prediction = getPrediction();
 
@@ -7314,7 +6666,7 @@ void ByteCodeParser::parseBlock(unsigned limit)
                 if (status.state() != GetByStatus::Simple
                     || status.numVariants() != 1
                     || status[0].structureSet().size() != 1) {
-                    set(bytecode.m_dst, addToGraph(GetByIdFlush, OpInfo(CacheableIdentifier::createFromIdentifierOwnedByCodeBlock(m_inlineStackTop->m_profiledBlock, uid)), OpInfo(prediction), get(bytecode.m_scope)));
+                    set(bytecode.m_dst, addToGraph(GetByIdFlush, OpInfo(identifierNumber), OpInfo(prediction), get(bytecode.m_scope)));
                     break;
                 }
 
@@ -7471,15 +6823,19 @@ void ByteCodeParser::parseBlock(unsigned limit)
             if (needsDynamicLookup(resolveType, op_put_to_scope)) {
                 ASSERT(identifierNumber != UINT_MAX);
                 uint64_t opInfo1 = makeDynamicVarOpInfo(identifierNumber, getPutInfo.operand());
-                addToGraph(PutDynamicVar, OpInfo(opInfo1), OpInfo(getPutInfo.ecmaMode()), get(bytecode.m_scope), get(bytecode.m_value));
+                addToGraph(PutDynamicVar, OpInfo(opInfo1), OpInfo(), get(bytecode.m_scope), get(bytecode.m_value));
                 NEXT_OPCODE(op_put_to_scope);
             }
 
             switch (resolveType) {
             case GlobalProperty:
             case GlobalPropertyWithVarInjectionChecks: {
-                if (!m_graph.watchGlobalProperty(globalObject, identifierNumber))
-                    addToGraph(ForceOSRExit);
+                // FIXME: Currently, module code do not query to JSGlobalLexicalEnvironment. So this case should be removed once it is fixed.
+                // https://bugs.webkit.org/show_bug.cgi?id=193347
+                if (m_inlineStackTop->m_codeBlock->scriptMode() != JSParserScriptMode::Module) {
+                    if (!m_graph.watchGlobalProperty(globalObject, identifierNumber))
+                        addToGraph(ForceOSRExit);
+                }
 
                 PutByIdStatus status;
                 if (uid)
@@ -7489,7 +6845,7 @@ void ByteCodeParser::parseBlock(unsigned limit)
                 if (status.numVariants() != 1
                     || status[0].kind() != PutByIdVariant::Replace
                     || status[0].structure().size() != 1) {
-                    addToGraph(PutById, OpInfo(CacheableIdentifier::createFromIdentifierOwnedByCodeBlock(m_inlineStackTop->m_profiledBlock, uid)), OpInfo(bytecode.m_getPutInfo.ecmaMode()), get(bytecode.m_scope), get(bytecode.m_value));
+                    addToGraph(PutById, OpInfo(identifierNumber), get(bytecode.m_scope), get(bytecode.m_value));
                     break;
                 }
                 Node* base = weakJSConstant(globalObject);
@@ -7623,7 +6979,7 @@ void ByteCodeParser::parseBlock(unsigned limit)
             // loads from the scope register later, as that would prevent the DFG from tracking the
             // bytecode-level liveness of the scope register.
             auto bytecode = currentInstruction->as<OpGetScope>();
-            Node* callee = get(VirtualRegister(CallFrameSlot::callee));
+            Node* callee = get(CallFrameSlot::callee);
             Node* result;
             if (JSFunction* function = callee->dynamicCastConstant<JSFunction*>(*m_vm))
                 result = weakJSConstant(function->scope());
@@ -7824,7 +7180,7 @@ void ByteCodeParser::parseBlock(unsigned limit)
                 }
             }
 
-            set(bytecode.m_dst, addToGraph(InById, OpInfo(CacheableIdentifier::createFromIdentifierOwnedByCodeBlock(m_inlineStackTop->m_profiledBlock, uid)), base));
+            set(bytecode.m_dst, addToGraph(InById, OpInfo(identifierNumber), base));
             NEXT_OPCODE(op_in_by_id);
         }
 
@@ -7847,24 +7203,6 @@ void ByteCodeParser::parseBlock(unsigned limit)
                 get(bytecode.m_property),
                 get(bytecode.m_enumerator)));
             NEXT_OPCODE(op_has_structure_property);
-        }
-
-        case op_has_own_structure_property: {
-            auto bytecode = currentInstruction->as<OpHasOwnStructureProperty>();
-            set(bytecode.m_dst, addToGraph(HasOwnStructureProperty,
-                get(bytecode.m_base),
-                get(bytecode.m_property),
-                get(bytecode.m_enumerator)));
-            NEXT_OPCODE(op_has_own_structure_property);
-        }
-
-        case op_in_structure_property: {
-            auto bytecode = currentInstruction->as<OpInStructureProperty>();
-            set(bytecode.m_dst, addToGraph(InStructureProperty,
-                get(bytecode.m_base),
-                get(bytecode.m_property),
-                get(bytecode.m_enumerator)));
-            NEXT_OPCODE(op_in_structure_property);
         }
 
         case op_has_indexed_property: {
@@ -8020,7 +7358,7 @@ ByteCodeParser::InlineStackEntry::InlineStackEntry(
     CodeBlock* codeBlock,
     CodeBlock* profiledBlock,
     JSFunction* callee, // Null if this is a closure call.
-    Operand returnValue,
+    VirtualRegister returnValueVR,
     VirtualRegister inlineCallFrameStart,
     int argumentCountIncludingThis,
     InlineCallFrame::Kind kind,
@@ -8029,7 +7367,7 @@ ByteCodeParser::InlineStackEntry::InlineStackEntry(
     , m_codeBlock(codeBlock)
     , m_profiledBlock(profiledBlock)
     , m_continuationBlock(continuationBlock)
-    , m_returnValue(returnValue)
+    , m_returnValue(returnValueVR)
     , m_caller(byteCodeParser->m_inlineStackTop)
 {
     {
@@ -8095,10 +7433,10 @@ ByteCodeParser::InlineStackEntry::InlineStackEntry(
         // Machine code block case.
         ASSERT(codeBlock == byteCodeParser->m_codeBlock);
         ASSERT(!callee);
-        ASSERT(!returnValue.isValid());
+        ASSERT(!returnValueVR.isValid());
         ASSERT(!inlineCallFrameStart.isValid());
 
-        m_inlineCallFrame = nullptr;
+        m_inlineCallFrame = 0;
 
         m_identifierRemap.resize(codeBlock->numberOfIdentifiers());
         m_switchRemap.resize(codeBlock->numberOfSwitchJumpTables());
@@ -8153,7 +7491,8 @@ void ByteCodeParser::parseCodeBlock()
                 " for inlining at ", CodeBlockWithJITType(m_codeBlock, JITType::DFGJIT),
                 " ", inlineCallFrame()->directCaller);
         }
-        dataLogLn();
+        dataLog(
+            ", isStrictMode = ", codeBlock->ownerExecutable()->isStrictMode(), "\n");
         codeBlock->baselineVersion()->dumpBytecode();
     }
 
@@ -8215,7 +7554,7 @@ void ByteCodeParser::parseCodeBlock()
 }
 
 template <typename Bytecode>
-void ByteCodeParser::handlePutByVal(Bytecode bytecode, BytecodeIndex osrExitIndex)
+void ByteCodeParser::handlePutByVal(Bytecode bytecode, unsigned instructionSize)
 {
     Node* base = get(bytecode.m_base);
     Node* property = get(bytecode.m_property);
@@ -8223,7 +7562,6 @@ void ByteCodeParser::handlePutByVal(Bytecode bytecode, BytecodeIndex osrExitInde
     bool isDirect = Bytecode::opcodeID == op_put_by_val_direct;
     bool compiledAsPutById = false;
     {
-        CacheableIdentifier identifier;
         unsigned identifierNumber = std::numeric_limits<unsigned>::max();
         PutByIdStatus putByIdStatus;
         {
@@ -8236,18 +7574,15 @@ void ByteCodeParser::handlePutByVal(Bytecode bytecode, BytecodeIndex osrExitInde
                 && !byValInfo->tookSlowPath
                 && !m_inlineStackTop->m_exitProfile.hasExitSite(m_currentIndex, BadIdent)
                 && !m_inlineStackTop->m_exitProfile.hasExitSite(m_currentIndex, BadType)
-                && !m_inlineStackTop->m_exitProfile.hasExitSite(m_currentIndex, BadConstantValue)) {
+                && !m_inlineStackTop->m_exitProfile.hasExitSite(m_currentIndex, BadCell)) {
                 compiledAsPutById = true;
-                identifier = byValInfo->cachedId;
-                identifierNumber = m_graph.identifiers().ensure(identifier.uid());
+                identifierNumber = m_graph.identifiers().ensure(byValInfo->cachedId.impl());
                 UniquedStringImpl* uid = m_graph.identifiers()[identifierNumber];
-                FrozenValue* frozen = nullptr;
-                if (identifier.isCell())
-                    frozen = m_graph.freezeStrong(identifier.cell());
 
-                if (identifier.isSymbolCell())
-                    addToGraph(CheckIsConstant, OpInfo(frozen), property);
-                else {
+                if (Symbol* symbol = byValInfo->cachedSymbol.get()) {
+                    FrozenValue* frozen = m_graph.freezeStrong(symbol);
+                    addToGraph(CheckCell, OpInfo(frozen), property);
+                } else {
                     ASSERT(!uid->isSymbol());
                     addToGraph(CheckIdent, OpInfo(uid), property);
                 }
@@ -8260,7 +7595,7 @@ void ByteCodeParser::handlePutByVal(Bytecode bytecode, BytecodeIndex osrExitInde
         }
 
         if (compiledAsPutById)
-            handlePutById(base, identifier, identifierNumber, value, putByIdStatus, isDirect, osrExitIndex, ecmaMode(bytecode));
+            handlePutById(base, identifierNumber, value, putByIdStatus, isDirect, instructionSize);
     }
 
     if (!compiledAsPutById) {
@@ -8269,9 +7604,9 @@ void ByteCodeParser::handlePutByVal(Bytecode bytecode, BytecodeIndex osrExitInde
         addVarArgChild(base);
         addVarArgChild(property);
         addVarArgChild(value);
-        addVarArgChild(nullptr); // Leave room for property storage.
-        addVarArgChild(nullptr); // Leave room for length.
-        addToGraph(Node::VarArg, isDirect ? PutByValDirect : PutByVal, OpInfo(arrayMode.asWord()), OpInfo(ecmaMode(bytecode)));
+        addVarArgChild(0); // Leave room for property storage.
+        addVarArgChild(0); // Leave room for length.
+        addToGraph(Node::VarArg, isDirect ? PutByValDirect : PutByVal, OpInfo(arrayMode.asWord()), OpInfo(0));
         m_exitOK = false; // PutByVal and PutByValDirect must be treated as if they clobber exit state, since FixupPhase may make them generic.
     }
 }
@@ -8340,11 +7675,11 @@ void ByteCodeParser::handleCreateInternalFieldObject(const ClassInfo* classInfo,
         JSCell* cachedFunction = bytecode.metadata(codeBlock).m_cachedCallee.unvalidatedGet();
         if (cachedFunction
             && cachedFunction != JSCell::seenMultipleCalleeObjects()
-            && !m_inlineStackTop->m_exitProfile.hasExitSite(m_currentIndex, BadConstantValue)) {
+            && !m_inlineStackTop->m_exitProfile.hasExitSite(m_currentIndex, BadCell)) {
             ASSERT(cachedFunction->inherits<JSFunction>(*m_vm));
 
             FrozenValue* frozen = m_graph.freeze(cachedFunction);
-            addToGraph(CheckIsConstant, OpInfo(frozen), callee);
+            addToGraph(CheckCell, OpInfo(frozen), callee);
 
             function = static_cast<JSFunction*>(cachedFunction);
         }
@@ -8381,7 +7716,7 @@ void ByteCodeParser::parse()
     VERBOSE_LOG("Parsing ", *m_codeBlock, "\n");
 
     InlineStackEntry inlineStackEntry(
-        this, m_codeBlock, m_profiledBlock, nullptr, VirtualRegister(), VirtualRegister(),
+        this, m_codeBlock, m_profiledBlock, 0, VirtualRegister(), VirtualRegister(),
         m_codeBlock->numParameters(), InlineCallFrame::Call, nullptr);
 
     parseCodeBlock();
@@ -8510,7 +7845,7 @@ void ByteCodeParser::parse()
                 insertionSet.execute(block);
 
                 auto nodeAndIndex = block->findTerminal();
-                DFG_ASSERT(m_graph, nodeAndIndex.node, nodeAndIndex.node->op() == Unreachable);
+                RELEASE_ASSERT(nodeAndIndex.node->op() == Unreachable);
                 block->resize(nodeAndIndex.index + 1);
                 break;
             }

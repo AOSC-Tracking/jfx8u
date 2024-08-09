@@ -423,7 +423,7 @@ LayoutUnit RootInlineBox::lineSnapAdjustment(LayoutUnit delta) const
 GapRects RootInlineBox::lineSelectionGap(RenderBlock& rootBlock, const LayoutPoint& rootBlockPhysicalPosition, const LayoutSize& offsetFromRootBlock,
     LayoutUnit selTop, LayoutUnit selHeight, const LogicalSelectionOffsetCaches& cache, const PaintInfo* paintInfo)
 {
-    RenderObject::HighlightState lineState = selectionState();
+    RenderObject::SelectionState lineState = selectionState();
 
     bool leftGap, rightGap;
     blockFlow().getSelectionGapInfo(lineState, leftGap, rightGap);
@@ -451,9 +451,9 @@ GapRects RootInlineBox::lineSelectionGap(RenderBlock& rootBlock, const LayoutPoi
     if (firstBox && firstBox != lastBox) {
         // Now fill in any gaps on the line that occurred between two selected elements.
         LayoutUnit lastLogicalLeft { firstBox->logicalRight() };
-        bool isPreviousBoxSelected = firstBox->selectionState() != RenderObject::HighlightState::None;
+        bool isPreviousBoxSelected = firstBox->selectionState() != RenderObject::SelectionNone;
         for (InlineBox* box = firstBox->nextLeafOnLine(); box; box = box->nextLeafOnLine()) {
-            if (box->selectionState() != RenderObject::HighlightState::None) {
+            if (box->selectionState() != RenderObject::SelectionNone) {
                 LayoutRect logicalRect { lastLogicalLeft, selTop, LayoutUnit(box->logicalLeft() - lastLogicalLeft), selHeight };
                 logicalRect.move(renderer().isHorizontalWritingMode() ? offsetFromRootBlock : LayoutSize(offsetFromRootBlock.height(), offsetFromRootBlock.width()));
                 LayoutRect gapRect = rootBlock.logicalRectToPhysicalRect(rootBlockPhysicalPosition, logicalRect);
@@ -467,7 +467,7 @@ GapRects RootInlineBox::lineSelectionGap(RenderBlock& rootBlock, const LayoutPoi
             }
             if (box == lastBox)
                 break;
-            isPreviousBoxSelected = box->selectionState() != RenderObject::HighlightState::None;
+            isPreviousBoxSelected = box->selectionState() != RenderObject::SelectionNone;
         }
     }
 
@@ -527,23 +527,24 @@ IntRect RootInlineBox::computeCaretRect(float logicalLeftPosition, unsigned care
     return blockStyle.isHorizontalWritingMode() ? IntRect(left, top, caretWidth, height) : IntRect(top, left, height, caretWidth);
 }
 
-RenderObject::HighlightState RootInlineBox::selectionState()
+RenderObject::SelectionState RootInlineBox::selectionState()
 {
     // Walk over all of the selected boxes.
-    RenderObject::HighlightState state = RenderObject::HighlightState::None;
+    RenderObject::SelectionState state = RenderObject::SelectionNone;
     for (InlineBox* box = firstLeafDescendant(); box; box = box->nextLeafOnLine()) {
-        RenderObject::HighlightState boxState = box->selectionState();
-        if ((boxState == RenderObject::HighlightState::Start && state == RenderObject::HighlightState::End)
-            || (boxState == RenderObject::HighlightState::End && state == RenderObject::HighlightState::Start))
-            state = RenderObject::HighlightState::Both;
-        else if (state == RenderObject::HighlightState::None || ((boxState == RenderObject::HighlightState::Start || boxState == RenderObject::HighlightState::End)
-            && (state == RenderObject::HighlightState::None || state == RenderObject::HighlightState::Inside)))
+        RenderObject::SelectionState boxState = box->selectionState();
+        if ((boxState == RenderObject::SelectionStart && state == RenderObject::SelectionEnd) ||
+            (boxState == RenderObject::SelectionEnd && state == RenderObject::SelectionStart))
+            state = RenderObject::SelectionBoth;
+        else if (state == RenderObject::SelectionNone ||
+                 ((boxState == RenderObject::SelectionStart || boxState == RenderObject::SelectionEnd) &&
+                  (state == RenderObject::SelectionNone || state == RenderObject::SelectionInside)))
             state = boxState;
-        else if (boxState == RenderObject::HighlightState::None && state == RenderObject::HighlightState::Start) {
+        else if (boxState == RenderObject::SelectionNone && state == RenderObject::SelectionStart) {
             // We are past the end of the selection.
-            state = RenderObject::HighlightState::Both;
+            state = RenderObject::SelectionBoth;
         }
-        if (state == RenderObject::HighlightState::Both)
+        if (state == RenderObject::SelectionBoth)
             break;
     }
 
@@ -553,7 +554,7 @@ RenderObject::HighlightState RootInlineBox::selectionState()
 InlineBox* RootInlineBox::firstSelectedBox()
 {
     for (auto* box = firstLeafDescendant(); box; box = box->nextLeafOnLine()) {
-        if (box->selectionState() != RenderObject::HighlightState::None)
+        if (box->selectionState() != RenderObject::SelectionNone)
             return box;
     }
     return nullptr;
@@ -562,13 +563,13 @@ InlineBox* RootInlineBox::firstSelectedBox()
 InlineBox* RootInlineBox::lastSelectedBox()
 {
     for (auto* box = lastLeafDescendant(); box; box = box->previousLeafOnLine()) {
-        if (box->selectionState() != RenderObject::HighlightState::None)
+        if (box->selectionState() != RenderObject::SelectionNone)
             return box;
     }
     return nullptr;
 }
 
-LayoutUnit RootInlineBox::selectionTop(ForHitTesting forHitTesting) const
+LayoutUnit RootInlineBox::selectionTop() const
 {
     LayoutUnit selectionTop = m_lineTop;
 
@@ -609,14 +610,7 @@ LayoutUnit RootInlineBox::selectionTop(ForHitTesting forHitTesting) const
     }
 #endif
 
-    LayoutUnit prevBottom;
-    if (auto* previousBox = prevRootBox())
-        prevBottom = previousBox->selectionBottom();
-    else {
-        auto borderAndPaddingBefore = blockFlow().borderAndPaddingBefore();
-        prevBottom = forHitTesting == ForHitTesting::Yes ? borderAndPaddingBefore : std::max(borderAndPaddingBefore, selectionTop);
-    }
-
+    LayoutUnit prevBottom = prevRootBox() ? prevRootBox()->selectionBottom() : blockFlow().borderAndPaddingBefore();
     if (prevBottom < selectionTop && blockFlow().containsFloats()) {
         // This line has actually been moved further down, probably from a large line-height, but possibly because the
         // line was forced to clear floats.  If so, let's check the offsets, and only be willing to use the previous
@@ -670,7 +664,7 @@ LayoutUnit RootInlineBox::selectionTopAdjustedForPrecedingBlock() const
     LayoutUnit top = selectionTop();
 
     auto blockSelectionState = rootBox.blockFlow().selectionState();
-    if (blockSelectionState != RenderObject::HighlightState::Inside && blockSelectionState != RenderObject::HighlightState::End)
+    if (blockSelectionState != RenderObject::SelectionInside && blockSelectionState != RenderObject::SelectionEnd)
         return top;
 
     LayoutSize offsetToBlockBefore;
@@ -683,8 +677,8 @@ LayoutUnit RootInlineBox::selectionTopAdjustedForPrecedingBlock() const
         return top;
 
     if (auto* lastLine = downcast<RenderBlockFlow>(*blockBefore).lastRootBox()) {
-        RenderObject::HighlightState lastLineSelectionState = lastLine->selectionState();
-        if (lastLineSelectionState != RenderObject::HighlightState::Inside && lastLineSelectionState != RenderObject::HighlightState::Start)
+        RenderObject::SelectionState lastLineSelectionState = lastLine->selectionState();
+        if (lastLineSelectionState != RenderObject::SelectionInside && lastLineSelectionState != RenderObject::SelectionStart)
             return top;
 
         LayoutUnit lastLineSelectionBottom = lastLine->selectionBottom() + offsetToBlockBefore.height();
@@ -892,7 +886,7 @@ void RootInlineBox::ascentAndDescentForBox(InlineBox& box, GlyphOverflowAndFallb
     if (box.renderer().isReplaced()) {
         if (lineStyle().lineBoxContain().contains(LineBoxContain::Replaced)) {
             ascent = box.baselinePosition(baselineType());
-            descent = roundToInt(box.lineHeight()) - ascent;
+            descent = box.lineHeight() - ascent;
 
             // Replaced elements always affect both the ascent and descent.
             affectsAscent = true;

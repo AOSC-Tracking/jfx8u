@@ -47,7 +47,6 @@ const GlobalObjectMethodTable JSRemoteDOMWindowBase::s_globalObjectMethodTable =
     nullptr, // moduleLoaderCreateImportMetaProperties
     nullptr, // moduleLoaderEvaluate
     nullptr, // promiseRejectionTracker
-    nullptr, // reportUncaughtExceptionAtEventLoop
     nullptr, // defaultLanguage
     nullptr, // compileStreaming
     nullptr, // instantiateStreaming

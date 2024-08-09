@@ -30,6 +30,7 @@
 
 #include "WasmBBQPlan.h"
 #include "WasmCallee.h"
+#include "WasmFormat.h"
 #include "WasmLLIntPlan.h"
 #include "WasmWorklist.h"
 

@@ -28,8 +28,6 @@
 
 #if ENABLE(DFG_JIT)
 
-#include "JSCJSValueInlines.h"
-
 namespace JSC { namespace DFG {
 
 void HeapLocation::dump(PrintStream& out) const
@@ -68,10 +66,6 @@ void printInternal(PrintStream& out, LocationKind kind)
 
     case IsFunctionLoc:
         out.print("IsFunctionLoc");
-        return;
-
-    case IsConstructorLoc:
-        out.print("IsConstructorLoc");
         return;
 
     case GetterLoc:

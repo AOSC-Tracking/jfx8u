@@ -28,8 +28,13 @@
 
 #include "ConsoleMessage.h"
 #include "InjectedScriptManager.h"
+#include "InspectorFrontendRouter.h"
 #include "InspectorHeapAgent.h"
+#include "ScriptArguments.h"
+#include "ScriptCallFrame.h"
+#include "ScriptCallStack.h"
 #include "ScriptCallStackFactory.h"
+#include "ScriptObject.h"
 #include <wtf/text/StringConcatenateNumbers.h>
 
 namespace Inspector {

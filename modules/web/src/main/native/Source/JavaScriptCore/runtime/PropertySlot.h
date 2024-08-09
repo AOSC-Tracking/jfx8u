@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2005-2020 Apple Inc. All rights reserved.
+ *  Copyright (C) 2005-2019 Apple Inc. All rights reserved.
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Library General Public
@@ -21,7 +21,6 @@
 #pragma once
 
 #include "DOMAnnotation.h"
-#include "DisallowVMEntry.h"
 #include "GetVM.h"
 #include "JSCJSValue.h"
 #include "PropertyName.h"
@@ -113,12 +112,17 @@ public:
         ModuleNamespace, // ModuleNamespaceObject's environment access.
     };
 
-    explicit PropertySlot(const JSValue thisValue, InternalMethodType internalMethodType, VM* vmForInquiry = nullptr)
-        : m_thisValue(thisValue)
+    explicit PropertySlot(const JSValue thisValue, InternalMethodType internalMethodType)
+        : m_offset(invalidOffset)
+        , m_thisValue(thisValue)
+        , m_slotBase(nullptr)
+        , m_watchpointSet(nullptr)
+        , m_cacheability(CachingDisallowed)
+        , m_propertyType(TypeUnset)
         , m_internalMethodType(internalMethodType)
+        , m_additionalDataType(AdditionalDataType::None)
+        , m_isTaintedByOpaqueObject(false)
     {
-        if (isVMInquiry())
-            disallowVMEntry.emplace(*vmForInquiry);
     }
 
     // FIXME: Remove this slotBase / receiver behavior difference in custom values and custom accessors.
@@ -126,7 +130,7 @@ public:
     typedef EncodedJSValue (*GetValueFunc)(JSGlobalObject*, EncodedJSValue thisValue, PropertyName);
 
     JSValue getValue(JSGlobalObject*, PropertyName) const;
-    JSValue getValue(JSGlobalObject*, uint64_t propertyName) const;
+    JSValue getValue(JSGlobalObject*, unsigned propertyName) const;
     JSValue getPureResult() const;
 
     bool isCacheable() const { return isUnset() || m_cacheability == CachingAllowed; }
@@ -142,7 +146,6 @@ public:
     bool isTaintedByOpaqueObject() const { return m_isTaintedByOpaqueObject; }
 
     InternalMethodType internalMethodType() const { return m_internalMethodType; }
-    bool isVMInquiry() const { return m_internalMethodType == InternalMethodType::VMInquiry; }
 
     void disableCaching()
     {
@@ -242,7 +245,7 @@ public:
         m_data.value = JSValue::encode(value);
         m_attributes = attributes;
 
-        m_slotBase = nullptr;
+        m_slotBase = 0;
         m_propertyType = TypeValue;
 
         ASSERT(m_cacheability == CachingDisallowed);
@@ -365,7 +368,7 @@ public:
         m_data.value = JSValue::encode(jsUndefined());
         m_attributes = PropertyAttribute::ReadOnly | PropertyAttribute::DontDelete | PropertyAttribute::DontEnum;
 
-        m_slotBase = nullptr;
+        m_slotBase = 0;
         m_propertyType = TypeValue;
     }
 
@@ -392,23 +395,20 @@ private:
         } customAccessor;
     } m_data;
 
-    unsigned m_attributes { 0 };
-    PropertyOffset m_offset { invalidOffset };
+    unsigned m_attributes;
+    PropertyOffset m_offset;
     JSValue m_thisValue;
-    JSObject* m_slotBase { nullptr };
-    WatchpointSet* m_watchpointSet { nullptr };
-    CacheabilityType m_cacheability { CachingDisallowed };
-    PropertyType m_propertyType { TypeUnset };
+    JSObject* m_slotBase;
+    WatchpointSet* m_watchpointSet;
+    CacheabilityType m_cacheability;
+    PropertyType m_propertyType;
     InternalMethodType m_internalMethodType;
-    AdditionalDataType m_additionalDataType { AdditionalDataType::None };
-    bool m_isTaintedByOpaqueObject { false };
-public:
-    Optional<DisallowVMEntry> disallowVMEntry;
-private:
+    AdditionalDataType m_additionalDataType;
+    bool m_isTaintedByOpaqueObject;
     union {
         DOMAttributeAnnotation domAttribute;
         ModuleNamespaceSlot moduleNamespaceSlot;
-    } m_additionalData { { nullptr, nullptr } };
+    } m_additionalData;
 };
 
 ALWAYS_INLINE JSValue PropertySlot::getValue(JSGlobalObject* globalObject, PropertyName propertyName) const
@@ -422,7 +422,7 @@ ALWAYS_INLINE JSValue PropertySlot::getValue(JSGlobalObject* globalObject, Prope
     return customGetter(globalObject, propertyName);
 }
 
-ALWAYS_INLINE JSValue PropertySlot::getValue(JSGlobalObject* globalObject, uint64_t propertyName) const
+ALWAYS_INLINE JSValue PropertySlot::getValue(JSGlobalObject* globalObject, unsigned propertyName) const
 {
     VM& vm = getVM(globalObject);
     if (m_propertyType == TypeValue)

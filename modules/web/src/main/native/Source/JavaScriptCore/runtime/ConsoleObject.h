@@ -30,15 +30,11 @@
 namespace JSC {
 
 class ConsoleObject final : public JSNonFinalObject {
-public:
-    using Base = JSNonFinalObject;
+private:
+    ConsoleObject(VM&, Structure*);
 
-    template<typename CellType, SubspaceAccess>
-    static IsoSubspace* subspaceFor(VM& vm)
-    {
-        STATIC_ASSERT_ISO_SUBSPACE_SHARABLE(ConsoleObject, Base);
-        return &vm.plainObjectSpace;
-    }
+public:
+    typedef JSNonFinalObject Base;
 
     static ConsoleObject* create(VM& vm, JSGlobalObject* globalObject, Structure* structure)
     {
@@ -54,8 +50,7 @@ public:
         return Structure::create(vm, globalObject, prototype, TypeInfo(ObjectType, StructureFlags), info());
     }
 
-private:
-    ConsoleObject(VM&, Structure*);
+protected:
     void finishCreation(VM&, JSGlobalObject*);
 };
 

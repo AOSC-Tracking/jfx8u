@@ -68,9 +68,10 @@ ResourceType toResourceType(CachedResource::Type type)
     case CachedResource::Type::RawResource:
         return ResourceType::Raw;
 
+#if ENABLE(VIDEO_TRACK)
     case CachedResource::Type::TextTrackResource:
         return ResourceType::Media;
-
+#endif
 #if ENABLE(APPLICATION_MANIFEST)
     case CachedResource::Type::ApplicationManifest:
         return ResourceType::Raw;

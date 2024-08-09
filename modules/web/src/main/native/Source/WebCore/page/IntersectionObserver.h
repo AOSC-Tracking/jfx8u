@@ -41,7 +41,6 @@ namespace WebCore {
 
 class Document;
 class Element;
-class ContainerNode;
 
 struct IntersectionObserverRegistration {
     WeakPtr<IntersectionObserver> observer;
@@ -51,19 +50,19 @@ struct IntersectionObserverRegistration {
 struct IntersectionObserverData {
     WTF_MAKE_STRUCT_FAST_ALLOCATED;
 
-    // IntersectionObservers for which the node that owns this IntersectionObserverData is the root.
-    // An IntersectionObserver is only owned by a JavaScript wrapper. ActiveDOMObject::virtualHasPendingActivity
+    // IntersectionObservers for which the element that owns this IntersectionObserverData is the root.
+    // An IntersectionObserver is only owned by a JavaScript wrapper. ActiveDOMObject::hasPendingActivity
     // is overridden to keep this wrapper alive while the observer has ongoing observations.
     Vector<WeakPtr<IntersectionObserver>> observers;
 
-    // IntersectionObserverRegistrations for which the node that owns this IntersectionObserverData is the target.
+    // IntersectionObserverRegistrations for which the element that owns this IntersectionObserverData is the target.
     Vector<IntersectionObserverRegistration> registrations;
 };
 
 class IntersectionObserver : public RefCounted<IntersectionObserver>, public ActiveDOMObject, public CanMakeWeakPtr<IntersectionObserver> {
 public:
     struct Init {
-        Optional<Variant<RefPtr<Element>, RefPtr<Document>>> root;
+        Element* root { nullptr };
         String rootMargin;
         Variant<double, Vector<double>> threshold;
     };
@@ -74,7 +73,7 @@ public:
 
     Document* trackingDocument() const { return m_root ? &m_root->document() : m_implicitRootDocument.get(); }
 
-    ContainerNode* root() const { return m_root; }
+    Element* root() const { return m_root; }
     String rootMargin() const;
     const LengthBox& rootMarginBox() const { return m_rootMargin; }
     const Vector<double>& thresholds() const { return m_thresholds; }
@@ -94,24 +93,24 @@ public:
     bool hasObservationTargets() const { return m_observationTargets.size(); }
     void rootDestroyed();
 
-    Optional<ReducedResolutionSeconds> nowTimestamp() const;
+    bool createTimestamp(DOMHighResTimeStamp&) const;
 
     void appendQueuedEntry(Ref<IntersectionObserverEntry>&&);
     void notify();
 
-private:
-    IntersectionObserver(Document&, Ref<IntersectionObserverCallback>&&, ContainerNode* root, LengthBox&& parsedRootMargin, Vector<double>&& thresholds);
-
     // ActiveDOMObject.
-    bool virtualHasPendingActivity() const override;
+    bool hasPendingActivity() const override;
     const char* activeDOMObjectName() const override;
     void stop() override;
+
+private:
+    IntersectionObserver(Document&, Ref<IntersectionObserverCallback>&&, Element* root, LengthBox&& parsedRootMargin, Vector<double>&& thresholds);
 
     bool removeTargetRegistration(Element&);
     void removeAllTargets();
 
     WeakPtr<Document> m_implicitRootDocument;
-    ContainerNode* m_root;
+    Element* m_root;
     LengthBox m_rootMargin;
     Vector<double> m_thresholds;
     RefPtr<IntersectionObserverCallback> m_callback;

@@ -21,7 +21,11 @@
 
 #pragma once
 
+#include "FloatQuad.h"
+#include "FloatRect.h"
+#include "LayoutRect.h"
 #include "RoundedRect.h"
+#include <wtf/Forward.h>
 
 namespace WebCore {
 
@@ -31,10 +35,8 @@ public:
     HitTestLocation(const LayoutPoint&);
     WEBCORE_EXPORT HitTestLocation(const FloatPoint&);
     HitTestLocation(const FloatPoint&, const FloatQuad&);
-
-    HitTestLocation(const LayoutRect&);
+    // Pass non-zero padding values to perform a rect-based hit test.
     HitTestLocation(const LayoutPoint& centerPoint, unsigned topPadding, unsigned rightPadding, unsigned bottomPadding, unsigned leftPadding);
-
     // Make a copy the HitTestLocation in a new region by applying given offset to internal point and area.
     HitTestLocation(const HitTestLocation&, const LayoutSize& offset);
     WEBCORE_EXPORT HitTestLocation(const HitTestLocation&);
@@ -63,19 +65,19 @@ public:
     const FloatQuad& transformedRect() const { return m_transformedRect; }
 
 private:
-    template<typename RectType> bool intersectsRect(const RectType&) const;
+    template<typename RectType>
+    bool intersectsRect(const RectType&) const;
+    void move(const LayoutSize& offset);
 
-    void move(const LayoutSize&);
-
-    // These are the cached forms of the more accurate point and rect below.
+    // This is cached forms of the more accurate point and area below.
     LayoutPoint m_point;
     IntRect m_boundingBox;
 
     FloatPoint m_transformedPoint;
     FloatQuad m_transformedRect;
 
-    bool m_isRectBased { false };
-    bool m_isRectilinear { true };
+    bool m_isRectBased;
+    bool m_isRectilinear;
 };
 
 } // namespace WebCore

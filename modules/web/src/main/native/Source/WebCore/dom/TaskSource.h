@@ -38,8 +38,6 @@ enum class TaskSource : uint8_t {
     Networking,
     PostedMessageQueue,
     UserInteraction,
-    WebGL,
-    WebXR,
 
     // Internal to WebCore
     InternalAsyncTask, // Safe to re-order or delay.

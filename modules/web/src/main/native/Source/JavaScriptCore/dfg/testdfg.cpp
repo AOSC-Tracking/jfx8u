@@ -25,6 +25,7 @@
 
 #include "config.h"
 
+#include "HeapCellInlines.h"
 #include "JSCJSValueInlines.h"
 // The above are needed before DFGAbstractValue.h
 #include "DFGAbstractValue.h"
@@ -111,7 +112,7 @@ int main(int argc, char** argv)
         break;
     }
 
-    JSC::initialize();
+    JSC::initializeThreading();
 
     run(filter);
 

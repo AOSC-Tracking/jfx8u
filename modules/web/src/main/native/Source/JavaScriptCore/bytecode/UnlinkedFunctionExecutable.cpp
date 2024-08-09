@@ -35,6 +35,7 @@
 #include "ExecutableInfo.h"
 #include "FunctionOverrides.h"
 #include "IsoCellSetInlines.h"
+#include "JSCInlines.h"
 #include "Parser.h"
 #include "SourceProvider.h"
 #include "Structure.h"
@@ -58,7 +59,7 @@ static UnlinkedFunctionCodeBlock* generateUnlinkedFunctionCodeBlock(
     ASSERT(isFunctionParseMode(executable->parseMode()));
     Vector<JSTextPosition>* instanceFieldLocations = executable->instanceFieldLocations();
     std::unique_ptr<FunctionNode> function = parse<FunctionNode>(
-        vm, source, executable->name(), builtinMode, strictMode, scriptMode, executable->parseMode(), executable->superBinding(), error, nullptr, ConstructorKind::None, DerivedContextType::None, EvalContextType::None, nullptr, nullptr, instanceFieldLocations);
+        vm, source, executable->name(), builtinMode, strictMode, scriptMode, executable->parseMode(), executable->superBinding(), error, nullptr, ConstructorKind::None, DerivedContextType::None, EvalContextType::None, nullptr, instanceFieldLocations);
 
     if (!function) {
         ASSERT(error.isValid());
@@ -70,11 +71,10 @@ static UnlinkedFunctionCodeBlock* generateUnlinkedFunctionCodeBlock(
 
     bool isClassContext = executable->superBinding() == SuperBinding::Needed;
 
-    UnlinkedFunctionCodeBlock* result = UnlinkedFunctionCodeBlock::create(vm, FunctionCode, ExecutableInfo(function->usesEval(), kind == CodeForConstruct, functionKind == UnlinkedBuiltinFunction, executable->constructorKind(), scriptMode, executable->superBinding(), parseMode, executable->derivedContextType(), executable->needsClassFieldInitializer(), false, isClassContext, EvalContextType::FunctionEvalContext), codeGenerationMode);
+    UnlinkedFunctionCodeBlock* result = UnlinkedFunctionCodeBlock::create(vm, FunctionCode, ExecutableInfo(function->usesEval(), function->isStrictMode(), kind == CodeForConstruct, functionKind == UnlinkedBuiltinFunction, executable->constructorKind(), scriptMode, executable->superBinding(), parseMode, executable->derivedContextType(), executable->needsClassFieldInitializer(), false, isClassContext, EvalContextType::FunctionEvalContext), codeGenerationMode);
 
     VariableEnvironment parentScopeTDZVariables = executable->parentScopeTDZVariables();
-    ECMAMode ecmaMode = executable->isInStrictContext() ? ECMAMode::strict() : ECMAMode::sloppy();
-    error = BytecodeGenerator::generate(vm, function.get(), source, result, codeGenerationMode, &parentScopeTDZVariables, ecmaMode);
+    error = BytecodeGenerator::generate(vm, function.get(), source, result, codeGenerationMode, &parentScopeTDZVariables);
 
     if (error.isValid())
         return nullptr;
@@ -151,7 +151,7 @@ void UnlinkedFunctionExecutable::visitChildren(JSCell* cell, SlotVisitor& visito
         auto markIfProfitable = [&] (WriteBarrier<UnlinkedFunctionCodeBlock>& unlinkedCodeBlock) {
             if (!unlinkedCodeBlock)
                 return;
-            if (unlinkedCodeBlock->didOptimize() == TriState::True)
+            if (unlinkedCodeBlock->didOptimize() == TrueTriState)
                 visitor.append(unlinkedCodeBlock);
             else if (unlinkedCodeBlock->age() < UnlinkedCodeBlock::maxAge)
                 visitor.append(unlinkedCodeBlock);
@@ -173,7 +173,7 @@ SourceCode UnlinkedFunctionExecutable::linkedSourceCode(const SourceCode& passed
     return SourceCode(parentSource.provider(), startOffset, startOffset + m_sourceLength, firstLine, startColumn);
 }
 
-FunctionExecutable* UnlinkedFunctionExecutable::link(VM& vm, ScriptExecutable* topLevelExecutable, const SourceCode& passedParentSource, Optional<int> overrideLineNumber, Intrinsic intrinsic, bool isInsideOrdinaryFunction)
+FunctionExecutable* UnlinkedFunctionExecutable::link(VM& vm, ScriptExecutable* topLevelExecutable, const SourceCode& passedParentSource, Optional<int> overrideLineNumber, Intrinsic intrinsic)
 {
     SourceCode source = linkedSourceCode(passedParentSource);
     FunctionOverrides::OverrideInfo overrideInfo;
@@ -181,7 +181,7 @@ FunctionExecutable* UnlinkedFunctionExecutable::link(VM& vm, ScriptExecutable* t
     if (UNLIKELY(Options::functionOverrides()))
         hasFunctionOverride = FunctionOverrides::initializeOverrideFor(source, overrideInfo);
 
-    FunctionExecutable* result = FunctionExecutable::create(vm, topLevelExecutable, source, this, intrinsic, isInsideOrdinaryFunction);
+    FunctionExecutable* result = FunctionExecutable::create(vm, topLevelExecutable, source, this, intrinsic);
     if (overrideLineNumber)
         result->setOverrideLineNumber(*overrideLineNumber);
 

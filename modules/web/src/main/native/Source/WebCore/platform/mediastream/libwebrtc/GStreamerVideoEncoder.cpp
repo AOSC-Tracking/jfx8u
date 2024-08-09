@@ -67,7 +67,17 @@ typedef enum
   ENCODER_LAST,
 } EncoderId;
 
-EncoderDefinition encoders[ENCODER_LAST] = { { } };
+EncoderDefinition encoders[ENCODER_LAST] = {
+  FALSE,
+  NULL,
+  NULL,
+  NULL,
+  NULL,
+  NULL,
+  NULL,
+  NULL,
+  NULL,
+};
 
 typedef struct
 {

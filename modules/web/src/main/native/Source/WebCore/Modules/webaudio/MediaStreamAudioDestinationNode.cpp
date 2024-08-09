@@ -39,24 +39,13 @@ namespace WebCore {
 
 WTF_MAKE_ISO_ALLOCATED_IMPL(MediaStreamAudioDestinationNode);
 
-ExceptionOr<Ref<MediaStreamAudioDestinationNode>> MediaStreamAudioDestinationNode::create(BaseAudioContext& context, const AudioNodeOptions& options)
+Ref<MediaStreamAudioDestinationNode> MediaStreamAudioDestinationNode::create(AudioContext& context, size_t numberOfChannels)
 {
-    if (context.isStopped())
-        return Exception { InvalidStateError };
-
-    context.lazyInitialize();
-
-    auto node = adoptRef(*new MediaStreamAudioDestinationNode(context));
-
-    auto result = node->handleAudioNodeOptions(options, { 2, ChannelCountMode::Explicit, ChannelInterpretation::Speakers });
-    if (result.hasException())
-        return result.releaseException();
-
-    return node;
+    return adoptRef(*new MediaStreamAudioDestinationNode(context, numberOfChannels));
 }
 
-MediaStreamAudioDestinationNode::MediaStreamAudioDestinationNode(BaseAudioContext& context)
-    : AudioBasicInspectorNode(context)
+MediaStreamAudioDestinationNode::MediaStreamAudioDestinationNode(AudioContext& context, size_t numberOfChannels)
+    : AudioBasicInspectorNode(context, context.sampleRate(), numberOfChannels)
     , m_source(MediaStreamAudioSource::create(context.sampleRate()))
     , m_stream(MediaStream::create(*context.document(), MediaStreamPrivate::create(context.document()->logger(), m_source.copyRef())))
 {

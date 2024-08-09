@@ -40,7 +40,6 @@ in-range
 increment
 indeterminate
 invalid
-is
 lang
 last-child
 last-of-type
@@ -71,7 +70,6 @@ target
 valid
 vertical
 visited
-where
 window-inactive
 
 #if ENABLE(FULLSCREEN_API)
@@ -86,7 +84,7 @@ window-inactive
 picture-in-picture
 #endif
 
-#if ENABLE(VIDEO)
+#if ENABLE(VIDEO_TRACK)
 future
 past
 #endif

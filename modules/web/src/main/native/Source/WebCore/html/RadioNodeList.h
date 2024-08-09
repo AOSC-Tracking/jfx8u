@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012 Motorola Mobility, Inc. All rights reserved.
- * Copyright (C) 2014-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2014 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -26,26 +26,41 @@
 
 #pragma once
 
+#include "HTMLElement.h"
 #include "LiveNodeList.h"
+#include <wtf/text/AtomString.h>
 
 namespace WebCore {
 
 class RadioNodeList final : public CachedLiveNodeList<RadioNodeList> {
     WTF_MAKE_ISO_ALLOCATED(RadioNodeList);
 public:
-    static Ref<RadioNodeList> create(ContainerNode& rootNode, const AtomString& name);
+    static Ref<RadioNodeList> create(ContainerNode& rootNode, const AtomString& name)
+    {
+        return adoptRef(*new RadioNodeList(rootNode, name));
+    }
+
     virtual ~RadioNodeList();
+
+    HTMLElement* item(unsigned offset) const override;
 
     String value() const;
     void setValue(const String&);
-    bool elementMatches(Element&) const final;
+
+    bool elementMatches(Element&) const override;
+    bool isRootedAtDocument() const override { return m_isRootedAtDocument; }
 
 private:
     RadioNodeList(ContainerNode&, const AtomString& name);
-    bool isRootedAtDocument() const final { return m_isRootedAtDocument; }
+    bool checkElementMatchesRadioNodeListFilter(const Element&) const;
 
     AtomString m_name;
     bool m_isRootedAtDocument;
 };
 
-} // namespace WebCore
+inline HTMLElement* RadioNodeList::item(unsigned offset) const
+{
+    return downcast<HTMLElement>(CachedLiveNodeList<RadioNodeList>::item(offset));
+}
+
+} // namepsace WebCore

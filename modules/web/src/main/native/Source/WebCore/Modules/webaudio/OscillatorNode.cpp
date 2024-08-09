@@ -45,46 +45,31 @@ PeriodicWave* OscillatorNode::s_periodicWaveSquare = nullptr;
 PeriodicWave* OscillatorNode::s_periodicWaveSawtooth = nullptr;
 PeriodicWave* OscillatorNode::s_periodicWaveTriangle = nullptr;
 
-ExceptionOr<Ref<OscillatorNode>> OscillatorNode::create(BaseAudioContext& context, const OscillatorOptions& options)
+Ref<OscillatorNode> OscillatorNode::create(AudioContext& context, float sampleRate)
 {
-    if (context.isStopped())
-        return Exception { InvalidStateError };
-
-    context.lazyInitialize();
-
-    if (options.type == OscillatorType::Custom && !options.periodicWave)
-        return Exception { InvalidStateError, "Must provide periodicWave when using custom type."_s };
-
-    auto oscillator = adoptRef(*new OscillatorNode(context, options));
-
-    auto result = oscillator->handleAudioNodeOptions(options, { 2, ChannelCountMode::Max, ChannelInterpretation::Speakers });
-    if (result.hasException())
-        return result.releaseException();
-
-    if (options.periodicWave)
-        oscillator->setPeriodicWave(*options.periodicWave);
-    else {
-        result = oscillator->setType(options.type);
-        if (result.hasException())
-            return result.releaseException();
-    }
-
-    // Because this is an AudioScheduledSourceNode, the context keeps a reference until it has finished playing.
-    // When this happens, AudioScheduledSourceNode::finish() calls BaseAudioContext::notifyNodeFinishedProcessing().
-    context.refNode(oscillator);
-
-    return oscillator;
+    return adoptRef(*new OscillatorNode(context, sampleRate));
 }
 
-OscillatorNode::OscillatorNode(BaseAudioContext& context, const OscillatorOptions& options)
-    : AudioScheduledSourceNode(context)
-    , m_frequency(AudioParam::create(context, "frequency"_s, options.frequency, -context.sampleRate() / 2, context.sampleRate() / 2))
-    , m_detune(AudioParam::create(context, "detune"_s, options.detune, -153600, 153600))
+OscillatorNode::OscillatorNode(AudioContext& context, float sampleRate)
+    : AudioScheduledSourceNode(context, sampleRate)
+    , m_firstRender(true)
+    , m_virtualReadIndex(0)
+    , m_phaseIncrements(AudioNode::ProcessingSizeInFrames)
+    , m_detuneValues(AudioNode::ProcessingSizeInFrames)
 {
     setNodeType(NodeTypeOscillator);
 
+    // Use musical pitch standard A440 as a default.
+    m_frequency = AudioParam::create(context, "frequency", 440, 0, 100000);
+    // Default to no detuning.
+    m_detune = AudioParam::create(context, "detune", 0, -4800, 4800);
+
+    // Sets up default wave.
+    setType(m_type);
+
     // An oscillator is always mono.
     addOutput(makeUnique<AudioNodeOutput>(this, 1));
+
     initialize();
 }
 
@@ -93,40 +78,40 @@ OscillatorNode::~OscillatorNode()
     uninitialize();
 }
 
-ExceptionOr<void> OscillatorNode::setType(OscillatorType type)
+ExceptionOr<void> OscillatorNode::setType(Type type)
 {
     PeriodicWave* periodicWave = nullptr;
 
     ALWAYS_LOG(LOGIDENTIFIER, type);
 
     switch (type) {
-    case OscillatorType::Sine:
+    case Type::Sine:
         if (!s_periodicWaveSine)
             s_periodicWaveSine = &PeriodicWave::createSine(sampleRate()).leakRef();
         periodicWave = s_periodicWaveSine;
         break;
-    case OscillatorType::Square:
+    case Type::Square:
         if (!s_periodicWaveSquare)
             s_periodicWaveSquare = &PeriodicWave::createSquare(sampleRate()).leakRef();
         periodicWave = s_periodicWaveSquare;
         break;
-    case OscillatorType::Sawtooth:
+    case Type::Sawtooth:
         if (!s_periodicWaveSawtooth)
             s_periodicWaveSawtooth = &PeriodicWave::createSawtooth(sampleRate()).leakRef();
         periodicWave = s_periodicWaveSawtooth;
         break;
-    case OscillatorType::Triangle:
+    case Type::Triangle:
         if (!s_periodicWaveTriangle)
             s_periodicWaveTriangle = &PeriodicWave::createTriangle(sampleRate()).leakRef();
         periodicWave = s_periodicWaveTriangle;
         break;
-    case OscillatorType::Custom:
-        if (m_type != OscillatorType::Custom)
+    case Type::Custom:
+        if (m_type != Type::Custom)
             return Exception { InvalidStateError };
         return { };
     }
 
-    setPeriodicWave(*periodicWave);
+    setPeriodicWave(periodicWave);
     m_type = type;
 
     return { };
@@ -315,15 +300,15 @@ void OscillatorNode::reset()
     m_virtualReadIndex = 0;
 }
 
-void OscillatorNode::setPeriodicWave(PeriodicWave& periodicWave)
+void OscillatorNode::setPeriodicWave(PeriodicWave* periodicWave)
 {
-    ALWAYS_LOG(LOGIDENTIFIER, "sample rate = ", periodicWave.sampleRate(), ", wave size = ", periodicWave.periodicWaveSize(), ", rate scale = ", periodicWave.rateScale());
+    ALWAYS_LOG(LOGIDENTIFIER, "sample rate = ", periodicWave ? periodicWave->sampleRate() : 0, ", wave size = ", periodicWave ? periodicWave->periodicWaveSize() : 0, ", rate scale = ", periodicWave ? periodicWave->rateScale() : 0);
     ASSERT(isMainThread());
 
     // This synchronizes with process().
-    auto locker = holdLock(m_processMutex);
-    m_periodicWave = &periodicWave;
-    m_type = OscillatorType::Custom;
+    std::lock_guard<Lock> lock(m_processMutex);
+    m_periodicWave = periodicWave;
+    m_type = Type::Custom;
 }
 
 bool OscillatorNode::propagatesSilence() const

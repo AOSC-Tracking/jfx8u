@@ -25,6 +25,8 @@
 #include "config.h"
 #include "PointerCaptureController.h"
 
+#if ENABLE(POINTER_EVENTS)
+
 #include "Document.h"
 #include "Element.h"
 #include "EventHandler.h"
@@ -144,7 +146,7 @@ void PointerCaptureController::elementWasRemoved(Element& element)
             // When the pointer capture target override is no longer connected, the pending pointer capture target override and pointer capture target
             // override nodes SHOULD be cleared and also a PointerEvent named lostpointercapture corresponding to the captured pointer SHOULD be fired
             // at the document.
-            ASSERT(isInBounds<PointerID>(keyAndValue.key));
+            ASSERT(WTF::isInBounds<PointerID>(keyAndValue.key));
             auto pointerId = static_cast<PointerID>(keyAndValue.key);
             auto pointerType = capturingData.pointerType;
             releasePointerCapture(&element, pointerId);
@@ -301,13 +303,6 @@ void PointerCaptureController::dispatchEventForTouchAtIndex(EventTarget& target,
 
 RefPtr<PointerEvent> PointerCaptureController::pointerEventForMouseEvent(const MouseEvent& mouseEvent)
 {
-    // If we already have known touches then we cannot dispatch a mouse event,
-    // for instance in the case of a long press to initiate a system drag.
-    for (auto& capturingData : m_activePointerIdsToCapturingData.values()) {
-        if (capturingData.pointerType != PointerEvent::mousePointerType())
-            return nullptr;
-    }
-
     const auto& type = mouseEvent.type();
     const auto& names = eventNames();
 
@@ -467,12 +462,9 @@ void PointerCaptureController::cancelPointer(PointerID pointerId, const IntPoint
     capturingData.previousTarget = nullptr;
 #endif
 
-    auto target = [&]() -> RefPtr<Element> {
-        if (capturingData.targetOverride)
-            return capturingData.targetOverride;
-        constexpr OptionSet<HitTestRequest::RequestType> hitType { HitTestRequest::ReadOnly, HitTestRequest::Active, HitTestRequest::DisallowUserAgentShadowContent, HitTestRequest::AllowChildFrameContent };
-        return m_page.mainFrame().eventHandler().hitTestResultAtPoint(documentPoint, hitType).innerNonSharedElement();
-    }();
+    auto& target = capturingData.targetOverride;
+    if (!target)
+        target = m_page.mainFrame().eventHandler().hitTestResultAtPoint(documentPoint, HitTestRequest::ReadOnly | HitTestRequest::Active | HitTestRequest::DisallowUserAgentShadowContent | HitTestRequest::AllowChildFrameContent).innerNonSharedElement();
 
     if (!target)
         return;
@@ -533,3 +525,5 @@ void PointerCaptureController::processPendingPointerCapture(PointerID pointerId)
 }
 
 } // namespace WebCore
+
+#endif // ENABLE(POINTER_EVENTS)

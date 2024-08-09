@@ -52,8 +52,12 @@ HashSet<CanvasRenderingContext*>& CanvasRenderingContext::instances(const LockHo
 
 Lock& CanvasRenderingContext::instancesMutex()
 {
-    static Lock mutex;
-    return mutex;
+    static LazyNeverDestroyed<Lock> mutex;
+    static std::once_flag initializeMutex;
+    std::call_once(initializeMutex, [] {
+        mutex.construct();
+    });
+    return mutex.get();
 }
 
 CanvasRenderingContext::CanvasRenderingContext(CanvasBase& canvas)

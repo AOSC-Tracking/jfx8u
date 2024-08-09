@@ -29,13 +29,20 @@
 #include "JSBasePrivate.h"
 
 #include "APICast.h"
+#include "CallFrame.h"
 #include "Completion.h"
+#include "Exception.h"
 #include "GCActivityCallback.h"
-#include "JSCInlines.h"
+#include "Identifier.h"
+#include "InitializeThreading.h"
+#include "JSGlobalObject.h"
 #include "JSLock.h"
+#include "JSObject.h"
 #include "ObjectConstructor.h"
 #include "OpaqueJSString.h"
+#include "JSCInlines.h"
 #include "SourceCode.h"
+#include <wtf/text/StringHash.h>
 
 #if ENABLE(REMOTE_INSPECTOR)
 #include "JSGlobalObjectInspectorController.h"
@@ -73,7 +80,7 @@ JSValueRef JSEvaluateScriptInternal(const JSLockHolder&, JSContextRef ctx, JSObj
     return toRef(globalObject, jsUndefined());
 }
 
-JSValueRef JSEvaluateScript(JSContextRef ctx, JSStringRef script, JSObjectRef thisObject, JSStringRef sourceURLString, int startingLineNumber, JSValueRef* exception)
+JSValueRef JSEvaluateScript(JSContextRef ctx, JSStringRef script, JSObjectRef thisObject, JSStringRef sourceURL, int startingLineNumber, JSValueRef* exception)
 {
     if (!ctx) {
         ASSERT_NOT_REACHED();
@@ -85,13 +92,13 @@ JSValueRef JSEvaluateScript(JSContextRef ctx, JSStringRef script, JSObjectRef th
 
     startingLineNumber = std::max(1, startingLineNumber);
 
-    auto sourceURL = sourceURLString ? URL({ }, sourceURLString->string()) : URL();
-    SourceCode source = makeSource(script->string(), SourceOrigin { sourceURL }, sourceURL.string(), TextPosition(OrdinalNumber::fromOneBasedInt(startingLineNumber), OrdinalNumber()));
+    auto sourceURLString = sourceURL ? sourceURL->string() : String();
+    SourceCode source = makeSource(script->string(), SourceOrigin { sourceURLString }, URL({ }, sourceURLString), TextPosition(OrdinalNumber::fromOneBasedInt(startingLineNumber), OrdinalNumber()));
 
     return JSEvaluateScriptInternal(locker, ctx, thisObject, source, exception);
 }
 
-bool JSCheckScriptSyntax(JSContextRef ctx, JSStringRef script, JSStringRef sourceURLString, int startingLineNumber, JSValueRef* exception)
+bool JSCheckScriptSyntax(JSContextRef ctx, JSStringRef script, JSStringRef sourceURL, int startingLineNumber, JSValueRef* exception)
 {
     if (!ctx) {
         ASSERT_NOT_REACHED();
@@ -103,8 +110,8 @@ bool JSCheckScriptSyntax(JSContextRef ctx, JSStringRef script, JSStringRef sourc
 
     startingLineNumber = std::max(1, startingLineNumber);
 
-    auto sourceURL = sourceURLString ? URL({ }, sourceURLString->string()) : URL();
-    SourceCode source = makeSource(script->string(), SourceOrigin { sourceURL }, sourceURL.string(), TextPosition(OrdinalNumber::fromOneBasedInt(startingLineNumber), OrdinalNumber()));
+    auto sourceURLString = sourceURL ? sourceURL->string() : String();
+    SourceCode source = makeSource(script->string(), SourceOrigin { sourceURLString }, URL({ }, sourceURLString), TextPosition(OrdinalNumber::fromOneBasedInt(startingLineNumber), OrdinalNumber()));
 
     JSValue syntaxException;
     bool isValidSyntax = checkSyntax(globalObject, source, &syntaxException);
@@ -186,7 +193,7 @@ JSObjectRef JSGetMemoryUsageStatistics(JSContextRef ctx)
 {
     if (!ctx) {
         ASSERT_NOT_REACHED();
-        return nullptr;
+        return 0;
     }
 
     JSGlobalObject* globalObject = toJS(ctx);

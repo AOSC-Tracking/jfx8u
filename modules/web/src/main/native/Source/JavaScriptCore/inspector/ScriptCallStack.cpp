@@ -32,6 +32,8 @@
 #include "config.h"
 #include "ScriptCallStack.h"
 
+#include <wtf/DataLog.h>
+
 namespace Inspector {
 
 Ref<ScriptCallStack> ScriptCallStack::create()

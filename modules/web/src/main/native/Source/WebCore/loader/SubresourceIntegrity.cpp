@@ -31,7 +31,6 @@
 #include "ParsingUtilities.h"
 #include "ResourceCryptographicDigest.h"
 #include "SharedBuffer.h"
-#include <wtf/text/StringParsingBuffer.h>
 
 namespace WebCore {
 
@@ -51,7 +50,7 @@ public:
     {
     }
 
-    bool operator()(StringParsingBuffer<CharacterType>& buffer)
+    bool operator()(const CharacterType*& position, const CharacterType* end)
     {
         // Initialize hashes to be something other WTF::nullopt, to indicate
         // that at least one token was seen, and thus setting the empty flag
@@ -59,19 +58,19 @@ public:
         if (!m_digests)
             m_digests = Vector<EncodedResourceCryptographicDigest> { };
 
-        auto digest = parseEncodedCryptographicDigest(buffer);
+        auto digest = parseEncodedCryptographicDigest(position, end);
         if (!digest)
             return false;
 
         // The spec allows for options following the digest, but so far, no
         // specific options have been specified. Thus, we just parse and ignore
         // them. Their syntax is a '?' follow by any number of VCHARs.
-        if (skipExactly(buffer, '?'))
-            skipWhile<isVCHAR>(buffer);
+        if (skipExactly<CharacterType>(position, end, '?'))
+            skipWhile<CharacterType, isVCHAR>(position, end);
 
         // After the base64 value and options, the current character pointed to by position
         // should either be the end or a space.
-        if (!buffer.atEnd() && !isHTMLSpace(*buffer))
+        if (position != end && !isHTMLSpace(*position))
             return false;
 
         m_digests->append(WTFMove(*digest));
@@ -85,14 +84,17 @@ private:
 }
 
 template <typename CharacterType, typename Functor>
-static inline void splitOnSpaces(StringParsingBuffer<CharacterType> buffer, Functor&& functor)
+static inline void splitOnSpaces(const CharacterType* begin, const CharacterType* end, Functor&& functor)
 {
-    skipWhile<isHTMLSpace>(buffer);
+    const CharacterType* position = begin;
 
-    while (buffer.hasCharactersRemaining()) {
-        if (!functor(buffer))
-            skipWhile<isNotHTMLSpace>(buffer);
-        skipWhile<isHTMLSpace>(buffer);
+    skipWhile<CharacterType, isHTMLSpace>(position, end);
+
+    while (position < end) {
+        if (!functor(position, end))
+            skipWhile<CharacterType, isNotHTMLSpace>(position, end);
+
+        skipWhile<CharacterType, isHTMLSpace>(position, end);
     }
 }
 
@@ -103,10 +105,11 @@ static Optional<Vector<EncodedResourceCryptographicDigest>> parseIntegrityMetada
 
     Optional<Vector<EncodedResourceCryptographicDigest>> result;
 
-    readCharactersForParsing(integrityMetadata, [&result] (auto buffer) {
-        using CharacterType = typename decltype(buffer)::CharacterType;
-        splitOnSpaces(buffer, IntegrityMetadataParser<CharacterType> { result });
-    });
+    const StringImpl& stringImpl = *integrityMetadata.impl();
+    if (stringImpl.is8Bit())
+        splitOnSpaces(stringImpl.characters8(), stringImpl.characters8() + stringImpl.length(), IntegrityMetadataParser<LChar> { result });
+    else
+        splitOnSpaces(stringImpl.characters16(), stringImpl.characters16() + stringImpl.length(), IntegrityMetadataParser<UChar> { result });
 
     return result;
 }

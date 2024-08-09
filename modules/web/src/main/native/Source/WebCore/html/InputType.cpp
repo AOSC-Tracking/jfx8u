@@ -36,8 +36,8 @@
 #include "DOMFormData.h"
 #include "DateComponents.h"
 #include "DateInputType.h"
+#include "DateTimeInputType.h"
 #include "DateTimeLocalInputType.h"
-#include "Decimal.h"
 #include "EmailInputType.h"
 #include "EventNames.h"
 #include "FileInputType.h"
@@ -62,11 +62,10 @@
 #include "RenderElement.h"
 #include "RenderTheme.h"
 #include "ResetInputType.h"
+#include "RuntimeEnabledFeatures.h"
 #include "ScopedEventQueue.h"
 #include "SearchInputType.h"
-#include "Settings.h"
 #include "ShadowRoot.h"
-#include "StepRange.h"
 #include "SubmitInputType.h"
 #include "TelephoneInputType.h"
 #include "TextControlInnerElements.h"
@@ -84,12 +83,13 @@ namespace WebCore {
 
 using namespace HTMLNames;
 
-typedef bool (Settings::*InputTypeConditionalFunction)() const;
+typedef bool (RuntimeEnabledFeatures::*InputTypeConditionalFunction)() const;
 typedef const AtomString& (*InputTypeNameFunction)();
 typedef Ref<InputType> (*InputTypeFactoryFunction)(HTMLInputElement&);
-typedef HashMap<AtomString, std::pair<InputTypeConditionalFunction, InputTypeFactoryFunction>, ASCIICaseInsensitiveHash> InputTypeFactoryMap;
+typedef HashMap<AtomString, InputTypeFactoryFunction, ASCIICaseInsensitiveHash> InputTypeFactoryMap;
 
-template<class T> static Ref<InputType> createInputType(HTMLInputElement& element)
+template<class T>
+static Ref<InputType> createInputType(HTMLInputElement& element)
 {
     return adoptRef(*new T(element));
 }
@@ -104,20 +104,23 @@ static InputTypeFactoryMap createInputTypeFactoryMap()
         { nullptr, &InputTypeNames::button, &createInputType<ButtonInputType> },
         { nullptr, &InputTypeNames::checkbox, &createInputType<CheckboxInputType> },
 #if ENABLE(INPUT_TYPE_COLOR)
-        { &Settings::inputTypeColorEnabled, &InputTypeNames::color, &createInputType<ColorInputType> },
+        { &RuntimeEnabledFeatures::inputTypeColorEnabled, &InputTypeNames::color, &createInputType<ColorInputType> },
 #endif
 #if ENABLE(INPUT_TYPE_DATE)
-        { &Settings::inputTypeDateEnabled, &InputTypeNames::date, &createInputType<DateInputType> },
+        { &RuntimeEnabledFeatures::inputTypeDateEnabled, &InputTypeNames::date, &createInputType<DateInputType> },
+#endif
+#if ENABLE(INPUT_TYPE_DATETIME_INCOMPLETE)
+        { &RuntimeEnabledFeatures::inputTypeDateTimeEnabled, &InputTypeNames::datetime, &createInputType<DateTimeInputType> },
 #endif
 #if ENABLE(INPUT_TYPE_DATETIMELOCAL)
-        { &Settings::inputTypeDateTimeLocalEnabled, &InputTypeNames::datetimelocal, &createInputType<DateTimeLocalInputType> },
+        { &RuntimeEnabledFeatures::inputTypeDateTimeLocalEnabled, &InputTypeNames::datetimelocal, &createInputType<DateTimeLocalInputType> },
 #endif
         { nullptr, &InputTypeNames::email, &createInputType<EmailInputType> },
         { nullptr, &InputTypeNames::file, &createInputType<FileInputType> },
         { nullptr, &InputTypeNames::hidden, &createInputType<HiddenInputType> },
         { nullptr, &InputTypeNames::image, &createInputType<ImageInputType> },
 #if ENABLE(INPUT_TYPE_MONTH)
-        { &Settings::inputTypeMonthEnabled, &InputTypeNames::month, &createInputType<MonthInputType> },
+        { &RuntimeEnabledFeatures::inputTypeMonthEnabled, &InputTypeNames::month, &createInputType<MonthInputType> },
 #endif
         { nullptr, &InputTypeNames::number, &createInputType<NumberInputType> },
         { nullptr, &InputTypeNames::password, &createInputType<PasswordInputType> },
@@ -128,18 +131,21 @@ static InputTypeFactoryMap createInputTypeFactoryMap()
         { nullptr, &InputTypeNames::submit, &createInputType<SubmitInputType> },
         { nullptr, &InputTypeNames::telephone, &createInputType<TelephoneInputType> },
 #if ENABLE(INPUT_TYPE_TIME)
-        { &Settings::inputTypeTimeEnabled, &InputTypeNames::time, &createInputType<TimeInputType> },
+        { &RuntimeEnabledFeatures::inputTypeTimeEnabled, &InputTypeNames::time, &createInputType<TimeInputType> },
 #endif
         { nullptr, &InputTypeNames::url, &createInputType<URLInputType> },
 #if ENABLE(INPUT_TYPE_WEEK)
-        { &Settings::inputTypeWeekEnabled, &InputTypeNames::week, &createInputType<WeekInputType> },
+        { &RuntimeEnabledFeatures::inputTypeWeekEnabled, &InputTypeNames::week, &createInputType<WeekInputType> },
 #endif
         // No need to register "text" because it is the default type.
     };
 
     InputTypeFactoryMap map;
-    for (auto& inputType : inputTypes)
-        map.add(inputType.nameFunction(), std::make_pair(inputType.conditionalFunction, inputType.factoryFunction));
+    for (auto& inputType : inputTypes) {
+        auto conditionalFunction = inputType.conditionalFunction;
+        if (!conditionalFunction || (RuntimeEnabledFeatures::sharedFeatures().*conditionalFunction)())
+            map.add(inputType.nameFunction(), inputType.factoryFunction);
+    }
     return map;
 }
 
@@ -147,8 +153,7 @@ Ref<InputType> InputType::create(HTMLInputElement& element, const AtomString& ty
 {
     if (!typeName.isEmpty()) {
         static const auto factoryMap = makeNeverDestroyed(createInputTypeFactoryMap());
-        auto&& [conditional, factory] = factoryMap.get().get(typeName);
-        if (factory && (!conditional || std::invoke(conditional, element.document().settings())))
+        if (auto factory = factoryMap.get().get(typeName))
             return factory(element);
     }
     return adoptRef(*new TextInputType(element));
@@ -286,7 +291,7 @@ bool InputType::rangeUnderflow(const String& value) const
     if (!numericValue.isFinite())
         return false;
 
-    return numericValue < createStepRange(AnyStepHandling::Reject).minimum();
+    return numericValue < createStepRange(RejectAny).minimum();
 }
 
 bool InputType::rangeOverflow(const String& value) const
@@ -298,7 +303,7 @@ bool InputType::rangeOverflow(const String& value) const
     if (!numericValue.isFinite())
         return false;
 
-    return numericValue > createStepRange(AnyStepHandling::Reject).maximum();
+    return numericValue > createStepRange(RejectAny).maximum();
 }
 
 Decimal InputType::defaultValueForStepUp() const
@@ -308,12 +313,12 @@ Decimal InputType::defaultValueForStepUp() const
 
 double InputType::minimum() const
 {
-    return createStepRange(AnyStepHandling::Reject).minimum().toDouble();
+    return createStepRange(RejectAny).minimum().toDouble();
 }
 
 double InputType::maximum() const
 {
-    return createStepRange(AnyStepHandling::Reject).maximum().toDouble();
+    return createStepRange(RejectAny).maximum().toDouble();
 }
 
 bool InputType::sizeShouldIncludeDecoration(int, int& preferredSize) const
@@ -333,7 +338,7 @@ bool InputType::isInRange(const String& value) const
     if (!isSteppable())
         return false;
 
-    StepRange stepRange(createStepRange(AnyStepHandling::Reject));
+    StepRange stepRange(createStepRange(RejectAny));
     if (!stepRange.hasRangeLimitations())
         return false;
 
@@ -349,7 +354,7 @@ bool InputType::isOutOfRange(const String& value) const
     if (!isSteppable() || value.isEmpty())
         return false;
 
-    StepRange stepRange(createStepRange(AnyStepHandling::Reject));
+    StepRange stepRange(createStepRange(RejectAny));
     if (!stepRange.hasRangeLimitations())
         return false;
 
@@ -369,7 +374,7 @@ bool InputType::stepMismatch(const String& value) const
     if (!numericValue.isFinite())
         return false;
 
-    return createStepRange(AnyStepHandling::Reject).stepMismatch(numericValue);
+    return createStepRange(RejectAny).stepMismatch(numericValue);
 }
 
 String InputType::badInputText() const
@@ -420,7 +425,7 @@ String InputType::validationMessage() const
     if (!numericValue.isFinite())
         return emptyString();
 
-    StepRange stepRange(createStepRange(AnyStepHandling::Reject));
+    StepRange stepRange(createStepRange(RejectAny));
 
     if (numericValue < stepRange.minimum())
         return validationMessageRangeUnderflowText(serialize(stepRange.minimum()));
@@ -517,16 +522,24 @@ Decimal InputType::parseToNumberOrNaN(const String& string) const
     return parseToNumber(string, Decimal::nan());
 }
 
+bool InputType::parseToDateComponents(const String&, DateComponents*) const
+{
+    ASSERT_NOT_REACHED();
+    return false;
+}
+
 String InputType::serialize(const Decimal&) const
 {
     ASSERT_NOT_REACHED();
     return String();
 }
 
+#if PLATFORM(IOS_FAMILY)
 DateComponents::Type InputType::dateType() const
 {
     return DateComponents::Invalid;
 }
+#endif
 
 void InputType::dispatchSimulatedClickIfActive(KeyboardEvent& event) const
 {
@@ -579,11 +592,10 @@ void InputType::handleBlurEvent()
 {
 }
 
-bool InputType::accessKeyAction(bool)
+void InputType::accessKeyAction(bool)
 {
     ASSERT(element());
     element()->focus(false);
-    return false;
 }
 
 void InputType::addSearchResult()
@@ -914,7 +926,7 @@ String InputType::defaultToolTip() const
 }
 
 #if ENABLE(DATALIST_ELEMENT)
-void InputType::dataListMayHaveChanged()
+void InputType::listAttributeTargetChanged()
 {
 }
 
@@ -995,7 +1007,7 @@ ExceptionOr<void> InputType::applyStep(int count, AnyStepHandling anyStepHandlin
 
 bool InputType::getAllowedValueStep(Decimal* step) const
 {
-    StepRange stepRange(createStepRange(AnyStepHandling::Reject));
+    StepRange stepRange(createStepRange(RejectAny));
     *step = stepRange.step();
     return stepRange.hasStep();
 }
@@ -1010,7 +1022,7 @@ ExceptionOr<void> InputType::stepUp(int n)
 {
     if (!isSteppable())
         return Exception { InvalidStateError };
-    return applyStep(n, AnyStepHandling::Reject, DispatchNoEvent);
+    return applyStep(n, RejectAny, DispatchNoEvent);
 }
 
 void InputType::stepUpFromRenderer(int n)
@@ -1057,7 +1069,7 @@ void InputType::stepUpFromRenderer(int n)
     if (!n)
         return;
 
-    StepRange stepRange(createStepRange(AnyStepHandling::Default));
+    StepRange stepRange(createStepRange(AnyIsDefaultStep));
 
     // FIXME: Not any changes after stepping, even if it is an invalid value, may be better.
     // (e.g. Stepping-up for <input type="number" value="foo" step="any" /> => "foo")
@@ -1108,17 +1120,17 @@ void InputType::stepUpFromRenderer(int n)
 
             setValueAsDecimal(newValue, n == 1 || n == -1 ? DispatchInputAndChangeEvent : DispatchNoEvent);
             if (n > 1)
-                applyStep(n - 1, AnyStepHandling::Default, DispatchInputAndChangeEvent);
+                applyStep(n - 1, AnyIsDefaultStep, DispatchInputAndChangeEvent);
             else if (n < -1)
-                applyStep(n + 1, AnyStepHandling::Default, DispatchInputAndChangeEvent);
+                applyStep(n + 1, AnyIsDefaultStep, DispatchInputAndChangeEvent);
         } else
-            applyStep(n, AnyStepHandling::Default, DispatchInputAndChangeEvent);
+            applyStep(n, AnyIsDefaultStep, DispatchInputAndChangeEvent);
     }
 }
 
 Color InputType::valueAsColor() const
 {
-    return Color::transparentBlack;
+    return Color::transparent;
 }
 
 void InputType::selectColor(StringView)

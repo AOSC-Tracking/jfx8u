@@ -36,10 +36,6 @@
 
 namespace JSC {
 
-namespace DFG {
-struct ArrayBufferViewWatchpointAdaptor;
-}
-
 class VM;
 
 class FireDetail {
@@ -57,21 +53,21 @@ public:
     virtual void dump(PrintStream&) const = 0;
 };
 
-class StringFireDetail final : public FireDetail {
+class StringFireDetail : public FireDetail {
 public:
     StringFireDetail(const char* string)
         : m_string(string)
     {
     }
 
-    void dump(PrintStream& out) const final;
+    void dump(PrintStream& out) const override;
 
 private:
     const char* m_string;
 };
 
 template<typename... Types>
-class LazyFireDetail final : public FireDetail {
+class LazyFireDetail : public FireDetail {
 public:
     LazyFireDetail(const Types&... args)
     {
@@ -80,7 +76,7 @@ public:
         });
     }
 
-    void dump(PrintStream& out) const final { m_lambda(out); }
+    void dump(PrintStream& out) const override { m_lambda(out); }
 
 private:
     ScopedLambda<void(PrintStream&)> m_lambda;
@@ -161,8 +157,6 @@ protected:
 
 private:
     friend class WatchpointSet;
-    // ArrayBufferViewWatchpointAdaptor can fire watchpoints if it tries to attach a watchpoint to a view but can't allocate the ArrayBuffer.
-    friend struct DFG::ArrayBufferViewWatchpointAdaptor;
     void fire(VM&, const FireDetail&);
 
     Type m_type;
@@ -186,6 +180,8 @@ class WatchpointSet : public ThreadSafeRefCounted<WatchpointSet> {
     friend class LLIntOffsetsExtractor;
     friend class DeferredWatchpointFire;
 public:
+    JS_EXPORT_PRIVATE WatchpointSet(WatchpointState);
+
     // FIXME: In many cases, it would be amazing if this *did* fire the watchpoints. I suspect that
     // this might be hard to get right, but still, it might be awesome.
     JS_EXPORT_PRIVATE ~WatchpointSet(); // Note that this will not fire any of the watchpoints; if you need to know when a WatchpointSet dies then you need a separate mechanism for this.
@@ -292,9 +288,6 @@ public:
     JS_EXPORT_PRIVATE void fireAllSlow(VM&, const FireDetail&); // Call only if you've checked isWatched.
     JS_EXPORT_PRIVATE void fireAllSlow(VM&, DeferredWatchpointFire* deferredWatchpoints); // Ditto.
     JS_EXPORT_PRIVATE void fireAllSlow(VM&, const char* reason); // Ditto.
-
-protected:
-    JS_EXPORT_PRIVATE WatchpointSet(WatchpointState);
 
 private:
     void fireAllWatchpoints(VM&, const FireDetail&);
@@ -534,7 +527,7 @@ class DeferredWatchpointFire : public FireDetail {
     WTF_MAKE_NONCOPYABLE(DeferredWatchpointFire);
 public:
     JS_EXPORT_PRIVATE DeferredWatchpointFire(VM&);
-    JS_EXPORT_PRIVATE ~DeferredWatchpointFire() override;
+    JS_EXPORT_PRIVATE ~DeferredWatchpointFire();
 
     JS_EXPORT_PRIVATE void takeWatchpointsToFire(WatchpointSet*);
     JS_EXPORT_PRIVATE void fireAll();

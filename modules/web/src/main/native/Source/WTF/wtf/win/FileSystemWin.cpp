@@ -151,9 +151,8 @@ static String getFinalPathName(const String& path)
     if (!isHandleValid(handle))
         return String();
 
-    // VOLUME_NAME_DOS can return a \\?\ prefixed path, so it can be longer than MAX_PATH
-    Vector<UChar> buffer(32768);
-    if (::GetFinalPathNameByHandleW(handle, wcharFrom(buffer.data()), buffer.size(), VOLUME_NAME_DOS) >= 32768) {
+    Vector<UChar> buffer(MAX_PATH);
+    if (::GetFinalPathNameByHandleW(handle, wcharFrom(buffer.data()), buffer.size(), VOLUME_NAME_NT) >= MAX_PATH) {
         closeFile(handle);
         return String();
     }
@@ -222,7 +221,7 @@ Optional<FileMetadata> fileMetadataFollowingSymlinks(const String& path)
 
 bool createSymbolicLink(const String& targetPath, const String& symbolicLinkPath)
 {
-    return ::CreateSymbolicLinkW(symbolicLinkPath.wideCharacters().data(), targetPath.wideCharacters().data(), 0);
+    return !::CreateSymbolicLinkW(symbolicLinkPath.wideCharacters().data(), targetPath.wideCharacters().data(), 0);
 }
 
 bool fileExists(const String& path)
@@ -294,7 +293,7 @@ CString fileSystemRepresentation(const String& path)
 bool makeAllDirectories(const String& path)
 {
     String fullPath = path;
-    if (SHCreateDirectoryEx(nullptr, fullPath.wideCharacters().data(), nullptr) != ERROR_SUCCESS) {
+    if (SHCreateDirectoryEx(0, fullPath.wideCharacters().data(), 0) != ERROR_SUCCESS) {
         DWORD error = GetLastError();
         if (error != ERROR_FILE_EXISTS && error != ERROR_ALREADY_EXISTS) {
             LOG_ERROR("Failed to create path %s", path.ascii().data());
@@ -317,9 +316,8 @@ String pathGetFileName(const String& path)
 String directoryName(const String& path)
 {
     String name = path.left(path.length() - pathGetFileName(path).length());
-    if (name.characterStartingAt(name.length() - 1) == '\\'
-        || name.characterStartingAt(name.length() - 1) == '/') {
-        // Remove any trailing "\" or "/"
+    if (name.characterStartingAt(name.length() - 1) == '\\') {
+        // Remove any trailing "\".
         name.truncate(name.length() - 1);
     }
     return name;
@@ -348,7 +346,7 @@ static String bundleName()
 static String storageDirectory(DWORD pathIdentifier)
 {
     Vector<UChar> buffer(MAX_PATH);
-    if (FAILED(SHGetFolderPathW(nullptr, pathIdentifier | CSIDL_FLAG_CREATE, nullptr, 0, wcharFrom(buffer.data()))))
+    if (FAILED(SHGetFolderPathW(0, pathIdentifier | CSIDL_FLAG_CREATE, 0, 0, wcharFrom(buffer.data()))))
         return String();
 
     buffer.shrink(wcslen(wcharFrom(buffer.data())));
@@ -404,16 +402,13 @@ static String generateTemporaryPath(const Function<bool(const String&)>& action)
     return proposedPath;
 }
 
-String openTemporaryFile(const String&, PlatformFileHandle& handle, const String& suffix)
+String openTemporaryFile(const String&, PlatformFileHandle& handle)
 {
-    // FIXME: Suffix is not supported, but OK for now since the code using it is macOS-port-only.
-    ASSERT_UNUSED(suffix, suffix.isEmpty());
-
     handle = INVALID_HANDLE_VALUE;
 
     String proposedPath = generateTemporaryPath([&handle](const String& proposedPath) {
         // use CREATE_NEW to avoid overwriting an existing file with the same name
-        handle = ::CreateFileW(proposedPath.wideCharacters().data(), GENERIC_READ | GENERIC_WRITE, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+        handle = ::CreateFileW(proposedPath.wideCharacters().data(), GENERIC_READ | GENERIC_WRITE, 0, 0, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, 0);
 
         return isHandleValid(handle) || GetLastError() == ERROR_ALREADY_EXISTS;
     });
@@ -424,7 +419,7 @@ String openTemporaryFile(const String&, PlatformFileHandle& handle, const String
     return proposedPath;
 }
 
-PlatformFileHandle openFile(const String& path, FileOpenMode mode, FileAccessPermission, bool failIfFileExists)
+PlatformFileHandle openFile(const String& path, FileOpenMode mode)
 {
     DWORD desiredAccess = 0;
     DWORD creationDisposition = 0;
@@ -439,17 +434,12 @@ PlatformFileHandle openFile(const String& path, FileOpenMode mode, FileAccessPer
         desiredAccess = GENERIC_WRITE;
         creationDisposition = CREATE_ALWAYS;
         break;
-    case FileOpenMode::ReadWrite:
-        desiredAccess = GENERIC_READ | GENERIC_WRITE;
-        creationDisposition = OPEN_ALWAYS;
-        break;
+    default:
+        ASSERT_NOT_REACHED();
     }
 
-    if (failIfFileExists)
-        creationDisposition = CREATE_NEW;
-
     String destination = path;
-    return CreateFile(destination.wideCharacters().data(), desiredAccess, shareMode, nullptr, creationDisposition, FILE_ATTRIBUTE_NORMAL, nullptr);
+    return CreateFile(destination.wideCharacters().data(), desiredAccess, shareMode, 0, creationDisposition, FILE_ATTRIBUTE_NORMAL, 0);
 }
 
 void closeFile(PlatformFileHandle& handle)
@@ -494,7 +484,7 @@ int writeToFile(PlatformFileHandle handle, const char* data, int length)
         return -1;
 
     DWORD bytesWritten;
-    bool success = WriteFile(handle, data, length, &bytesWritten, nullptr);
+    bool success = WriteFile(handle, data, length, &bytesWritten, 0);
 
     if (!success)
         return -1;
@@ -507,7 +497,7 @@ int readFromFile(PlatformFileHandle handle, char* data, int length)
         return -1;
 
     DWORD bytesRead;
-    bool success = ::ReadFile(handle, data, length, &bytesRead, nullptr);
+    bool success = ::ReadFile(handle, data, length, &bytesRead, 0);
 
     if (!success)
         return -1;
@@ -557,14 +547,9 @@ Vector<String> listDirectory(const String& directory, const String& filter)
     return entries;
 }
 
-bool getVolumeFreeSpace(const String& path, uint64_t& freeSpace)
+bool getVolumeFreeSpace(const String&, uint64_t&)
 {
-    ULARGE_INTEGER freeBytesAvailableToCaller;
-    if (!GetDiskFreeSpaceExW(path.wideCharacters().data(), &freeBytesAvailableToCaller, nullptr, nullptr))
-        return false;
-
-    freeSpace = freeBytesAvailableToCaller.QuadPart;
-    return true;
+    return false;
 }
 
 Optional<int32_t> getFileDeviceId(const CString& fsFile)
@@ -605,7 +590,7 @@ bool deleteNonEmptyDirectory(const String& directoryPath)
         L"",
         FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT,
         false,
-        nullptr,
+        0,
         L""
     };
     return !SHFileOperation(&deleteOperation);
@@ -616,7 +601,15 @@ bool unmapViewOfFile(void* buffer, size_t)
     return UnmapViewOfFile(buffer);
 }
 
-bool MappedFileData::mapFileHandle(PlatformFileHandle handle, FileOpenMode openMode, MappedFileMode)
+MappedFileData::MappedFileData(const String& filePath, MappedFileMode mode, bool& success)
+{
+    auto file = CreateFile(filePath.wideCharacters().data(), GENERIC_READ, 0, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+
+    success = mapFileHandle(file, mode);
+    closeFile(file);
+}
+
+bool MappedFileData::mapFileHandle(PlatformFileHandle handle, MappedFileMode)
 {
     if (!isHandleValid(handle))
         return false;
@@ -630,28 +623,11 @@ bool MappedFileData::mapFileHandle(PlatformFileHandle handle, FileOpenMode openM
         return true;
     }
 
-    DWORD pageProtection = PAGE_READONLY;
-    DWORD desiredAccess = FILE_MAP_READ;
-    switch (openMode) {
-    case FileOpenMode::Read:
-        pageProtection = PAGE_READONLY;
-        desiredAccess = FILE_MAP_READ;
-        break;
-    case FileOpenMode::Write:
-        pageProtection = PAGE_READWRITE;
-        desiredAccess = FILE_MAP_WRITE;
-        break;
-    case FileOpenMode::ReadWrite:
-        pageProtection = PAGE_READWRITE;
-        desiredAccess = FILE_MAP_WRITE | FILE_MAP_READ;
-        break;
-    }
-
-    auto mapping = CreateFileMapping(handle, nullptr, pageProtection, 0, 0, nullptr);
+    auto mapping = CreateFileMapping(handle, nullptr, PAGE_READONLY, 0, 0, nullptr);
     if (!mapping)
         return false;
 
-    m_fileData = MapViewOfFile(mapping, desiredAccess, 0, 0, size);
+    m_fileData = MapViewOfFile(mapping, FILE_MAP_READ, 0, 0, size);
     CloseHandle(mapping);
     if (!m_fileData)
         return false;

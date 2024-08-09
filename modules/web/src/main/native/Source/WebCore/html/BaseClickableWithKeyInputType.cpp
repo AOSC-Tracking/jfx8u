@@ -75,9 +75,9 @@ void BaseClickableWithKeyInputType::handleKeyupEvent(InputType& inputType, Keybo
 }
 
 // FIXME: Could share this with BaseCheckableInputType and RangeInputType if we had a common base class.
-bool BaseClickableWithKeyInputType::accessKeyAction(HTMLInputElement& element, bool sendMouseEvents)
+void BaseClickableWithKeyInputType::accessKeyAction(HTMLInputElement& element, bool sendMouseEvents)
 {
-    return element.dispatchSimulatedClick(0, sendMouseEvents ? SendMouseUpDownEvents : SendNoEvents);
+    element.dispatchSimulatedClick(0, sendMouseEvents ? SendMouseUpDownEvents : SendNoEvents);
 }
 
 auto BaseClickableWithKeyInputType::handleKeydownEvent(KeyboardEvent& event) -> ShouldCallBaseEventHandler
@@ -97,11 +97,11 @@ void BaseClickableWithKeyInputType::handleKeyupEvent(KeyboardEvent& event)
     handleKeyupEvent(*this, event);
 }
 
-bool BaseClickableWithKeyInputType::accessKeyAction(bool sendMouseEvents)
+void BaseClickableWithKeyInputType::accessKeyAction(bool sendMouseEvents)
 {
     InputType::accessKeyAction(sendMouseEvents);
     ASSERT(element());
-    return accessKeyAction(*element(), sendMouseEvents);
+    accessKeyAction(*element(), sendMouseEvents);
 }
 
 } // namespace WebCore

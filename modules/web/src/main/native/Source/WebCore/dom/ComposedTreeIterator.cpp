@@ -49,7 +49,7 @@ ComposedTreeIterator::Context::Context(ContainerNode& root, Node& node, SlottedT
     : iterator(root, &node)
     , end(iterator)
 {
-    end.traverseNextSkippingChildren();
+    end.traverseNextSibling();
 }
 
 ComposedTreeIterator::ComposedTreeIterator(ContainerNode& root, FirstChildTag)

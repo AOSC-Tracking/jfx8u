@@ -26,7 +26,10 @@
 #include "config.h"
 #include "JSNativeStdFunction.h"
 
-#include "JSCJSValueInlines.h"
+#include "JSCInlines.h"
+#include "JSFunction.h"
+#include "JSFunctionInlines.h"
+#include "JSObject.h"
 #include "VM.h"
 
 namespace JSC {

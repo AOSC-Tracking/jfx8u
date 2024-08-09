@@ -48,8 +48,7 @@ public:
 protected:
     SVGZoomAndPan() = default;
 
-    static Optional<SVGZoomAndPanType> parseZoomAndPan(StringParsingBuffer<LChar>&);
-    static Optional<SVGZoomAndPanType> parseZoomAndPan(StringParsingBuffer<UChar>&);
+    bool parseZoomAndPan(const UChar*&, const UChar*);
 
 private:
     SVGZoomAndPanType m_zoomAndPan { SVGPropertyTraits<SVGZoomAndPanType>::initialValue() };

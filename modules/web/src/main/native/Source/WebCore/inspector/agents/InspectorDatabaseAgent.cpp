@@ -236,12 +236,12 @@ void InspectorDatabaseAgent::willDestroyFrontendAndBackend(Inspector::Disconnect
 
 void InspectorDatabaseAgent::enable(ErrorString& errorString)
 {
-    if (m_instrumentingAgents.enabledDatabaseAgent() == this) {
+    if (m_instrumentingAgents.inspectorDatabaseAgent() == this) {
         errorString = "Database domain already enabled"_s;
         return;
     }
 
-    m_instrumentingAgents.setEnabledDatabaseAgent(this);
+    m_instrumentingAgents.setInspectorDatabaseAgent(this);
 
     for (auto& database : DatabaseTracker::singleton().openDatabases())
         didOpenDatabase(database.get());
@@ -249,19 +249,19 @@ void InspectorDatabaseAgent::enable(ErrorString& errorString)
 
 void InspectorDatabaseAgent::disable(ErrorString& errorString)
 {
-    if (m_instrumentingAgents.enabledDatabaseAgent() != this) {
+    if (m_instrumentingAgents.inspectorDatabaseAgent() != this) {
         errorString = "Database domain already disabled"_s;
         return;
     }
 
-    m_instrumentingAgents.setEnabledDatabaseAgent(nullptr);
+    m_instrumentingAgents.setInspectorDatabaseAgent(nullptr);
 
     m_resources.clear();
 }
 
 void InspectorDatabaseAgent::getDatabaseTableNames(ErrorString& errorString, const String& databaseId, RefPtr<JSON::ArrayOf<String>>& names)
 {
-    if (m_instrumentingAgents.enabledDatabaseAgent() != this) {
+    if (m_instrumentingAgents.inspectorDatabaseAgent() != this) {
         errorString = "Database domain must be enabled"_s;
         return;
     }
@@ -276,7 +276,7 @@ void InspectorDatabaseAgent::getDatabaseTableNames(ErrorString& errorString, con
 
 void InspectorDatabaseAgent::executeSQL(const String& databaseId, const String& query, Ref<ExecuteSQLCallback>&& requestCallback)
 {
-    if (m_instrumentingAgents.enabledDatabaseAgent() != this) {
+    if (m_instrumentingAgents.inspectorDatabaseAgent() != this) {
         requestCallback->sendFailure("Database domain must be enabled"_s);
         return;
     }

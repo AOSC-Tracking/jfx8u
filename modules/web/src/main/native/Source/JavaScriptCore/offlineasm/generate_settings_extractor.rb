@@ -49,7 +49,7 @@ if FileTest.exist? outputFlnm
         | inp |
         firstLine = inp.gets
         if firstLine and firstLine.chomp == inputHash
-            # Nothing changed.
+            $stderr.puts "SettingsExtractor: Nothing changed."
             exit 0
         end
     }

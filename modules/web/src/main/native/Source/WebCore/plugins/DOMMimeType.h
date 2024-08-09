@@ -19,19 +19,18 @@
 
 #pragma once
 
+#include "FrameDestructionObserver.h"
 #include "PluginData.h"
 #include <wtf/RefCounted.h>
 #include <wtf/RefPtr.h>
-#include <wtf/WeakPtr.h>
 
 namespace WebCore {
 
 class DOMPlugin;
-class Navigator;
 
-class DOMMimeType : public RefCounted<DOMMimeType> {
+class DOMMimeType : public RefCounted<DOMMimeType>, public FrameDestructionObserver {
 public:
-    static Ref<DOMMimeType> create(Navigator&, const MimeClassInfo&, DOMPlugin&);
+    static Ref<DOMMimeType> create(RefPtr<PluginData>&& pluginData, Frame* frame, unsigned index) { return adoptRef(*new DOMMimeType(WTFMove(pluginData), frame, index)); }
     ~DOMMimeType();
 
     String type() const;
@@ -39,14 +38,11 @@ public:
     String description() const;
     RefPtr<DOMPlugin> enabledPlugin() const;
 
-    Navigator* navigator() { return m_navigator.get(); }
-
 private:
-    DOMMimeType(Navigator&, const MimeClassInfo&, DOMPlugin&);
-
-    WeakPtr<Navigator> m_navigator;
-    MimeClassInfo m_info;
-    WeakPtr<DOMPlugin> m_enabledPlugin;
+    DOMMimeType(RefPtr<PluginData>&&, Frame*, unsigned index);
+    MimeClassInfo m_mimeClassInfo;
+    RefPtr<PluginData> m_pluginData;
+    PluginInfo m_pluginInfo;
 };
 
 } // namespace WebCore

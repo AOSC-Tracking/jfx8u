@@ -37,9 +37,6 @@ CrossThreadTaskHandler::CrossThreadTaskHandler(const char* threadName, Autodrain
     Locker<Lock> locker(m_taskThreadCreationLock);
     Thread::create(threadName, [this] {
         taskRunLoop();
-
-        if (m_completionCallback)
-            m_completionCallback();
     })->detach();
 }
 
@@ -75,9 +72,22 @@ void CrossThreadTaskHandler::taskRunLoop()
     }
 
     while (!m_taskQueue.isKilled()) {
-        std::unique_ptr<AutodrainedPool> autodrainedPool = (m_useAutodrainedPool == AutodrainedPoolForRunLoop::Use) ? makeUnique<AutodrainedPool>() : nullptr;
+        {
+            std::unique_ptr<AutodrainedPool> autodrainedPool = (m_useAutodrainedPool == AutodrainedPoolForRunLoop::Use) ? makeUnique<AutodrainedPool>() : nullptr;
 
-        m_taskQueue.waitForMessage().performTask();
+            m_taskQueue.waitForMessage().performTask();
+        }
+
+        Locker<Lock> shouldSuspendLocker(m_shouldSuspendLock);
+        while (m_shouldSuspend) {
+            m_suspendedLock.lock();
+            if (!m_suspended) {
+                m_suspended = true;
+                m_suspendedCondition.notifyOne();
+            }
+            m_suspendedLock.unlock();
+            m_shouldSuspendCondition.wait(m_shouldSuspendLock);
+        }
     }
 }
 
@@ -92,15 +102,34 @@ void CrossThreadTaskHandler::handleTaskRepliesOnMainThread()
         task->performTask();
 }
 
-void CrossThreadTaskHandler::setCompletionCallback(Function<void ()>&& completionCallback)
+void CrossThreadTaskHandler::suspendAndWait()
 {
-    m_completionCallback = WTFMove(completionCallback);
+    ASSERT(isMainThread());
+    {
+        Locker<Lock> locker(m_shouldSuspendLock);
+        m_shouldSuspend = true;
+    }
+
+    // Post an empty task to ensure database thread knows m_shouldSuspend and sets m_suspended.
+    postTask(CrossThreadTask([]() { }));
+
+    Locker<Lock> locker(m_suspendedLock);
+    while (!m_suspended)
+        m_suspendedCondition.wait(m_suspendedLock);
 }
 
-void CrossThreadTaskHandler::kill()
+void CrossThreadTaskHandler::resume()
 {
-    m_taskQueue.kill();
-    m_taskReplyQueue.kill();
+    ASSERT(isMainThread());
+    Locker<Lock> locker(m_shouldSuspendLock);
+    if (m_shouldSuspend) {
+        m_suspendedLock.lock();
+        if (m_suspended)
+            m_suspended = false;
+        m_suspendedLock.unlock();
+        m_shouldSuspend = false;
+        m_shouldSuspendCondition.notifyOne();
+    }
 }
 
 } // namespace WTF

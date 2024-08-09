@@ -26,7 +26,6 @@
 
 #pragma once
 
-#include <wtf/Optional.h>
 #include <wtf/URL.h>
 #include <wtf/text/StringHash.h>
 #include <wtf/text/WTFString.h>
@@ -90,7 +89,7 @@ struct Cookie {
     String path;
     // Creation and expiration dates are expressed as milliseconds since the UNIX epoch.
     double created { 0 };
-    Optional<double> expires;
+    double expires { 0 };
     bool httpOnly { false };
     bool secure { false };
     bool session { false };
@@ -170,7 +169,9 @@ Optional<Cookie> Cookie::decode(Decoder& decoder)
 
 namespace WTF {
     template<typename T> struct DefaultHash;
-    template<> struct DefaultHash<WebCore::Cookie> : WebCore::CookieHash { };
+    template<> struct DefaultHash<WebCore::Cookie> {
+        typedef WebCore::CookieHash Hash;
+    };
     template<> struct HashTraits<WebCore::Cookie> : GenericHashTraits<WebCore::Cookie> {
         static WebCore::Cookie emptyValue() { return { }; }
         static void constructDeletedValue(WebCore::Cookie& slot) { slot = WebCore::Cookie(WTF::HashTableDeletedValue); }

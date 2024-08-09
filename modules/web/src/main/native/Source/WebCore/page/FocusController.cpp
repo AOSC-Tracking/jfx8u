@@ -29,7 +29,6 @@
 
 #include "AXObjectCache.h"
 #include "Chrome.h"
-#include "ChromeClient.h"
 #include "Document.h"
 #include "Editing.h"
 #include "Editor.h"
@@ -78,7 +77,7 @@ static inline bool isFocusScopeOwner(const Element& element)
         return true;
     if (is<HTMLSlotElement>(element)) {
         ShadowRoot* root = element.containingShadowRoot();
-        if (!root || !root->host() || !hasCustomFocusLogic(*root->host()))
+        if (root && root->host() && !hasCustomFocusLogic(*root->host()))
             return true;
     }
     return false;
@@ -448,21 +447,6 @@ bool FocusController::advanceFocus(FocusDirection direction, KeyboardEvent* even
     return false;
 }
 
-bool FocusController::relinquishFocusToChrome(FocusDirection direction)
-{
-    RefPtr<Document> document = focusedOrMainFrame().document();
-    if (!document)
-        return false;
-
-    if (!m_page.chrome().canTakeFocus(direction) || m_page.isControlledByAutomation())
-        return false;
-
-    document->setFocusedElement(nullptr);
-    setFocusedFrame(nullptr);
-    m_page.chrome().takeFocus(direction);
-    return true;
-}
-
 bool FocusController::advanceFocusInDocumentOrder(FocusDirection direction, KeyboardEvent* event, bool initialFocus)
 {
     Frame& frame = focusedOrMainFrame();
@@ -481,9 +465,11 @@ bool FocusController::advanceFocusInDocumentOrder(FocusDirection direction, Keyb
 
     if (!element) {
         // We didn't find a node to focus, so we should try to pass focus to Chrome.
-        if (!initialFocus) {
-            if (relinquishFocusToChrome(direction))
-                return true;
+        if (!initialFocus && m_page.chrome().canTakeFocus(direction) && !m_page.isControlledByAutomation()) {
+            document->setFocusedElement(nullptr);
+            setFocusedFrame(nullptr);
+            m_page.chrome().takeFocus(direction);
+            return true;
         }
 
         // Chrome doesn't want focus, so we should wrap focus.
@@ -752,16 +738,17 @@ Element* FocusController::previousFocusableElementOrScopeOwner(const FocusNaviga
     return previousElementWithLowerTabIndex(scope, last, startingTabIndex, event);
 }
 
-static bool relinquishesEditingFocus(Element& element)
+static bool relinquishesEditingFocus(Node *node)
 {
-    ASSERT(element.hasEditableStyle());
+    ASSERT(node);
+    ASSERT(node->hasEditableStyle());
 
-    auto root = element.rootEditableElement();
-    auto frame = element.document().frame();
+    Node* root = node->rootEditableElement();
+    Frame* frame = node->document().frame();
     if (!frame || !root)
         return false;
 
-    return frame->editor().shouldEndEditing(makeRangeSelectingNodeContents(*root));
+    return frame->editor().shouldEndEditing(rangeOfContents(*root).ptr());
 }
 
 static void clearSelectionIfNeeded(Frame* oldFocusedFrame, Frame* newFocusedFrame, Node* newFocusedNode)
@@ -805,7 +792,7 @@ static void clearSelectionIfNeeded(Frame* oldFocusedFrame, Frame* newFocusedFram
 
 static bool shouldClearSelectionWhenChangingFocusedElement(const Page& page, RefPtr<Element> oldFocusedElement, RefPtr<Element> newFocusedElement)
 {
-#if PLATFORM(IOS_FAMILY) && ENABLE(DRAG_SUPPORT)
+#if ENABLE(DATA_INTERACTION)
     if (newFocusedElement || !oldFocusedElement)
         return true;
 
@@ -833,14 +820,11 @@ bool FocusController::setFocusedElement(Element* element, Frame& newFocusedFrame
     RefPtr<Document> oldDocument = oldFocusedFrame ? oldFocusedFrame->document() : nullptr;
 
     Element* oldFocusedElement = oldDocument ? oldDocument->focusedElement() : nullptr;
-    if (oldFocusedElement == element) {
-        if (element)
-            m_page.chrome().client().elementDidRefocus(*element);
+    if (oldFocusedElement == element)
         return true;
-    }
 
     // FIXME: Might want to disable this check for caretBrowsing
-    if (oldFocusedElement && oldFocusedElement->isRootEditableElement() && !relinquishesEditingFocus(*oldFocusedElement))
+    if (oldFocusedElement && oldFocusedElement->isRootEditableElement() && !relinquishesEditingFocus(oldFocusedElement))
         return false;
 
     m_page.editorClient().willSetInputMethodState();
@@ -981,9 +965,9 @@ static void updateFocusCandidateIfNeeded(FocusDirection direction, const FocusCa
     LayoutRect intersectionRect = intersection(candidate.rect, closest.rect);
     if (!intersectionRect.isEmpty() && !areElementsOnSameLine(closest, candidate)) {
         // If 2 nodes are intersecting, do hit test to find which node in on top.
-        auto center = flooredIntPoint(intersectionRect.center()); // FIXME: Would roundedIntPoint be better?
-        constexpr OptionSet<HitTestRequest::RequestType> hitType { HitTestRequest::ReadOnly, HitTestRequest::Active, HitTestRequest::IgnoreClipping, HitTestRequest::DisallowUserAgentShadowContent, HitTestRequest::AllowChildFrameContent };
-        HitTestResult result = candidate.visibleNode->document().page()->mainFrame().eventHandler().hitTestResultAtPoint(center, hitType);
+        LayoutUnit x = intersectionRect.x() + intersectionRect.width() / 2;
+        LayoutUnit y = intersectionRect.y() + intersectionRect.height() / 2;
+        HitTestResult result = candidate.visibleNode->document().page()->mainFrame().eventHandler().hitTestResultAtPoint(IntPoint(x, y), HitTestRequest::ReadOnly | HitTestRequest::Active | HitTestRequest::IgnoreClipping | HitTestRequest::DisallowUserAgentShadowContent | HitTestRequest::AllowChildFrameContent);
         if (candidate.visibleNode->contains(result.innerNode())) {
             closest = candidate;
             return;

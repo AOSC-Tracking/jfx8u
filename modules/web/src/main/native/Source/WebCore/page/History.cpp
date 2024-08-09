@@ -201,14 +201,13 @@ ExceptionOr<void> History::stateObjectAdded(RefPtr<SerializedScriptValue>&& data
         const char* functionName = stateObjectType == StateObjectType::Replace ? "history.replaceState()" : "history.pushState()";
         return Exception { SecurityError, makeString("Blocked attempt to use ", functionName, " to change session history URL from ", documentURL.stringCenterEllipsizedToLength(), " to ", fullURL.stringCenterEllipsizedToLength(), ". ", suffix) };
     };
-    if (!protocolHostAndPortAreEqual(fullURL, documentURL) || fullURL.user() != documentURL.user() || fullURL.password() != documentURL.password())
+    if (!protocolHostAndPortAreEqual(fullURL, documentURL) || fullURL.user() != documentURL.user() || fullURL.pass() != documentURL.pass())
         return createBlockedURLSecurityErrorWithMessageSuffix("Protocols, domains, ports, usernames, and passwords must match.");
 
     const auto& documentSecurityOrigin = frame->document()->securityOrigin();
     // We allow sandboxed documents, 'data:'/'file:' URLs, etc. to use 'pushState'/'replaceState' to modify the URL query and fragments.
     // See https://bugs.webkit.org/show_bug.cgi?id=183028 for the compatibility concerns.
-    bool allowSandboxException = (documentSecurityOrigin.isLocal() || documentSecurityOrigin.isUnique())
-        && documentURL.stringWithoutQueryOrFragmentIdentifier() == fullURL.stringWithoutQueryOrFragmentIdentifier();
+    bool allowSandboxException = (documentSecurityOrigin.isLocal() || documentSecurityOrigin.isUnique()) && equalIgnoringQueryAndFragment(documentURL, fullURL);
 
     if (!allowSandboxException && !documentSecurityOrigin.canRequest(fullURL) && (fullURL.path() != documentURL.path() || fullURL.query() != documentURL.query()))
         return createBlockedURLSecurityErrorWithMessageSuffix("Paths and fragments must match for a sandboxed document.");

@@ -71,9 +71,10 @@ void SVGFEDiffuseLightingElement::parseAttribute(const QualifiedName& name, cons
     }
 
     if (name == SVGNames::kernelUnitLengthAttr) {
-        if (auto result = parseNumberOptionalNumber(value)) {
-            m_kernelUnitLengthX->setBaseValInternal(result->first);
-            m_kernelUnitLengthY->setBaseValInternal(result->second);
+        float x, y;
+        if (parseNumberOptionalNumber(value, x, y)) {
+            m_kernelUnitLengthX->setBaseValInternal(x);
+            m_kernelUnitLengthY->setBaseValInternal(y);
         }
         return;
     }

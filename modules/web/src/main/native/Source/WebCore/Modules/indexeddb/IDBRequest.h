@@ -125,7 +125,7 @@ public:
 
     IndexedDB::RequestType requestType() const { return m_requestType; }
 
-    void setTransactionOperationID(uint64_t transactionOperationID) { m_currentTransactionOperationID = transactionOperationID; }
+    bool hasPendingActivity() const final;
 
     void setTransactionOperationID(uint64_t transactionOperationID) { m_currentTransactionOperationID = transactionOperationID; }
 
@@ -146,6 +146,7 @@ protected:
     bool m_shouldExposeTransactionToDOM { true };
     RefPtr<DOMException> m_domError;
     IndexedDB::RequestType m_requestType { IndexedDB::RequestType::Other };
+    bool m_contextStopped { false };
     Event* m_openDatabaseSuccessEvent { nullptr };
 
 private:
@@ -157,11 +158,8 @@ private:
 
     EventTargetInterface eventTargetInterface() const override;
 
-    // ActiveDOMObject.
-    bool virtualHasPendingActivity() const final;
     const char* activeDOMObjectName() const final;
     void stop() final;
-
     virtual void cancelForStop();
 
     void refEventTarget() final { ref(); }

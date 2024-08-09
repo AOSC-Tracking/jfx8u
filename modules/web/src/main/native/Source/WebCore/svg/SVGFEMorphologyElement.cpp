@@ -71,9 +71,10 @@ void SVGFEMorphologyElement::parseAttribute(const QualifiedName& name, const Ato
     }
 
     if (name == SVGNames::radiusAttr) {
-        if (auto result = parseNumberOptionalNumber(value)) {
-            m_radiusX->setBaseValInternal(result->first);
-            m_radiusY->setBaseValInternal(result->second);
+        float x, y;
+        if (parseNumberOptionalNumber(value, x, y)) {
+            m_radiusX->setBaseValInternal(x);
+            m_radiusY->setBaseValInternal(y);
         }
         return;
     }

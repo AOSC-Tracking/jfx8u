@@ -1,4 +1,4 @@
-# Copyright (C) 2011-2020 Apple Inc. All rights reserved.
+# Copyright (C) 2011-2018 Apple Inc. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -428,36 +428,24 @@ end
 # addi tmp, bar
 #
 
-def riscLowerOperandToRegister(insn, preList, postList, operandIndex, suffix, needStore)
-    operand = insn.operands[operandIndex]
+def riscAsRegister(preList, postList, operand, suffix, needStore)
     return operand unless operand.address?
-
-    tmp = Tmp.new(insn.codeOrigin, if suffix == "d" then :fpr else :gpr end)
-    preList << Instruction.new(insn.codeOrigin, "load" + suffix, [operand, tmp])
+    
+    tmp = Tmp.new(operand.codeOrigin, if suffix == "d" then :fpr else :gpr end)
+    preList << Instruction.new(operand.codeOrigin, "load" + suffix, [operand, tmp])
     if needStore
-        postList << Instruction.new(insn.codeOrigin, "store" + suffix, [tmp, operand])
+        postList << Instruction.new(operand.codeOrigin, "store" + suffix, [tmp, operand])
     end
     tmp
 end
 
-def riscLowerOperandsToRegisters(insn, preList, postList, suffix)
+def riscAsRegisters(preList, postList, operands, suffix)
     newOperands = []
-    insn.operands.each_with_index {
+    operands.each_with_index {
         | operand, index |
-        newOperands << riscLowerOperandToRegister(insn, preList, postList, index, suffix, index == insn.operands.size - 1)
+        newOperands << riscAsRegister(preList, postList, operand, suffix, index == operands.size - 1)
     }
     newOperands
-end
-
-class Instruction
-    def riscCloneWithOperandLowered(preList, postList, operandIndex, suffix, needStore)
-        operand = riscLowerOperandToRegister(self, preList, postList, operandIndex, suffix, needStore)
-        cloneWithNewOperands([operand])
-    end
-    def riscCloneWithOperandsLowered(preList, postList, suffix)
-        operands = riscLowerOperandsToRegisters(self, preList, postList, suffix)
-        cloneWithNewOperands(operands)
-    end
 end
 
 def riscLowerMisplacedAddresses(list)
@@ -474,26 +462,45 @@ def riscLowerMisplacedAddresses(list)
             postInstructions = []
             annotation = node.annotation
             case node.opcode
-            when "addi", "addis", "andi", "lshifti", "muli", "negi", "noti", "ori", "oris",
+            when "addi", "addis", "andi", "lshifti", "muli", "negi", "noti", "ori", "orh", "oris",
                 "rshifti", "urshifti", "subi", "subis", "xori", /^bi/, /^bti/, /^ci/, /^ti/
-                newList << node.riscCloneWithOperandsLowered(newList, postInstructions, "i")
-            when "orh"
-                newList << node.riscCloneWithOperandsLowered(newList, postInstructions, "h")
+                newList << Instruction.new(node.codeOrigin,
+                                           node.opcode,
+                                           riscAsRegisters(newList, postInstructions, node.operands, "i"),
+                                           annotation)
             when "addp", "andp", "lshiftp", "mulp", "negp", "orp", "rshiftp", "urshiftp",
                 "subp", "xorp", /^bp/, /^btp/, /^cp/
-                newList << node.riscCloneWithOperandsLowered(newList, postInstructions, "p")
+                newList << Instruction.new(node.codeOrigin,
+                                           node.opcode,
+                                           riscAsRegisters(newList, postInstructions, node.operands, "p"),
+                                           annotation)
             when "addq", "andq", "lshiftq", "mulq", "negq", "orq", "rshiftq", "urshiftq",
                 "subq", "xorq", /^bq/, /^btq/, /^cq/
-                newList << node.riscCloneWithOperandsLowered(newList, postInstructions, "q")
+                newList << Instruction.new(node.codeOrigin,
+                                           node.opcode,
+                                           riscAsRegisters(newList, postInstructions, node.operands, "q"),
+                                           annotation)
             when "bbeq", "bbneq", "bba", "bbaeq", "bbb", "bbbeq", "btbz", "btbnz", "tbz", "tbnz",
                 "cbeq", "cbneq", "cba", "cbaeq", "cbb", "cbbeq"
-                newList << node.riscCloneWithOperandsLowered(newList, postInstructions, "b")
+                newList << Instruction.new(node.codeOrigin,
+                                           node.opcode,
+                                           riscAsRegisters(newList, postInstructions, node.operands, "b"),
+                                           annotation)
             when "bbgt", "bbgteq", "bblt", "bblteq", "btbs", "tbs", "cbgt", "cbgteq", "cblt", "cblteq"
-                newList << node.riscCloneWithOperandsLowered(newList, postInstructions, "bs")
+                newList << Instruction.new(node.codeOrigin,
+                                           node.opcode,
+                                           riscAsRegisters(newList, postInstructions, node.operands, "bs"),
+                                           annotation)
             when "addd", "divd", "subd", "muld", "sqrtd", /^bd/
-                newList << node.riscCloneWithOperandsLowered(newList, postInstructions, "d")
+                newList << Instruction.new(node.codeOrigin,
+                                           node.opcode,
+                                           riscAsRegisters(newList, postInstructions, node.operands, "d"),
+                                           annotation)
             when "jmp", "call"
-                newList << node.riscCloneWithOperandLowered(newList, postInstructions, 0, "p", false)
+                newList << Instruction.new(node.codeOrigin,
+                                           node.opcode,
+                                           [riscAsRegister(newList, postInstructions, node.operands[0], "p", false)],
+                                           annotation)
             else
                 newList << node
             end

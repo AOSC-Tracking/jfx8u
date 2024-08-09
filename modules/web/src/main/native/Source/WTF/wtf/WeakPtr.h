@@ -1,6 +1,6 @@
 /*
- * Copyright (C) 2013 Google, Inc. All rights reserved.
- * Copyright (C) 2015-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2013 Google, Inc. All Rights Reserved.
+ * Copyright (C) 2015, 2017 Apple Inc. All Rights Reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -26,19 +26,27 @@
 
 #pragma once
 
+#include <wtf/MainThread.h>
+#include <wtf/Noncopyable.h>
+#include <wtf/Ref.h>
+#include <wtf/ThreadSafeRefCounted.h>
 #include <wtf/Threading.h>
 
 namespace WTF {
 
-template<typename, typename> class WeakHashSet;
-template<typename, typename> class WeakPtrFactory;
+// Testing interface for TestWebKitAPI
+#ifndef DID_CREATE_WEAK_PTR_IMPL
+#define DID_CREATE_WEAK_PTR_IMPL(p)
+#endif
+#ifndef WILL_DESTROY_WEAK_PTR_IMPL
+#define WILL_DESTROY_WEAK_PTR_IMPL(p)
+#endif
 
-struct EmptyCounter {
-    static void increment() { }
-    static void decrement() { }
-};
+template<typename> class WeakHashSet;
+template<typename> class WeakPtr;
+template<typename> class WeakPtrFactory;
 
-template<typename Counter = EmptyCounter> class WeakPtrImpl : public ThreadSafeRefCounted<WeakPtrImpl<Counter>> {
+class WeakPtrImpl : public ThreadSafeRefCounted<WeakPtrImpl> {
     WTF_MAKE_NONCOPYABLE(WeakPtrImpl);
     WTF_MAKE_FAST_ALLOCATED;
 public:
@@ -49,7 +57,7 @@ public:
 
     ~WeakPtrImpl()
     {
-        Counter::decrement();
+        WILL_DESTROY_WEAK_PTR_IMPL(m_ptr);
     }
 
     template<typename T> typename T::WeakValueType* get()
@@ -71,7 +79,7 @@ private:
         , m_wasConstructedOnMainThread(isMainThread())
 #endif
     {
-        Counter::increment();
+        DID_CREATE_WEAK_PTR_IMPL(ptr);
     }
 
     void* m_ptr;
@@ -80,27 +88,27 @@ private:
 #endif
 };
 
-template<typename T, typename Counter> class WeakPtr {
+template<typename T>
+class WeakPtr {
     WTF_MAKE_FAST_ALLOCATED;
 public:
     WeakPtr() { }
     WeakPtr(std::nullptr_t) { }
-    template<typename U> WeakPtr(const WeakPtr<U, Counter>&);
-    template<typename U> WeakPtr(WeakPtr<U, Counter>&&);
+    template<typename U> WeakPtr(const WeakPtr<U>&);
+    template<typename U> WeakPtr(WeakPtr<U>&&);
 
     T* get() const
     {
         // FIXME: Our GC threads currently need to get opaque pointers from WeakPtrs and have to be special-cased.
         ASSERT(!m_impl || Thread::mayBeGCThread() || m_impl->wasConstructedOnMainThread() == isMainThread());
-        return m_impl ? static_cast<T*>(m_impl->template get<T>()) : nullptr;
+        return m_impl ? static_cast<T*>(m_impl->get<T>()) : nullptr;
     }
 
-    bool operator!() const { return !m_impl || !*m_impl; }
     explicit operator bool() const { return m_impl && *m_impl; }
 
     WeakPtr& operator=(std::nullptr_t) { m_impl = nullptr; return *this; }
-    template<typename U> WeakPtr& operator=(const WeakPtr<U, Counter>&);
-    template<typename U> WeakPtr& operator=(WeakPtr<U, Counter>&&);
+    template<typename U> WeakPtr& operator=(const WeakPtr<U>&);
+    template<typename U> WeakPtr& operator=(WeakPtr<U>&&);
 
     T* operator->() const
     {
@@ -117,25 +125,21 @@ public:
     void clear() { m_impl = nullptr; }
 
 private:
-    template<typename, typename> friend class WeakHashSet;
-    template<typename, typename> friend class WeakPtr;
-    template<typename, typename> friend class WeakPtrFactory;
+    explicit WeakPtr(Ref<WeakPtrImpl>&& ref) : m_impl(WTFMove(ref)) { }
+    template<typename> friend class WeakHashSet;
+    template<typename> friend class WeakPtr;
+    template<typename> friend class WeakPtrFactory;
+    template<typename U> friend WeakPtr<U> makeWeakPtr(U&);
 
-    explicit WeakPtr(Ref<WeakPtrImpl<Counter>>&& ref)
-        : m_impl(WTFMove(ref))
-    {
-    }
-
-    RefPtr<WeakPtrImpl<Counter>> m_impl;
+    RefPtr<WeakPtrImpl> m_impl;
 };
 
 // Note: you probably want to inherit from CanMakeWeakPtr rather than use this directly.
-template<typename T, typename Counter = EmptyCounter> class WeakPtrFactory {
-    WTF_MAKE_NONCOPYABLE(WeakPtrFactory);
+template<typename T>
+class WeakPtrFactory {
+    WTF_MAKE_NONCOPYABLE(WeakPtrFactory<T>);
     WTF_MAKE_FAST_ALLOCATED;
 public:
-    using CounterType = Counter;
-
     WeakPtrFactory()
 #if ASSERT_ENABLED
         : m_wasConstructedOnMainThread(isMainThread())
@@ -156,15 +160,23 @@ public:
             return;
 
         ASSERT(m_wasConstructedOnMainThread == isMainThread());
-        m_impl = WeakPtrImpl<Counter>::create(const_cast<T*>(&object));
+        m_impl = WeakPtrImpl::create(const_cast<T*>(&object));
     }
 
-    template<typename U> WeakPtr<U, Counter> createWeakPtr(U& object) const
+    WeakPtr<T> createWeakPtr(T& object) const
     {
         initializeIfNeeded(object);
 
-        ASSERT(&object == m_impl->template get<T>());
-        return WeakPtr<U, Counter>(makeRef(*m_impl));
+        ASSERT(&object == m_impl->get<T>());
+        return WeakPtr<T>(makeRef(*m_impl));
+    }
+
+    WeakPtr<const T> createWeakPtr(const T& object) const
+    {
+        initializeIfNeeded(object);
+
+        ASSERT(&object == m_impl->get<T>());
+        return WeakPtr<T>(makeRef(*m_impl));
     }
 
     void revokeAll()
@@ -177,9 +189,9 @@ public:
     }
 
 private:
-    template<typename, typename> friend class WeakHashSet;
+    template<typename> friend class WeakHashSet;
 
-    mutable RefPtr<WeakPtrImpl<Counter>> m_impl;
+    mutable RefPtr<WeakPtrImpl> m_impl;
 #if ASSERT_ENABLED
     bool m_wasConstructedOnMainThread;
 #endif
@@ -189,12 +201,12 @@ private:
 // initialization is however useful if you plan to call makeWeakPtr() from other threads.
 enum class WeakPtrFactoryInitialization { Lazy, Eager };
 
-template<typename T, WeakPtrFactoryInitialization initializationMode = WeakPtrFactoryInitialization::Lazy, typename Counter = EmptyCounter> class CanMakeWeakPtr {
+template<typename T, WeakPtrFactoryInitialization initializationMode = WeakPtrFactoryInitialization::Lazy> class CanMakeWeakPtr {
 public:
     using WeakValueType = T;
 
-    const WeakPtrFactory<T, Counter>& weakPtrFactory() const { return m_weakPtrFactory; }
-    WeakPtrFactory<T, Counter>& weakPtrFactory() { return m_weakPtrFactory; }
+    const WeakPtrFactory<T>& weakPtrFactory() const { return m_weakPtrFactory; }
+    WeakPtrFactory<T>& weakPtrFactory() { return m_weakPtrFactory; }
 
 protected:
     CanMakeWeakPtr()
@@ -204,75 +216,75 @@ protected:
     }
 
 private:
-    WeakPtrFactory<T, Counter> m_weakPtrFactory;
+    WeakPtrFactory<T> m_weakPtrFactory;
 };
 
-template<typename T, typename U, typename Counter> inline WeakPtrImpl<Counter>* weak_ptr_impl_cast(WeakPtrImpl<Counter>* impl)
+template<typename T, typename U> inline WeakPtrImpl* weak_ptr_impl_cast(WeakPtrImpl* impl)
 {
-    static_assert(std::is_same_v<typename T::WeakValueType, typename U::WeakValueType>, "Invalid weak pointer cast");
+    static_assert(std::is_same<typename T::WeakValueType, typename U::WeakValueType>::value, "Invalid weak pointer cast");
     return impl;
 }
 
-template<typename T, typename Counter> template<typename U> inline WeakPtr<T, Counter>::WeakPtr(const WeakPtr<U, Counter>& o)
+template<typename T> template<typename U> inline WeakPtr<T>::WeakPtr(const WeakPtr<U>& o)
     : m_impl(weak_ptr_impl_cast<T, U>(o.m_impl.get()))
 {
 }
 
-template<typename T, typename Counter> template<typename U> inline WeakPtr<T, Counter>::WeakPtr(WeakPtr<U, Counter>&& o)
+template<typename T> template<typename U> inline WeakPtr<T>::WeakPtr(WeakPtr<U>&& o)
     : m_impl(adoptRef(weak_ptr_impl_cast<T, U>(o.m_impl.leakRef())))
 {
 }
 
-template<typename T, typename Counter> template<typename U> inline WeakPtr<T, Counter>& WeakPtr<T, Counter>::operator=(const WeakPtr<U, Counter>& o)
+template<typename T> template<typename U> inline WeakPtr<T>& WeakPtr<T>::operator=(const WeakPtr<U>& o)
 {
     m_impl = weak_ptr_impl_cast<T, U>(o.m_impl.get());
     return *this;
 }
 
-template<typename T, typename Counter> template<typename U> inline WeakPtr<T, Counter>& WeakPtr<T, Counter>::operator=(WeakPtr<U, Counter>&& o)
+template<typename T> template<typename U> inline WeakPtr<T>& WeakPtr<T>::operator=(WeakPtr<U>&& o)
 {
     m_impl = adoptRef(weak_ptr_impl_cast<T, U>(o.m_impl.leakRef()));
     return *this;
 }
 
-template<typename T> inline auto makeWeakPtr(T& object)
+template<typename T> inline WeakPtr<T> makeWeakPtr(T& object)
 {
-    return object.weakPtrFactory().template createWeakPtr<T>(object);
+    return { object.weakPtrFactory().createWeakPtr(object) };
 }
 
-template<typename T> inline auto makeWeakPtr(T* ptr) -> decltype(makeWeakPtr(*ptr))
+template<typename T> inline WeakPtr<T> makeWeakPtr(T* ptr)
 {
     if (!ptr)
         return { };
     return makeWeakPtr(*ptr);
 }
 
-template<typename T, typename U, typename Counter> inline bool operator==(const WeakPtr<T, Counter>& a, const WeakPtr<U, Counter>& b)
+template<typename T, typename U> inline bool operator==(const WeakPtr<T>& a, const WeakPtr<U>& b)
 {
     return a.get() == b.get();
 }
 
-template<typename T, typename U, typename Counter> inline bool operator==(const WeakPtr<T, Counter>& a, U* b)
+template<typename T, typename U> inline bool operator==(const WeakPtr<T>& a, U* b)
 {
     return a.get() == b;
 }
 
-template<typename T, typename U, typename Counter> inline bool operator==(T* a, const WeakPtr<U, Counter>& b)
+template<typename T, typename U> inline bool operator==(T* a, const WeakPtr<U>& b)
 {
     return a == b.get();
 }
 
-template<typename T, typename U, typename Counter> inline bool operator!=(const WeakPtr<T, Counter>& a, const WeakPtr<U, Counter>& b)
+template<typename T, typename U> inline bool operator!=(const WeakPtr<T>& a, const WeakPtr<U>& b)
 {
     return a.get() != b.get();
 }
 
-template<typename T, typename U, typename Counter> inline bool operator!=(const WeakPtr<T, Counter>& a, U* b)
+template<typename T, typename U> inline bool operator!=(const WeakPtr<T>& a, U* b)
 {
     return a.get() != b;
 }
 
-template<typename T, typename U, typename Counter> inline bool operator!=(T* a, const WeakPtr<U, Counter>& b)
+template<typename T, typename U> inline bool operator!=(T* a, const WeakPtr<U>& b)
 {
     return a != b.get();
 }

@@ -40,7 +40,7 @@ public:
         character = *m_characters;
         clusterLength = 1;
 
-        if (!U16_IS_SURROGATE(character))
+        if (character < HiraganaLetterSmallA)
             return true;
 
         return consumeSlowCase(character, clusterLength);

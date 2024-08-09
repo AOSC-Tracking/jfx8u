@@ -25,7 +25,7 @@
 #include "FEConvolveMatrix.h"
 
 #include "Filter.h"
-#include "ImageData.h"
+#include <JavaScriptCore/Uint8ClampedArray.h>
 #include <wtf/ParallelJobs.h>
 #include <wtf/WorkQueue.h>
 #include <wtf/text/TextStream.h>
@@ -35,7 +35,7 @@ namespace WebCore {
 FEConvolveMatrix::FEConvolveMatrix(Filter& filter, const IntSize& kernelSize,
     float divisor, float bias, const IntPoint& targetOffset, EdgeModeType edgeMode,
     const FloatPoint& kernelUnitLength, bool preserveAlpha, const Vector<float>& kernelMatrix)
-    : FilterEffect(filter, Type::ConvolveMatrix)
+    : FilterEffect(filter)
     , m_kernelSize(kernelSize)
     , m_divisor(divisor)
     , m_bias(bias)
@@ -371,22 +371,22 @@ void FEConvolveMatrix::platformApplySoftware()
 {
     FilterEffect* in = inputEffect(0);
 
-    ImageData* resultImage;
+    Uint8ClampedArray* resultImage;
     if (m_preserveAlpha)
         resultImage = createUnmultipliedImageResult();
     else
         resultImage = createPremultipliedImageResult();
-    auto* dstPixelArray = resultImage ? resultImage->data() : nullptr;
-    if (!dstPixelArray)
+    if (!resultImage)
         return;
 
     IntRect effectDrawingRect = requestedRegionOfInputImageData(in->absolutePaintRect());
 
     RefPtr<Uint8ClampedArray> srcPixelArray;
     if (m_preserveAlpha)
-        srcPixelArray = in->unmultipliedResult(effectDrawingRect, operatingColorSpace());
+        srcPixelArray = in->unmultipliedResult(effectDrawingRect);
     else
-        srcPixelArray = in->premultipliedResult(effectDrawingRect, operatingColorSpace());
+        srcPixelArray = in->premultipliedResult(effectDrawingRect);
+
     if (!srcPixelArray)
         return;
 
@@ -395,7 +395,7 @@ void FEConvolveMatrix::platformApplySoftware()
 
     PaintingData paintingData = {
         *srcPixelArray,
-        *dstPixelArray,
+        *resultImage,
         paintSize.width(),
         paintSize.height(),
         m_bias * 255,

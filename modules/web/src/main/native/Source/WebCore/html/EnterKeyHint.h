@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2019 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -25,7 +25,6 @@
 
 #pragma once
 
-#include <wtf/EnumTraits.h>
 #include <wtf/text/WTFString.h>
 
 namespace WebCore {
@@ -45,21 +44,3 @@ EnterKeyHint enterKeyHintForAttributeValue(const String&);
 String attributeValueForEnterKeyHint(EnterKeyHint);
 
 } // namespace WebCore
-
-namespace WTF {
-
-template<> struct EnumTraits<WebCore::EnterKeyHint> {
-    using values = EnumValues<
-        WebCore::EnterKeyHint,
-        WebCore::EnterKeyHint::Unspecified,
-        WebCore::EnterKeyHint::Enter,
-        WebCore::EnterKeyHint::Done,
-        WebCore::EnterKeyHint::Go,
-        WebCore::EnterKeyHint::Next,
-        WebCore::EnterKeyHint::Previous,
-        WebCore::EnterKeyHint::Search,
-        WebCore::EnterKeyHint::Send
-    >;
-};
-
-} // namespace WTF

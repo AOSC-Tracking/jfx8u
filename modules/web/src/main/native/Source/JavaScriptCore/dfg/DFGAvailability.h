@@ -37,7 +37,7 @@ struct Node;
 class Availability {
 public:
     Availability()
-        : m_node(nullptr)
+        : m_node(0)
         , m_flushedAt(DeadFlush)
     {
     }

@@ -34,7 +34,6 @@
 #include "FrameDestructionObserver.h"
 #include "ImageBitmap.h"
 #include "PostMessageOptions.h"
-#include "ReducedResolutionSeconds.h"
 #include "ScrollToOptions.h"
 #include "ScrollTypes.h"
 #include "Supplementable.h"
@@ -76,6 +75,7 @@ class NodeList;
 class Page;
 class PageConsoleClient;
 class Performance;
+class PostMessageTimer;
 class RequestAnimationFrameCallback;
 class RequestIdleCallback;
 class ScheduledAction;
@@ -141,8 +141,8 @@ public:
         virtual void willDetachGlobalObjectFromFrame() { }
     };
 
-    WEBCORE_EXPORT void registerObserver(Observer&);
-    WEBCORE_EXPORT void unregisterObserver(Observer&);
+    void registerObserver(Observer&);
+    void unregisterObserver(Observer&);
 
     void resetUnlessSuspendedForDocumentSuspension();
     void suspendForBackForwardCache();
@@ -276,6 +276,8 @@ public:
         return postMessage(globalObject, incumbentWindow, message, WindowPostMessageOptions { WTFMove(targetOrigin), WTFMove(transfer) });
     }
 
+    void postMessageTimerFired(PostMessageTimer&);
+
     void languagesChanged();
 
     void scrollBy(const ScrollToOptions&) const;
@@ -350,10 +352,7 @@ public:
 #endif
 
     Performance& performance() const;
-    WEBCORE_EXPORT ReducedResolutionSeconds nowTimestamp() const;
-    void freezeNowTimestamp();
-    void unfreezeNowTimestamp();
-    ReducedResolutionSeconds frozenNowTimestamp() const;
+    WEBCORE_EXPORT double nowTimestamp() const;
 
 #if PLATFORM(IOS_FAMILY)
     void incrementScrollEventListenersCount();
@@ -472,8 +471,6 @@ private:
     RefPtr<CustomElementRegistry> m_customElementRegistry;
 
     mutable RefPtr<Performance> m_performance;
-
-    Optional<ReducedResolutionSeconds> m_frozenNowTimestamp;
 
     // For the purpose of tracking user activation, each Window W has a last activation timestamp. This is a number indicating the last time W got
     // an activation notification. It corresponds to a DOMHighResTimeStamp value except for two cases: positive infinity indicates that W has never

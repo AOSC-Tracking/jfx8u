@@ -26,7 +26,7 @@
 
 #include "Filter.h"
 #include "GraphicsContext.h"
-#include "ImageData.h"
+#include <JavaScriptCore/Uint8ClampedArray.h>
 #include <wtf/MathExtras.h>
 #include <wtf/StdLibExtras.h>
 #include <wtf/text/TextStream.h>
@@ -35,7 +35,7 @@ namespace WebCore {
 
 FEComponentTransfer::FEComponentTransfer(Filter& filter, const ComponentTransferFunction& redFunction,
     const ComponentTransferFunction& greenFunction, const ComponentTransferFunction& blueFunction, const ComponentTransferFunction& alphaFunction)
-    : FilterEffect(filter, Type::ComponentTransfer)
+    : FilterEffect(filter)
     , m_redFunction(redFunction)
     , m_greenFunction(greenFunction)
     , m_blueFunction(blueFunction)
@@ -108,8 +108,7 @@ void FEComponentTransfer::platformApplySoftware()
 {
     FilterEffect* in = inputEffect(0);
 
-    auto* imageResult = createUnmultipliedImageResult();
-    auto* pixelArray = imageResult ? imageResult->data() : nullptr;
+    Uint8ClampedArray* pixelArray = createUnmultipliedImageResult();
     if (!pixelArray)
         return;
 
@@ -120,7 +119,8 @@ void FEComponentTransfer::platformApplySoftware()
     computeLookupTables(redTable, greenTable, blueTable, alphaTable);
 
     IntRect drawingRect = requestedRegionOfInputImageData(in->absolutePaintRect());
-    in->copyUnmultipliedResult(*pixelArray, drawingRect, operatingColorSpace());
+    in->copyUnmultipliedResult(*pixelArray, drawingRect);
+
     unsigned pixelArrayLength = pixelArray->length();
     uint8_t* data = pixelArray->data();
     for (unsigned pixelOffset = 0; pixelOffset < pixelArrayLength; pixelOffset += 4) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2006-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2006-2019 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -29,12 +29,20 @@
 #include "APICast.h"
 #include "APIUtils.h"
 #include "DateInstance.h"
+#include "Exception.h"
+#include "JSAPIWrapperObject.h"
 #include "JSCInlines.h"
+#include "JSCJSValue.h"
 #include "JSCallbackObject.h"
+#include "JSGlobalObject.h"
 #include "JSONObject.h"
+#include "JSObjectRefPrivate.h"
+#include "JSString.h"
 #include "LiteralParser.h"
 #include "Protect.h"
+#include <algorithm>
 #include <wtf/Assertions.h>
+#include <wtf/text/StringHash.h>
 #include <wtf/text/WTFString.h>
 
 #if PLATFORM(MAC)
@@ -227,8 +235,7 @@ bool JSValueIsEqual(JSContextRef ctx, JSValueRef a, JSValueRef b, JSValueRef* ex
     JSValue jsB = toJS(globalObject, b);
 
     bool result = JSValue::equal(globalObject, jsA, jsB); // false if an exception is thrown
-    if (handleExceptionIfNeeded(scope, ctx, exception) == ExceptionStatus::DidThrow)
-        return false;
+    handleExceptionIfNeeded(scope, ctx, exception);
 
     return result;
 }
@@ -265,8 +272,7 @@ bool JSValueIsInstanceOfConstructor(JSContextRef ctx, JSValueRef value, JSObject
     if (!jsConstructor->structure(vm)->typeInfo().implementsHasInstance())
         return false;
     bool result = jsConstructor->hasInstance(globalObject, jsValue); // false if an exception is thrown
-    if (handleExceptionIfNeeded(scope, ctx, exception) == ExceptionStatus::DidThrow)
-        return false;
+    handleExceptionIfNeeded(scope, ctx, exception);
     return result;
 }
 
@@ -274,7 +280,7 @@ JSValueRef JSValueMakeUndefined(JSContextRef ctx)
 {
     if (!ctx) {
         ASSERT_NOT_REACHED();
-        return nullptr;
+        return 0;
     }
     JSGlobalObject* globalObject = toJS(ctx);
     JSLockHolder locker(globalObject);
@@ -286,7 +292,7 @@ JSValueRef JSValueMakeNull(JSContextRef ctx)
 {
     if (!ctx) {
         ASSERT_NOT_REACHED();
-        return nullptr;
+        return 0;
     }
     JSGlobalObject* globalObject = toJS(ctx);
     JSLockHolder locker(globalObject);
@@ -298,7 +304,7 @@ JSValueRef JSValueMakeBoolean(JSContextRef ctx, bool value)
 {
     if (!ctx) {
         ASSERT_NOT_REACHED();
-        return nullptr;
+        return 0;
     }
     JSGlobalObject* globalObject = toJS(ctx);
     JSLockHolder locker(globalObject);
@@ -310,7 +316,7 @@ JSValueRef JSValueMakeNumber(JSContextRef ctx, double value)
 {
     if (!ctx) {
         ASSERT_NOT_REACHED();
-        return nullptr;
+        return 0;
     }
     JSGlobalObject* globalObject = toJS(ctx);
     JSLockHolder locker(globalObject);
@@ -337,7 +343,7 @@ JSValueRef JSValueMakeString(JSContextRef ctx, JSStringRef string)
 {
     if (!ctx) {
         ASSERT_NOT_REACHED();
-        return nullptr;
+        return 0;
     }
     JSGlobalObject* globalObject = toJS(ctx);
     VM& vm = globalObject->vm();
@@ -350,7 +356,7 @@ JSValueRef JSValueMakeFromJSONString(JSContextRef ctx, JSStringRef string)
 {
     if (!ctx) {
         ASSERT_NOT_REACHED();
-        return nullptr;
+        return 0;
     }
     JSGlobalObject* globalObject = toJS(ctx);
     JSLockHolder locker(globalObject);
@@ -368,7 +374,7 @@ JSStringRef JSValueCreateJSONString(JSContextRef ctx, JSValueRef apiValue, unsig
 {
     if (!ctx) {
         ASSERT_NOT_REACHED();
-        return nullptr;
+        return 0;
     }
     JSGlobalObject* globalObject = toJS(ctx);
     VM& vm = globalObject->vm();
@@ -378,9 +384,9 @@ JSStringRef JSValueCreateJSONString(JSContextRef ctx, JSValueRef apiValue, unsig
     JSValue value = toJS(globalObject, apiValue);
     String result = JSONStringify(globalObject, value, indent);
     if (exception)
-        *exception = nullptr;
+        *exception = 0;
     if (handleExceptionIfNeeded(scope, ctx, exception) == ExceptionStatus::DidThrow)
-        return nullptr;
+        return 0;
     return OpaqueJSString::tryCreate(result).leakRef();
 }
 
@@ -420,7 +426,7 @@ JSStringRef JSValueToStringCopy(JSContextRef ctx, JSValueRef value, JSValueRef* 
 {
     if (!ctx) {
         ASSERT_NOT_REACHED();
-        return nullptr;
+        return 0;
     }
     JSGlobalObject* globalObject = toJS(ctx);
     VM& vm = globalObject->vm();
@@ -439,7 +445,7 @@ JSObjectRef JSValueToObject(JSContextRef ctx, JSValueRef value, JSValueRef* exce
 {
     if (!ctx) {
         ASSERT_NOT_REACHED();
-        return nullptr;
+        return 0;
     }
     JSGlobalObject* globalObject = toJS(ctx);
     VM& vm = globalObject->vm();
@@ -450,7 +456,7 @@ JSObjectRef JSValueToObject(JSContextRef ctx, JSValueRef value, JSValueRef* exce
 
     JSObjectRef objectRef = toRef(jsValue.toObject(globalObject));
     if (handleExceptionIfNeeded(scope, ctx, exception) == ExceptionStatus::DidThrow)
-        objectRef = nullptr;
+        objectRef = 0;
     return objectRef;
 }
 

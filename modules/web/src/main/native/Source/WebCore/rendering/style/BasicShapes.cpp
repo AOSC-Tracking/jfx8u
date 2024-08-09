@@ -409,6 +409,12 @@ bool BasicShapeInset::operator==(const BasicShape& other) const
         && m_bottomLeftRadius == otherInset.m_bottomLeftRadius;
 }
 
+static FloatSize floatSizeForLengthSize(const LengthSize& lengthSize, const FloatRect& boundingBox)
+{
+    return { floatValueForLength(lengthSize.width, boundingBox.width()),
+        floatValueForLength(lengthSize.height, boundingBox.height()) };
+}
+
 const Path& BasicShapeInset::path(const FloatRect& boundingBox)
 {
     float left = floatValueForLength(m_left, boundingBox.width());
@@ -416,10 +422,10 @@ const Path& BasicShapeInset::path(const FloatRect& boundingBox)
     auto rect = FloatRect(left + boundingBox.x(), top + boundingBox.y(),
         std::max<float>(boundingBox.width() - left - floatValueForLength(m_right, boundingBox.width()), 0),
         std::max<float>(boundingBox.height() - top - floatValueForLength(m_bottom, boundingBox.height()), 0));
-    auto radii = FloatRoundedRect::Radii(floatSizeForLengthSize(m_topLeftRadius, boundingBox.size()),
-        floatSizeForLengthSize(m_topRightRadius, boundingBox.size()),
-        floatSizeForLengthSize(m_bottomLeftRadius, boundingBox.size()),
-        floatSizeForLengthSize(m_bottomRightRadius, boundingBox.size()));
+    auto radii = FloatRoundedRect::Radii(floatSizeForLengthSize(m_topLeftRadius, boundingBox),
+        floatSizeForLengthSize(m_topRightRadius, boundingBox),
+        floatSizeForLengthSize(m_bottomLeftRadius, boundingBox),
+        floatSizeForLengthSize(m_bottomRightRadius, boundingBox));
     radii.scale(calcBorderRadiiConstraintScaleFor(rect, radii));
 
     return cachedRoundedRectPath(FloatRoundedRect(rect, radii));

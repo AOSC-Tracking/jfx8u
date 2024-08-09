@@ -35,11 +35,9 @@
 #include "JSDOMBinding.h"
 #include "JSPerformanceMark.h"
 #include "JSPerformanceMeasure.h"
-#include "JSPerformancePaintTiming.h"
 #include "JSPerformanceResourceTiming.h"
 #include "PerformanceMark.h"
 #include "PerformanceMeasure.h"
-#include "PerformancePaintTiming.h"
 #include "PerformanceResourceTiming.h"
 
 
@@ -48,9 +46,6 @@ using namespace JSC;
 
 JSValue toJSNewlyCreated(JSGlobalObject*, JSDOMGlobalObject* globalObject, Ref<PerformanceEntry>&& entry)
 {
-    if (is<PerformancePaintTiming>(entry))
-        return createWrapper<PerformancePaintTiming>(globalObject, WTFMove(entry));
-
     if (is<PerformanceResourceTiming>(entry))
         return createWrapper<PerformanceResourceTiming>(globalObject, WTFMove(entry));
 

@@ -27,7 +27,6 @@
 
 #if ENABLE(WEBGL)
 
-#include "GraphicsContextGL.h"
 #include "WebGLSharedObject.h"
 
 namespace WebCore {
@@ -38,17 +37,8 @@ public:
 
     static Ref<WebGLSync> create(WebGLRenderingContextBase&);
 
-    void updateCache(WebGLRenderingContextBase&);
-    GCGLint getCachedResult(GCGLenum pname) const;
-    bool isSignaled() const;
-    void scheduleAllowCacheUpdate(WebGLRenderingContextBase&);
-
-private:
+protected:
     WebGLSync(WebGLRenderingContextBase&);
-
-    bool m_allowCacheUpdate = { false };
-    GCGLint m_syncStatus = { GraphicsContextGL::UNSIGNALED };
-    GCGLsync m_sync;
 
     void deleteObjectImpl(GraphicsContextGLOpenGL*, PlatformGLObject) override;
 };

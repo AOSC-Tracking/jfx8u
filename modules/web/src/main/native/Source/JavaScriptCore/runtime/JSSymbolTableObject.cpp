@@ -44,13 +44,13 @@ void JSSymbolTableObject::visitChildren(JSCell* cell, SlotVisitor& visitor)
     visitor.append(thisObject->m_symbolTable);
 }
 
-bool JSSymbolTableObject::deleteProperty(JSCell* cell, JSGlobalObject* globalObject, PropertyName propertyName, DeletePropertySlot& slot)
+bool JSSymbolTableObject::deleteProperty(JSCell* cell, JSGlobalObject* globalObject, PropertyName propertyName)
 {
     JSSymbolTableObject* thisObject = jsCast<JSSymbolTableObject*>(cell);
     if (thisObject->symbolTable()->contains(propertyName.uid()))
         return false;
 
-    return Base::deleteProperty(thisObject, globalObject, propertyName, slot);
+    return Base::deleteProperty(thisObject, globalObject, propertyName);
 }
 
 void JSSymbolTableObject::getOwnNonIndexPropertyNames(JSObject* object, JSGlobalObject* globalObject, PropertyNameArray& propertyNames, EnumerationMode mode)

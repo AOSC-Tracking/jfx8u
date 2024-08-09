@@ -21,7 +21,6 @@
 #pragma once
 
 #include "InternalFunction.h"
-#include "MathCommon.h"
 
 namespace JSC {
 
@@ -49,12 +48,20 @@ public:
 
     static bool isIntegerImpl(JSValue value)
     {
-        return value.isInt32() || (value.isDouble() && isInteger(value.asDouble()));
+        if (value.isInt32())
+            return true;
+        if (!value.isDouble())
+            return false;
+
+        double number = value.asDouble();
+        return std::isfinite(number) && trunc(number) == number;
     }
+
+protected:
+    void finishCreation(VM&, NumberPrototype*);
 
 private:
     NumberConstructor(VM&, Structure*);
-    void finishCreation(VM&, NumberPrototype*);
 };
 STATIC_ASSERT_ISO_SUBSPACE_SHARABLE(NumberConstructor, InternalFunction);
 

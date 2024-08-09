@@ -30,6 +30,7 @@
 
 #include "AirBasicBlock.h"
 #include "AirCode.h"
+#include <wtf/BubbleSort.h>
 
 namespace JSC { namespace B3 { namespace Air {
 

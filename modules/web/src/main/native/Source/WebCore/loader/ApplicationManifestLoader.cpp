@@ -32,6 +32,7 @@
 #include "CachedResourceLoader.h"
 #include "CachedResourceRequest.h"
 #include "CachedResourceRequestInitiators.h"
+#include "CustomHeaderFields.h"
 #include "DocumentLoader.h"
 #include "Frame.h"
 
@@ -114,7 +115,7 @@ Optional<ApplicationManifest>& ApplicationManifestLoader::processManifest()
     return m_processedManifest;
 }
 
-void ApplicationManifestLoader::notifyFinished(CachedResource& resource, const NetworkLoadMetrics&)
+void ApplicationManifestLoader::notifyFinished(CachedResource& resource)
 {
     ASSERT_UNUSED(resource, &resource == m_resource);
     m_documentLoader.finishedLoadingApplicationManifest(*this);

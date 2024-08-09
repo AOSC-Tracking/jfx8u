@@ -44,7 +44,7 @@
 
 namespace WebCore {
 
-#if !PLATFORM(MAC) && !PLATFORM(IOS_FAMILY) && !USE(GSTREAMER)
+#if !PLATFORM(MAC) && !PLATFORM(IOS_FAMILY) && !(USE(GSTREAMER) && USE(LIBWEBRTC))
 CaptureSourceOrError MockRealtimeAudioSource::create(String&& deviceID, String&& name, String&& hashSalt, const MediaConstraints* constraints)
 {
 #ifndef NDEBUG
@@ -90,7 +90,6 @@ const RealtimeMediaSourceSettings& MockRealtimeAudioSource::settings()
         settings.setVolume(volume());
         settings.setEchoCancellation(echoCancellation());
         settings.setSampleRate(sampleRate());
-        settings.setLabel(name());
 
         RealtimeMediaSourceSupportedConstraints supportedConstraints;
         supportedConstraints.setSupportsDeviceId(true);

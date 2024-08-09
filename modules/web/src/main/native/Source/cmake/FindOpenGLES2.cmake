@@ -4,7 +4,7 @@
 #     OPENGLES2_LIBRARIES
 #     OPENGLES2_DEFINITIONS
 
-find_package(PkgConfig QUIET)
+find_package(PkgConfig)
 
 pkg_check_modules(PC_OPENGLES2 glesv2)
 

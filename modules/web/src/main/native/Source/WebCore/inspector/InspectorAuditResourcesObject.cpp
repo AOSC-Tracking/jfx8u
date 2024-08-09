@@ -69,7 +69,7 @@ ExceptionOr<Vector<InspectorAuditResourcesObject::Resource>> InspectorAuditResou
 
     for (auto* cachedResource : InspectorPageAgent::cachedResourcesForFrame(frame)) {
         Resource resource;
-        resource.url = cachedResource->url().string();
+        resource.url = cachedResource->url();
         resource.mimeType = cachedResource->mimeType();
 
         bool exists = false;

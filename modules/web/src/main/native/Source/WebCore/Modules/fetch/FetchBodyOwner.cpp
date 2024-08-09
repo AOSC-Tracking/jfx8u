@@ -1,6 +1,5 @@
 /*
  * Copyright (C) 2016 Canon Inc.
- * Copyright (C) 2020 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted, provided that the following conditions
@@ -76,8 +75,10 @@ bool FetchBodyOwner::isDisturbed() const
     if (m_isDisturbed)
         return true;
 
+#if ENABLE(STREAMS_API)
     if (body().readableStream())
         return body().readableStream()->isDisturbed();
+#endif
 
     return false;
 }
@@ -90,8 +91,10 @@ bool FetchBodyOwner::isDisturbedOrLocked() const
     if (m_isDisturbed)
         return true;
 
+#if ENABLE(STREAMS_API)
     if (body().readableStream())
         return body().readableStream()->isDisturbed() || body().readableStream()->isLocked();
+#endif
 
     return false;
 }
@@ -253,6 +256,7 @@ void FetchBodyOwner::loadBlob(const Blob& blob, FetchBodyConsumer* consumer)
         m_blobLoader = WTF::nullopt;
         return;
     }
+    setPendingActivity(*this);
 }
 
 void FetchBodyOwner::finishBlobLoading()
@@ -260,16 +264,18 @@ void FetchBodyOwner::finishBlobLoading()
     ASSERT(m_blobLoader);
 
     m_blobLoader = WTF::nullopt;
+    unsetPendingActivity(*this);
 }
 
 void FetchBodyOwner::blobLoadingSucceeded()
 {
     ASSERT(!isBodyNull());
+#if ENABLE(STREAMS_API)
     if (m_readableStreamSource) {
         m_readableStreamSource->close();
         m_readableStreamSource = nullptr;
     }
-
+#endif
     m_body->loadingSucceeded();
     finishBlobLoading();
 }
@@ -277,11 +283,13 @@ void FetchBodyOwner::blobLoadingSucceeded()
 void FetchBodyOwner::blobLoadingFailed()
 {
     ASSERT(!isBodyNull());
+#if ENABLE(STREAMS_API)
     if (m_readableStreamSource) {
         if (!m_readableStreamSource->isCancelling())
             m_readableStreamSource->error(Exception { TypeError, "Blob loading failed"_s});
         m_readableStreamSource = nullptr;
     } else
+#endif
         m_body->loadingFailed(Exception { TypeError, "Blob loading failed"_s});
     finishBlobLoading();
 }
@@ -289,9 +297,14 @@ void FetchBodyOwner::blobLoadingFailed()
 void FetchBodyOwner::blobChunk(const char* data, size_t size)
 {
     ASSERT(data);
+#if ENABLE(STREAMS_API)
     ASSERT(m_readableStreamSource);
     if (!m_readableStreamSource->enqueue(ArrayBuffer::tryCreate(data, size)))
         stop();
+#else
+    UNUSED_PARAM(data);
+    UNUSED_PARAM(size);
+#endif
 }
 
 FetchBodyOwner::BlobLoader::BlobLoader(FetchBodyOwner& owner)
@@ -312,40 +325,27 @@ void FetchBodyOwner::BlobLoader::didFail(const ResourceError&)
         owner.blobLoadingFailed();
 }
 
-ExceptionOr<RefPtr<ReadableStream>> FetchBodyOwner::readableStream(JSC::JSGlobalObject& state)
+RefPtr<ReadableStream> FetchBodyOwner::readableStream(JSC::JSGlobalObject& state)
 {
     if (isBodyNullOrOpaque())
         return nullptr;
 
-    if (!m_body->hasReadableStream()) {
-        auto voidOrException = createReadableStream(state);
-        if (UNLIKELY(voidOrException.hasException()))
-            return voidOrException.releaseException();
-    }
+    if (!m_body->hasReadableStream())
+        createReadableStream(state);
 
     return m_body->readableStream();
 }
 
-ExceptionOr<void> FetchBodyOwner::createReadableStream(JSC::JSGlobalObject& state)
+void FetchBodyOwner::createReadableStream(JSC::JSGlobalObject& state)
 {
     ASSERT(!m_readableStreamSource);
     if (isDisturbed()) {
-        auto streamOrException = ReadableStream::create(state, nullptr);
-        if (UNLIKELY(streamOrException.hasException()))
-            return streamOrException.releaseException();
-        m_body->setReadableStream(streamOrException.releaseReturnValue());
+        m_body->setReadableStream(ReadableStream::create(state, nullptr));
         m_body->readableStream()->lock();
-        return { };
+    } else {
+        m_readableStreamSource = adoptRef(*new FetchBodySource(*this));
+        m_body->setReadableStream(ReadableStream::create(state, m_readableStreamSource));
     }
-
-    m_readableStreamSource = adoptRef(*new FetchBodySource(*this));
-    auto streamOrException = ReadableStream::create(state, m_readableStreamSource);
-    if (UNLIKELY(streamOrException.hasException())) {
-        m_readableStreamSource = nullptr;
-        return streamOrException.releaseException();
-    }
-    m_body->setReadableStream(streamOrException.releaseReturnValue());
-    return { };
 }
 
 void FetchBodyOwner::consumeBodyAsStream()
@@ -382,11 +382,6 @@ Optional<Exception> FetchBodyOwner::loadingException() const
     }, [](auto&&) -> Optional<Exception> {
         return WTF::nullopt;
     });
-}
-
-bool FetchBodyOwner::virtualHasPendingActivity() const
-{
-    return !!m_blobLoader;
 }
 
 bool FetchBodyOwner::hasLoadingError() const

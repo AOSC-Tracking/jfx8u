@@ -30,7 +30,9 @@
 #include "SymbolTable.h"
 
 #include "CodeBlock.h"
-#include "JSCJSValueInlines.h"
+#include "JSDestructibleObject.h"
+#include "JSCInlines.h"
+#include "SlotVisitorInlines.h"
 #include "TypeProfiler.h"
 
 namespace JSC {
@@ -67,7 +69,7 @@ void SymbolTableEntry::prepareToWatch()
     FatEntry* entry = inflate();
     if (entry->m_watchpoints)
         return;
-    entry->m_watchpoints = WatchpointSet::create(ClearWatchpoint);
+    entry->m_watchpoints = adoptRef(new WatchpointSet(ClearWatchpoint));
 }
 
 SymbolTableEntry::FatEntry* SymbolTableEntry::inflateSlow()
@@ -180,11 +182,6 @@ SymbolTable* SymbolTable::cloneScopePart(VM& vm)
             auto end = m_rareData->m_uniqueTypeSetMap.end();
             for (; iter != end; ++iter)
                 result->m_rareData->m_uniqueTypeSetMap.set(iter->key, iter->value);
-        }
-
-        {
-            for (auto name : m_rareData->m_privateNames)
-                result->m_rareData->m_privateNames.add(name);
         }
     }
 

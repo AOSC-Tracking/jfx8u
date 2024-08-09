@@ -25,23 +25,16 @@
 
 #pragma once
 
-#include "JSObject.h"
+#include "JSDestructibleObject.h"
 
 namespace Inspector {
 
 class InjectedScriptHost;
 
-class JSInjectedScriptHost final : public JSC::JSNonFinalObject {
+class JSInjectedScriptHost final : public JSC::JSDestructibleObject {
 public:
-    using Base = JSC::JSNonFinalObject;
+    typedef JSC::JSDestructibleObject Base;
     static constexpr unsigned StructureFlags = Base::StructureFlags;
-    static constexpr bool needsDestruction = true;
-
-    template<typename CellType, JSC::SubspaceAccess mode>
-    static JSC::IsoSubspace* subspaceFor(JSC::VM& vm)
-    {
-        return vm.injectedScriptHostSpace<mode>();
-    }
 
     DECLARE_INFO;
 
@@ -83,9 +76,11 @@ public:
     JSC::JSValue queryInstances(JSC::JSGlobalObject*, JSC::CallFrame*);
     JSC::JSValue queryHolders(JSC::JSGlobalObject*, JSC::CallFrame*);
 
+protected:
+    void finishCreation(JSC::VM&);
+
 private:
     JSInjectedScriptHost(JSC::VM&, JSC::Structure*, Ref<InjectedScriptHost>&&);
-    void finishCreation(JSC::VM&);
 
     Ref<InjectedScriptHost> m_wrapped;
 };

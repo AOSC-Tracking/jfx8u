@@ -39,6 +39,7 @@ ScrollingTreeNode::ScrollingTreeNode(ScrollingTree& scrollingTree, ScrollingNode
     : m_scrollingTree(scrollingTree)
     , m_nodeType(nodeType)
     , m_nodeID(nodeID)
+    , m_parent(nullptr)
 {
 }
 
@@ -116,6 +117,19 @@ void ScrollingTreeNode::dump(TextStream& ts, ScrollingStateTreeAsTextBehavior be
         TextStream::GroupScope scope(ts);
         child->dump(ts, behavior);
     }
+}
+
+ScrollingTreeScrollingNode* ScrollingTreeNode::scrollingNodeForPoint(LayoutPoint parentPoint) const
+{
+    LayoutPoint localPoint = parentToLocalPoint(parentPoint);
+    LayoutPoint contentsPoint = localToContentsPoint(localPoint);
+
+    for (auto& child : WTF::makeReversedRange(m_children)) {
+        if (auto* node = child->scrollingNodeForPoint(contentsPoint))
+            return node;
+    }
+
+    return nullptr;
 }
 
 } // namespace WebCore

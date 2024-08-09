@@ -35,7 +35,6 @@
 #include <JavaScriptCore/MachineStackMarker.h>
 #include <JavaScriptCore/VM.h>
 #include <wtf/MainThread.h>
-#include <wtf/RunLoop.h>
 #include <wtf/text/AtomString.h>
 
 #if PLATFORM(IOS_FAMILY)
@@ -51,18 +50,9 @@ JSC::VM& commonVMSlow()
     ASSERT(isMainThread());
     ASSERT(!g_commonVMOrNull);
 
-    // FIXME: Remove this call to ScriptController::initializeMainThread(). The
-    // main thread should have been initialized by a WebKit entrypoint already.
-    // Also, initializeMainThread() does nothing on iOS.
-    ScriptController::initializeMainThread();
+    ScriptController::initializeThreading();
 
-#if PLATFORM(IOS_FAMILY)
-    RunLoop* runLoop = RunLoop::webIfExists();
-#else
-    RunLoop* runLoop = nullptr;
-#endif
-
-    auto& vm = JSC::VM::create(JSC::LargeHeap, runLoop).leakRef();
+    auto& vm = JSC::VM::create(JSC::LargeHeap).leakRef();
 
     g_commonVMOrNull = &vm;
 
@@ -71,6 +61,7 @@ JSC::VM& commonVMSlow()
 #if PLATFORM(IOS_FAMILY)
     if (WebThreadIsEnabled())
         vm.apiLock().makeWebThreadAware();
+    vm.setRunLoop(WebThreadRunLoop());
     vm.heap.machineThreads().addCurrentThread();
 #endif
 

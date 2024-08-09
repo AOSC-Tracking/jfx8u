@@ -26,6 +26,10 @@
 #include "config.h"
 #include "CachePayload.h"
 
+#if !OS(WINDOWS)
+#include <sys/mman.h>
+#endif
+
 namespace JSC {
 
 CachePayload CachePayload::makeMappedPayload(FileSystem::MappedFileData&& data)

@@ -27,6 +27,8 @@
 #include <wtf/ParallelHelperPool.h>
 
 #include <wtf/AutomaticThread.h>
+#include <wtf/DataLog.h>
+#include <wtf/StringPrintStream.h>
 
 namespace WTF {
 
@@ -167,7 +169,7 @@ void ParallelHelperPool::doSomeHelping()
     client->runTask(task);
 }
 
-class ParallelHelperPool::Thread final : public AutomaticThread {
+class ParallelHelperPool::Thread : public AutomaticThread {
 public:
     Thread(const AbstractLocker& locker, ParallelHelperPool& pool)
         : AutomaticThread(locker, pool.m_lock, pool.m_workAvailableCondition.copyRef())
@@ -175,13 +177,13 @@ public:
     {
     }
 
-    const char* name() const final
+    const char* name() const override
     {
         return m_pool.m_threadName.data();
     }
 
-private:
-    PollResult poll(const AbstractLocker& locker) final
+protected:
+    PollResult poll(const AbstractLocker& locker) override
     {
         if (m_pool.m_isDying)
             return PollResult::Stop;
@@ -193,7 +195,7 @@ private:
         return PollResult::Wait;
     }
 
-    WorkResult work() final
+    WorkResult work() override
     {
         m_client->runTask(m_task);
         m_client = nullptr;
@@ -201,6 +203,7 @@ private:
         return WorkResult::Continue;
     }
 
+private:
     ParallelHelperPool& m_pool;
     ParallelHelperClient* m_client { nullptr };
     RefPtr<SharedTask<void ()>> m_task;

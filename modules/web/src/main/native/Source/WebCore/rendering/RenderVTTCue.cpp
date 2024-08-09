@@ -26,7 +26,7 @@
 
 #include "config.h"
 
-#if ENABLE(VIDEO)
+#if ENABLE(VIDEO_TRACK)
 #include "RenderVTTCue.h"
 
 #include "RenderInline.h"
@@ -43,9 +43,10 @@ WTF_MAKE_ISO_ALLOCATED_IMPL(RenderVTTCue);
 
 RenderVTTCue::RenderVTTCue(VTTCueBox& element, RenderStyle&& style)
     : RenderBlockFlow(element, WTFMove(style))
-    , m_cue(downcast<VTTCue>(element.getCue()))
+    , m_cue(toVTTCue(element.getCue()))
 {
     ASSERT(m_cue);
+    ASSERT(is<VTTCue>(m_cue));
 }
 
 void RenderVTTCue::layout()
@@ -63,7 +64,7 @@ void RenderVTTCue::layout()
     LayoutStateMaintainer statePusher(*this, locationOffset(), hasTransform() || hasReflection() || style().isFlippedBlocksWritingMode());
 
     if (m_cue->cueType()== TextTrackCue::WebVTT) {
-        if (m_cue->snapToLines())
+        if (toVTTCue(m_cue)->snapToLines())
             repositionCueSnapToLinesSet();
         else
             repositionCueSnapToLinesNotSet();
@@ -351,7 +352,7 @@ void RenderVTTCue::repositionGenericCue()
     RenderElement& backdropElement = downcast<RenderElement>(firstChild);
 
     InlineFlowBox* firstLineBox = downcast<RenderInline>(*backdropElement.firstChild()).firstLineBox();
-    if (downcast<TextTrackCueGeneric>(*m_cue).useDefaultPosition() && firstLineBox) {
+    if (static_cast<TextTrackCueGeneric*>(m_cue)->useDefaultPosition() && firstLineBox) {
         LayoutUnit parentWidth = containingBlock()->logicalWidth();
         LayoutUnit width { firstLineBox->width() };
         LayoutUnit right = (parentWidth / 2) - (width / 2);

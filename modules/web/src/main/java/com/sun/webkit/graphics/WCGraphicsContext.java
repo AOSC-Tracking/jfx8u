@@ -27,8 +27,6 @@ package com.sun.webkit.graphics;
 
 import java.nio.ByteBuffer;
 
-import com.sun.prism.paint.Color;
-
 public abstract class WCGraphicsContext {
     // The constants are taken from WebCore/platform/graphics/GraphicsTypes.h
     public static final int COMPOSITE_CLEAR               = 0;
@@ -46,22 +44,22 @@ public abstract class WCGraphicsContext {
     public static final int COMPOSITE_HIGHLIGHT           = 12;
     public static final int COMPOSITE_PLUS_LIGHTER        = 13;
 
-    public abstract void fillRect(float x, float y, float w, float h, Color color);
+    public abstract void fillRect(float x, float y, float w, float h, Integer rgba);
     public abstract void clearRect(float x, float y, float w, float h);
-    public abstract void setFillColor(Color color);
+    public abstract void setFillColor(int rgba);
     public abstract void setFillGradient(WCGradient gradient);
 
     public abstract void fillRoundedRect(float x, float y, float w, float h,
             float topLeftW, float topLeftH, float topRightW, float topRightH,
             float bottomLeftW, float bottomLeftH, float bottomRightW, float bottomRightH,
-            Color color);
+            int rgba);
 
     public abstract void setTextMode(boolean fill, boolean stroke, boolean clip);
     public abstract void setFontSmoothingType(int fontSmoothingType);
     public abstract int getFontSmoothingType();
 
     public abstract void setStrokeStyle(int style);
-    public abstract void setStrokeColor(Color color);
+    public abstract void setStrokeColor(int rgba);
     public abstract void setStrokeWidth(float width);
     public abstract void setStrokeGradient(WCGradient gradient);
 
@@ -107,7 +105,7 @@ public abstract class WCGraphicsContext {
     public abstract void strokeArc(int x, int y, int w, int h, int startAngle,
                           int angleSpan);
     public abstract void drawEllipse(int x, int y, int w, int h);
-    public abstract void drawFocusRing(int x, int y, int w, int h, Color color);
+    public abstract void drawFocusRing(int x, int y, int w, int h, int rgba);
     public abstract void setAlpha(float alpha);
     public abstract float getAlpha();
     public abstract void beginTransparencyLayer(float opacity);
@@ -117,7 +115,7 @@ public abstract class WCGraphicsContext {
                                     float lineWidth);
     public abstract void fillPath(WCPath path);
 
-    public abstract void setShadow(float dx, float dy, float blur, Color color);
+    public abstract void setShadow(float dx, float dy, float blur, int color);
 
     public abstract void drawString(WCFont f, String str,
                                     boolean rtl,

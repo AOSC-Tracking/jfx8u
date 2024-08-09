@@ -28,7 +28,9 @@
 
 #if ENABLE(WEBASSEMBLY)
 
-#include "JSObjectInlines.h"
+#include "Error.h"
+#include "FunctionPrototype.h"
+#include "JSCInlines.h"
 #include "JSWebAssemblyInstance.h"
 #include "WasmSignatureInlines.h"
 
@@ -41,10 +43,11 @@ static EncodedJSValue JSC_HOST_CALL callWebAssemblyWrapperFunction(JSGlobalObjec
     VM& vm = globalObject->vm();
     auto scope = DECLARE_THROW_SCOPE(vm);
     WebAssemblyWrapperFunction* wasmFunction = jsCast<WebAssemblyWrapperFunction*>(callFrame->jsCallee());
+    CallData callData;
     JSObject* function = wasmFunction->function();
-    auto callData = getCallData(vm, function);
-    RELEASE_ASSERT(callData.type != CallData::Type::None);
-    RELEASE_AND_RETURN(scope, JSValue::encode(call(globalObject, function, callData, jsUndefined(), ArgList(callFrame))));
+    CallType callType = function->methodTable(vm)->getCallData(function, callData);
+    RELEASE_ASSERT(callType != CallType::None);
+    RELEASE_AND_RETURN(scope, JSValue::encode(call(globalObject, function, callType, callData, jsUndefined(), ArgList(callFrame))));
 }
 
 WebAssemblyWrapperFunction::WebAssemblyWrapperFunction(VM& vm, NativeExecutable* executable, JSGlobalObject* globalObject, Structure* structure, Wasm::WasmToWasmImportableFunction importableFunction)
@@ -66,7 +69,7 @@ WebAssemblyWrapperFunction* WebAssemblyWrapperFunction::create(VM& vm, JSGlobalO
 void WebAssemblyWrapperFunction::finishCreation(VM& vm, NativeExecutable* executable, unsigned length, const String& name, JSObject* function, JSWebAssemblyInstance* instance)
 {
     Base::finishCreation(vm, executable, length, name, instance);
-    RELEASE_ASSERT(JSValue(function).isCallable(vm));
+    RELEASE_ASSERT(JSValue(function).isFunction(vm));
     m_function.set(vm, this, function);
 }
 

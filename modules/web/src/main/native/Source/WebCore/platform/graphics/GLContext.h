@@ -82,6 +82,13 @@ public:
     virtual PlatformGraphicsContextGL platformContext() = 0;
 #endif
 
+#if PLATFORM(X11)
+private:
+    static void addActiveContext(GLContext*);
+    static void removeActiveContext(GLContext*);
+    static void cleanupActiveContextsAtExit();
+#endif
+
 protected:
     GLContext(PlatformDisplay&);
 

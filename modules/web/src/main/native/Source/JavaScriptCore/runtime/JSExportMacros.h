@@ -31,12 +31,16 @@
 
 #include <wtf/ExportMacros.h>
 
-#if !defined(JS_EXPORT_PRIVATE)
+#if USE(EXPORT_MACROS)
 
 #if defined(BUILDING_JavaScriptCore) || defined(STATICALLY_LINKED_WITH_JavaScriptCore)
-#define JS_EXPORT_PRIVATE WTF_EXPORT_DECLARATION
+#define JS_EXPORT_PRIVATE WTF_EXPORT
 #else
-#define JS_EXPORT_PRIVATE WTF_IMPORT_DECLARATION
+#define JS_EXPORT_PRIVATE WTF_IMPORT
 #endif
 
-#endif
+#else // !USE(EXPORT_MACROS)
+
+#define JS_EXPORT_PRIVATE
+
+#endif // USE(EXPORT_MACROS)

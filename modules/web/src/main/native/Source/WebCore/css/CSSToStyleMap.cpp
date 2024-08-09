@@ -424,7 +424,8 @@ void CSSToStyleMap::mapAnimationPlayState(Animation& layer, const CSSValue& valu
 void CSSToStyleMap::mapAnimationProperty(Animation& animation, const CSSValue& value)
 {
     if (value.treatAsInitialValue(CSSPropertyAnimation)) {
-        animation.setProperty(Animation::initialProperty());
+        animation.setAnimationMode(Animation::AnimateAll);
+        animation.setProperty(CSSPropertyInvalid);
         return;
     }
 
@@ -433,20 +434,23 @@ void CSSToStyleMap::mapAnimationProperty(Animation& animation, const CSSValue& v
 
     auto& primitiveValue = downcast<CSSPrimitiveValue>(value);
     if (primitiveValue.valueID() == CSSValueAll) {
-        animation.setProperty({ Animation::TransitionMode::All, CSSPropertyInvalid });
+        animation.setAnimationMode(Animation::AnimateAll);
+        animation.setProperty(CSSPropertyInvalid);
         return;
     }
     if (primitiveValue.valueID() == CSSValueNone) {
-        animation.setProperty({ Animation::TransitionMode::None, CSSPropertyInvalid });
+        animation.setAnimationMode(Animation::AnimateNone);
+        animation.setProperty(CSSPropertyInvalid);
         return;
     }
     if (primitiveValue.propertyID() == CSSPropertyInvalid) {
-        animation.setProperty({ Animation::TransitionMode::UnknownProperty, CSSPropertyInvalid });
+        animation.setAnimationMode(Animation::AnimateUnknownProperty);
+        animation.setProperty(CSSPropertyInvalid);
         animation.setUnknownProperty(primitiveValue.stringValue());
         return;
     }
-
-    animation.setProperty({ Animation::TransitionMode::SingleProperty, primitiveValue.propertyID() });
+    animation.setAnimationMode(Animation::AnimateSingleProperty);
+    animation.setProperty(primitiveValue.propertyID());
 }
 
 void CSSToStyleMap::mapAnimationTimingFunction(Animation& animation, const CSSValue& value)
@@ -474,10 +478,10 @@ void CSSToStyleMap::mapAnimationTimingFunction(Animation& animation, const CSSVa
             animation.setTimingFunction(CubicBezierTimingFunction::create(CubicBezierTimingFunction::EaseInOut));
             break;
         case CSSValueStepStart:
-            animation.setTimingFunction(StepsTimingFunction::create(1, StepsTimingFunction::StepPosition::Start));
+            animation.setTimingFunction(StepsTimingFunction::create(1, true));
             break;
         case CSSValueStepEnd:
-            animation.setTimingFunction(StepsTimingFunction::create(1, StepsTimingFunction::StepPosition::End));
+            animation.setTimingFunction(StepsTimingFunction::create(1, false));
             break;
         default:
             break;
@@ -490,7 +494,7 @@ void CSSToStyleMap::mapAnimationTimingFunction(Animation& animation, const CSSVa
         animation.setTimingFunction(CubicBezierTimingFunction::create(cubicTimingFunction.x1(), cubicTimingFunction.y1(), cubicTimingFunction.x2(), cubicTimingFunction.y2()));
     } else if (is<CSSStepsTimingFunctionValue>(value)) {
         auto& stepsTimingFunction = downcast<CSSStepsTimingFunctionValue>(value);
-        animation.setTimingFunction(StepsTimingFunction::create(stepsTimingFunction.numberOfSteps(), stepsTimingFunction.stepPosition()));
+        animation.setTimingFunction(StepsTimingFunction::create(stepsTimingFunction.numberOfSteps(), stepsTimingFunction.stepAtStart()));
     } else if (is<CSSSpringTimingFunctionValue>(value)) {
         auto& springTimingFunction = downcast<CSSSpringTimingFunctionValue>(value);
         animation.setTimingFunction(SpringTimingFunction::create(springTimingFunction.mass(), springTimingFunction.stiffness(), springTimingFunction.damping(), springTimingFunction.initialVelocity()));

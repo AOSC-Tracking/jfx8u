@@ -17,9 +17,9 @@
  * Boston, MA 02110-1301, USA.
  */
 
-interface UIEvent : Event {
-    constructor(DOMString type, optional UIEventInit eventInitDict);
-
+[
+    Constructor(DOMString type, optional UIEventInit eventInitDict)
+] interface UIEvent : Event {
     readonly attribute WindowProxy view;
     readonly attribute long detail;
     

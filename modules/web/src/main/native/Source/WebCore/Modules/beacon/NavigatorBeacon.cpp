@@ -64,7 +64,7 @@ const char* NavigatorBeacon::supplementName()
     return "NavigatorBeacon";
 }
 
-void NavigatorBeacon::notifyFinished(CachedResource& resource, const NetworkLoadMetrics&)
+void NavigatorBeacon::notifyFinished(CachedResource& resource)
 {
     if (!resource.resourceError().isNull())
         logError(resource.resourceError());
@@ -121,7 +121,6 @@ ExceptionOr<bool> NavigatorBeacon::sendBeacon(Document& document, const String& 
 
     ResourceRequest request(parsedUrl);
     request.setHTTPMethod("POST"_s);
-    request.setRequester(ResourceRequest::Requester::Beacon);
 
     ResourceLoaderOptions options;
     options.credentials = FetchOptions::Credentials::Include;

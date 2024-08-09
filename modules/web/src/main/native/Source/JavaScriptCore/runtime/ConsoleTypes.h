@@ -40,15 +40,13 @@ enum class MessageSource : uint8_t {
     CSS,
     Security,
     ContentBlocker,
-    Media,
-    MediaSource,
-    WebRTC,
-    ITPDebug,
-    AdClickAttribution,
     Other,
+    Media,
+    WebRTC,
+    MediaSource,
 };
 
-enum class MessageType : uint8_t {
+enum class MessageType {
     Log,
     Dir,
     DirXML,
@@ -66,11 +64,11 @@ enum class MessageType : uint8_t {
 };
 
 enum class MessageLevel : uint8_t {
-    Log,
-    Warning,
-    Error,
-    Debug,
-    Info,
+    Log = 1,
+    Warning = 2,
+    Error = 3,
+    Debug = 4,
+    Info = 5,
 };
 
 } // namespace JSC
@@ -90,12 +88,10 @@ template<> struct EnumTraits<JSC::MessageSource> {
         JSC::MessageSource::CSS,
         JSC::MessageSource::Security,
         JSC::MessageSource::ContentBlocker,
+        JSC::MessageSource::Other,
         JSC::MessageSource::Media,
-        JSC::MessageSource::MediaSource,
         JSC::MessageSource::WebRTC,
-        JSC::MessageSource::ITPDebug,
-        JSC::MessageSource::AdClickAttribution,
-        JSC::MessageSource::Other
+        JSC::MessageSource::MediaSource
     >;
 };
 

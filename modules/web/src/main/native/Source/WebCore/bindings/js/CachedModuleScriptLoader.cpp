@@ -75,7 +75,7 @@ bool CachedModuleScriptLoader::load(Document& document, const URL& sourceURL)
     return true;
 }
 
-void CachedModuleScriptLoader::notifyFinished(CachedResource& resource, const NetworkLoadMetrics&)
+void CachedModuleScriptLoader::notifyFinished(CachedResource& resource)
 {
     ASSERT_UNUSED(resource, &resource == m_cachedScript);
     ASSERT(m_cachedScript);

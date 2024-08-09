@@ -40,6 +40,8 @@ enum XMLHttpRequestResponseType {
 
 [
     ActiveDOMObject,
+    Constructor,
+    ConstructorCallWith=ScriptExecutionContext,
     ExportMacro=WEBCORE_EXPORT,
     Exposed=(Window,DedicatedWorker),
     JSCustomMarkFunction,
@@ -47,8 +49,6 @@ enum XMLHttpRequestResponseType {
     JSGenerateToNativeObject,
     ReportExtraMemoryCost,
 ] interface XMLHttpRequest : XMLHttpRequestEventTarget {
-    [CallWith=ScriptExecutionContext] constructor();
-
     // event handler
     attribute EventHandler onreadystatechange;
 

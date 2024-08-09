@@ -38,7 +38,6 @@
 #include "FrameLoader.h"
 #include "HTMLEntityParser.h"
 #include "HTMLHtmlElement.h"
-#include "HTMLParserIdioms.h"
 #include "HTMLTemplateElement.h"
 #include "HTTPParsers.h"
 #include "InlineClassicScript.h"
@@ -380,18 +379,17 @@ private:
     unsigned m_currentOffset;
 };
 
-static bool externalEntityMimeTypeAllowed(const ResourceResponse& response)
+static bool externalEntityMimeTypeAllowedByNosniff(const ResourceResponse& response)
 {
-    String contentType = response.httpHeaderField(HTTPHeaderName::ContentType);
-    String mimeType = extractMIMETypeFromMediaType(contentType);
-    if (mimeType.isEmpty()) {
-        // Same logic as XMLHttpRequest::responseMIMEType(). Keep them in sync.
-        if (response.isInHTTPFamily())
-            mimeType = contentType;
-        else
-            mimeType = response.mimeType();
+    ContentTypeOptionsDisposition contentTypeOption = parseContentTypeOptionsHeader(response.httpHeaderField(HTTPHeaderName::XContentTypeOptions));
+    if (contentTypeOption != ContentTypeOptionsNosniff) {
+        // Allow any MIME type without 'X-Content-Type-Options: nosniff' HTTP header.
+        return true;
     }
-    return MIMETypeRegistry::isXMLMIMEType(mimeType) || MIMETypeRegistry::isXMLEntityMIMEType(mimeType);
+    String mimeType = extractMIMETypeFromMediaType(response.httpHeaderField(HTTPHeaderName::ContentType));
+    if (MIMETypeRegistry::isXMLMIMEType(mimeType) || MIMETypeRegistry::isXMLEntityMIMEType(mimeType))
+        return true;
+    return false;
 }
 
 static inline void setAttributes(Element* element, Vector<Attribute>& attributeVector, ParserContentPolicy parserContentPolicy)
@@ -454,42 +452,38 @@ static void* openFunc(const char* uri)
     ASSERT(XMLDocumentParserScope::currentCachedResourceLoader);
     ASSERT(libxmlLoaderThread == &Thread::current());
 
-    CachedResourceLoader& cachedResourceLoader = *XMLDocumentParserScope::currentCachedResourceLoader;
-    Document* document = cachedResourceLoader.document();
-    // Same logic as HTMLBaseElement::href(). Keep them in sync.
-    auto* encoding = (document && document->decoder()) ? document->decoder()->encodingForURLParsing() : nullptr;
-    URL url(document ? document->url() : URL(), stripLeadingAndTrailingHTMLSpaces(uri), encoding);
+    URL url(URL(), uri);
 
     if (!shouldAllowExternalLoad(url))
         return &globalDescriptor;
 
+    ResourceError error;
     ResourceResponse response;
     RefPtr<SharedBuffer> data;
 
+
     {
-        ResourceError error;
+        CachedResourceLoader* cachedResourceLoader = XMLDocumentParserScope::currentCachedResourceLoader;
         XMLDocumentParserScope scope(nullptr);
         // FIXME: We should restore the original global error handler as well.
 
-        if (cachedResourceLoader.frame()) {
+        if (cachedResourceLoader->frame()) {
             FetchOptions options;
             options.mode = FetchOptions::Mode::SameOrigin;
             options.credentials = FetchOptions::Credentials::Include;
-            cachedResourceLoader.frame()->loader().loadResourceSynchronously(url, ClientCredentialPolicy::MayAskClientForCredentials, options, { }, error, response, data);
-
-            if (response.url().isEmpty()) {
-                if (Page* page = document ? document->page() : nullptr)
-                    page->console().addMessage(MessageSource::Security, MessageLevel::Error, makeString("Did not parse external entity resource at '", url.stringCenterEllipsizedToLength(), "' because cross-origin loads are not allowed."));
-                return &globalDescriptor;
-            }
-            if (!externalEntityMimeTypeAllowed(response)) {
-                if (Page* page = document ? document->page() : nullptr)
-                    page->console().addMessage(MessageSource::Security, MessageLevel::Error, makeString("Did not parse external entity resource at '", url.stringCenterEllipsizedToLength(), "' because only XML MIME types are allowed."));
-                return &globalDescriptor;
+            cachedResourceLoader->frame()->loader().loadResourceSynchronously(url, ClientCredentialPolicy::MayAskClientForCredentials, options, { }, error, response, data);
+            if (!externalEntityMimeTypeAllowedByNosniff(response)) {
+                data = nullptr;
+                if (Page* page = cachedResourceLoader->document()->page())
+                    page->console().addMessage(MessageSource::Security, MessageLevel::Error, makeString("Did not parse external entity resource at '", url.stringCenterEllipsizedToLength(), "' because non XML External Entity MIME types are not allowed when 'X-Content-Type-Options: nosniff' is given."));
             }
         }
     }
 
+    // We have to check the URL again after the load to catch redirects.
+    // See <https://bugs.webkit.org/show_bug.cgi?id=21963>.
+    if (!shouldAllowExternalLoad(response.url()))
+        return &globalDescriptor;
     Vector<char> buffer;
     if (data)
         buffer.append(data->data(), data->size());
@@ -819,7 +813,7 @@ void XMLDocumentParser::startElementNs(const xmlChar* xmlLocalName, const xmlCha
         downcast<HTMLHtmlElement>(newElement.get()).insertedByParser();
 
     if (!m_parsingFragment && isFirstElement && document()->frame())
-        document()->frame()->injectUserScripts(UserScriptInjectionTime::DocumentStart);
+        document()->frame()->injectUserScripts(InjectAtDocumentStart);
 }
 
 void XMLDocumentParser::endElementNs()

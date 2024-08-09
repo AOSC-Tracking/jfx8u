@@ -21,9 +21,17 @@
 #include "config.h"
 #include "Identifier.h"
 
-#include "IdentifierInlines.h"
+#include "CallFrame.h"
+#include "JSObject.h"
+#include "JSScope.h"
 #include "NumericStrings.h"
+#include "JSCInlines.h"
+#include <new>
+#include <string.h>
 #include <wtf/Assertions.h>
+#include <wtf/FastMalloc.h>
+#include <wtf/text/ASCIIFastPath.h>
+#include <wtf/text/StringHash.h>
 
 namespace JSC {
 

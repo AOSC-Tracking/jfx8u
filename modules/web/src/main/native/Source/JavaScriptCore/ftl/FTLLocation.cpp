@@ -31,7 +31,9 @@
 #include "B3ValueRep.h"
 #include "FTLSaveRestore.h"
 #include "RegisterSet.h"
+#include <wtf/CommaPrinter.h>
 #include <wtf/DataLog.h>
+#include <wtf/ListDump.h>
 
 namespace JSC { namespace FTL {
 

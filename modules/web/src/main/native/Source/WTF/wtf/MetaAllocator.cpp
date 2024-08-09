@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2011-2018 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -29,6 +29,11 @@
 #include "config.h"
 #include <wtf/MetaAllocator.h>
 
+#include <wtf/DataLog.h>
+#include <wtf/FastMalloc.h>
+#include <wtf/NeverDestroyed.h>
+#include <wtf/ProcessID.h>
+
 namespace WTF {
 
 DEFINE_ALLOCATOR_WITH_HEAP_IDENTIFIER(MetaAllocatorHandle);
@@ -49,21 +54,22 @@ MetaAllocator::~MetaAllocator()
 #endif
 }
 
-void MetaAllocatorTracker::notify(MetaAllocatorHandle& handle)
+void MetaAllocatorTracker::notify(MetaAllocatorHandle* handle)
 {
-    m_allocations.insert(&handle);
+    m_allocations.insert(handle);
 }
 
-void MetaAllocatorTracker::release(MetaAllocatorHandle& handle)
+void MetaAllocatorTracker::release(MetaAllocatorHandle* handle)
 {
-    m_allocations.remove(&handle);
+    m_allocations.remove(handle);
 }
 
-void MetaAllocator::release(const LockHolder&, MetaAllocatorHandle& handle)
+ALWAYS_INLINE void MetaAllocator::release(MetaAllocatorHandle* handle)
 {
-    if (handle.sizeInBytes()) {
-        void* start = handle.start().untaggedPtr();
-        size_t sizeInBytes = handle.sizeInBytes();
+    LockHolder locker(&m_lock);
+    if (handle->sizeInBytes()) {
+        void* start = handle->start().untaggedPtr();
+        size_t sizeInBytes = handle->sizeInBytes();
         decrementPageOccupancy(start, sizeInBytes);
         addFreeSpaceFromReleasedHandle(FreeSpacePtr(start), sizeInBytes);
     }
@@ -72,19 +78,21 @@ void MetaAllocator::release(const LockHolder&, MetaAllocatorHandle& handle)
         m_tracker->release(handle);
 }
 
-MetaAllocatorHandle::MetaAllocatorHandle(MetaAllocator& allocator, void* start, size_t sizeInBytes)
+MetaAllocatorHandle::MetaAllocatorHandle(MetaAllocator* allocator, void* start, size_t sizeInBytes, void* ownerUID)
     : m_allocator(allocator)
     , m_start(start)
     , m_end(reinterpret_cast<char*>(start) + sizeInBytes)
+    , m_ownerUID(ownerUID)
 {
+    ASSERT(allocator);
     ASSERT(start);
     ASSERT(sizeInBytes);
 }
 
 MetaAllocatorHandle::~MetaAllocatorHandle()
 {
-    auto locker = holdLock(allocator().m_lock);
-    allocator().release(locker, *this);
+    ASSERT(m_allocator);
+    m_allocator->release(this);
 }
 
 void MetaAllocatorHandle::shrink(size_t newSizeInBytes)
@@ -92,10 +100,9 @@ void MetaAllocatorHandle::shrink(size_t newSizeInBytes)
     size_t sizeInBytes = this->sizeInBytes();
     ASSERT(newSizeInBytes <= sizeInBytes);
 
-    MetaAllocator& allocator = this->allocator();
-    LockHolder locker(&allocator.m_lock);
+    LockHolder locker(&m_allocator->m_lock);
 
-    newSizeInBytes = allocator.roundUp(newSizeInBytes);
+    newSizeInBytes = m_allocator->roundUp(newSizeInBytes);
 
     ASSERT(newSizeInBytes <= sizeInBytes);
 
@@ -106,11 +113,11 @@ void MetaAllocatorHandle::shrink(size_t newSizeInBytes)
     size_t freeSize = sizeInBytes - newSizeInBytes;
     uintptr_t freeEnd = freeStart + freeSize;
 
-    uintptr_t firstCompletelyFreePage = (freeStart + allocator.m_pageSize - 1) & ~(allocator.m_pageSize - 1);
+    uintptr_t firstCompletelyFreePage = (freeStart + m_allocator->m_pageSize - 1) & ~(m_allocator->m_pageSize - 1);
     if (firstCompletelyFreePage < freeEnd)
-        allocator.decrementPageOccupancy(reinterpret_cast<void*>(firstCompletelyFreePage), freeSize - (firstCompletelyFreePage - freeStart));
+        m_allocator->decrementPageOccupancy(reinterpret_cast<void*>(firstCompletelyFreePage), freeSize - (firstCompletelyFreePage - freeStart));
 
-    allocator.addFreeSpaceFromReleasedHandle(MetaAllocator::FreeSpacePtr(freeStart), freeSize);
+    m_allocator->addFreeSpaceFromReleasedHandle(MetaAllocator::FreeSpacePtr(freeStart), freeSize);
 
     m_end = m_start + newSizeInBytes;
 }
@@ -120,13 +127,13 @@ void MetaAllocatorHandle::dump(PrintStream& out) const
     out.print(RawPointer(start().untaggedPtr()), "...", RawPointer(end().untaggedPtr()));
 }
 
-MetaAllocator::MetaAllocator(Lock& lock, size_t allocationGranule, size_t pageSize)
+MetaAllocator::MetaAllocator(size_t allocationGranule, size_t pageSize)
     : m_allocationGranule(allocationGranule)
     , m_pageSize(pageSize)
     , m_bytesAllocated(0)
     , m_bytesReserved(0)
     , m_bytesCommitted(0)
-    , m_lock(lock)
+    , m_tracker(0)
 #ifndef NDEBUG
     , m_mallocBalance(0)
 #endif
@@ -150,8 +157,10 @@ MetaAllocator::MetaAllocator(Lock& lock, size_t allocationGranule, size_t pageSi
     ASSERT(static_cast<size_t>(1) << m_logAllocationGranule == m_allocationGranule);
 }
 
-RefPtr<MetaAllocatorHandle> MetaAllocator::allocate(const LockHolder&, size_t sizeInBytes)
+RefPtr<MetaAllocatorHandle> MetaAllocator::allocate(size_t sizeInBytes, void* ownerUID)
 {
+    LockHolder locker(&m_lock);
+
     if (!sizeInBytes)
         return nullptr;
 
@@ -186,16 +195,17 @@ RefPtr<MetaAllocatorHandle> MetaAllocator::allocate(const LockHolder&, size_t si
     m_numAllocations++;
 #endif
 
-    auto handle = adoptRef(*new MetaAllocatorHandle(*this, start.untaggedPtr(), sizeInBytes));
+    auto handle = adoptRef(*new MetaAllocatorHandle(this, start.untaggedPtr(), sizeInBytes, ownerUID));
 
     if (UNLIKELY(!!m_tracker))
-        m_tracker->notify(*handle.ptr());
+        m_tracker->notify(handle.ptr());
 
     return handle;
 }
 
-MetaAllocator::Statistics MetaAllocator::currentStatistics(const LockHolder&)
+MetaAllocator::Statistics MetaAllocator::currentStatistics()
 {
+    LockHolder locker(&m_lock);
     Statistics result;
     result.bytesAllocated = m_bytesAllocated;
     result.bytesReserved = m_bytesReserved;
@@ -208,7 +218,7 @@ MetaAllocator::FreeSpacePtr MetaAllocator::findAndRemoveFreeSpace(size_t sizeInB
     FreeSpaceNode* node = m_freeSpaceSizeMap.findLeastGreaterThanOrEqual(sizeInBytes);
 
     if (!node)
-        return nullptr;
+        return 0;
 
     size_t nodeSizeInBytes = node->sizeInBytes();
     ASSERT(nodeSizeInBytes >= sizeInBytes);

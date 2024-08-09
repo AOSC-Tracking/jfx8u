@@ -40,7 +40,6 @@ namespace WebCore {
 class HTMLSlotElement;
 class SlotAssignment;
 class StyleSheetList;
-class WebAnimation;
 
 class ShadowRoot final : public DocumentFragment, public TreeScope {
     WTF_MAKE_ISO_ALLOCATED(ShadowRoot);
@@ -72,8 +71,8 @@ public:
     bool containsFocusedElement() const { return m_containsFocusedElement; }
     void setContainsFocusedElement(bool flag) { m_containsFocusedElement = flag; }
 
-    Element* host() const { return m_host.get(); }
-    void setHost(WeakPtr<Element>&& host) { m_host = WTFMove(host); }
+    Element* host() const { return m_host; }
+    void setHost(Element* host) { m_host = host; }
 
     String innerHTML() const;
     ExceptionOr<void> setInnerHTML(const String&);
@@ -112,8 +111,6 @@ public:
     HTMLVideoElement* pictureInPictureElement() const;
 #endif
 
-    Vector<RefPtr<WebAnimation>> getAnimations();
-
 private:
     ShadowRoot(Document&, ShadowRootMode, DelegatesFocus);
     ShadowRoot(Document&, std::unique_ptr<SlotAssignment>&&);
@@ -133,7 +130,7 @@ private:
     bool m_containsFocusedElement { false };
     ShadowRootMode m_type { ShadowRootMode::UserAgent };
 
-    WeakPtr<Element> m_host;
+    Element* m_host { nullptr };
     RefPtr<StyleSheetList> m_styleSheetList;
 
     std::unique_ptr<Style::Scope> m_styleScope;

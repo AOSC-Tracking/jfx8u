@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2016-2019 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -27,9 +27,10 @@
 #include "PreciseAllocation.h"
 
 #include "AlignedMemoryAllocator.h"
+#include "Heap.h"
 #include "IsoCellSetInlines.h"
 #include "JSCInlines.h"
-#include "Scribble.h"
+#include "Operations.h"
 #include "SubspaceInlines.h"
 
 namespace JSC {
@@ -42,8 +43,8 @@ static inline bool isAlignedForPreciseAllocation(void* memory)
 
 PreciseAllocation* PreciseAllocation::tryCreate(Heap& heap, size_t size, Subspace* subspace, unsigned indexInSpace)
 {
-    if constexpr (validateDFGDoesGC)
-        heap.verifyCanGC();
+    if (validateDFGDoesGC)
+        RELEASE_ASSERT(heap.expectDoesGC());
 
     size_t adjustedAlignmentAllocationSize = headerSize() + size + halfAlignment;
     static_assert(halfAlignment == 8, "We assume that memory returned by malloc has alignment >= 8.");
@@ -122,8 +123,8 @@ PreciseAllocation* PreciseAllocation::tryReallocate(size_t size, Subspace* subsp
 
 PreciseAllocation* PreciseAllocation::createForLowerTier(Heap& heap, size_t size, Subspace* subspace, uint8_t lowerTierIndex)
 {
-    if constexpr (validateDFGDoesGC)
-        heap.verifyCanGC();
+    if (validateDFGDoesGC)
+        RELEASE_ASSERT(heap.expectDoesGC());
 
     size_t adjustedAlignmentAllocationSize = headerSize() + size + halfAlignment;
     static_assert(halfAlignment == 8, "We assume that memory returned by malloc has alignment >= 8.");

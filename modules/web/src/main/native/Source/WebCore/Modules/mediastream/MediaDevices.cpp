@@ -181,16 +181,16 @@ void MediaDevices::refreshDevices(const Vector<CaptureDevice>& newDevices)
         if (!canAccessCamera && newDevice.type() == CaptureDevice::DeviceType::Camera)
             continue;
 
-        auto deviceKind = newDevice.type() == CaptureDevice::DeviceType::Microphone ? MediaDeviceInfo::Kind::Audioinput : MediaDeviceInfo::Kind::Videoinput;
-        auto index = m_devices.findMatching([deviceKind, &newDevice](auto& oldDevice) {
-            return oldDevice->deviceId() == newDevice.persistentId() && oldDevice->kind() == deviceKind;
+        auto index = m_devices.findMatching([&newDevice](auto& oldDevice) {
+            return oldDevice->deviceId() == newDevice.persistentId();
         });
         if (index != notFound) {
             devices.append(m_devices[index].copyRef());
             continue;
         }
 
-        devices.append(MediaDeviceInfo::create(newDevice.label(), newDevice.persistentId(), newDevice.groupId(), deviceKind));
+        auto deviceType = newDevice.type() == CaptureDevice::DeviceType::Microphone ? MediaDeviceInfo::Kind::Audioinput : MediaDeviceInfo::Kind::Videoinput;
+        devices.append(MediaDeviceInfo::create(newDevice.label(), newDevice.persistentId(), newDevice.groupId(), deviceType));
     }
     m_devices = WTFMove(devices);
 }
@@ -248,9 +248,9 @@ void MediaDevices::scheduledEventTimerFired()
     dispatchEvent(Event::create(eventNames().devicechangeEvent, Event::CanBubble::No, Event::IsCancelable::No));
 }
 
-bool MediaDevices::virtualHasPendingActivity() const
+bool MediaDevices::hasPendingActivity() const
 {
-    return hasEventListeners(m_eventNames.devicechangeEvent);
+    return !isContextStopped() && hasEventListeners(m_eventNames.devicechangeEvent);
 }
 
 const char* MediaDevices::activeDOMObjectName() const

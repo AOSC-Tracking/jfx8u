@@ -20,7 +20,8 @@
     Boston, MA 02110-1301, USA.
 */
 
-#pragma once
+#ifndef Length_h
+#define Length_h
 
 #include "AnimationUtilities.h"
 #include <memory>
@@ -423,3 +424,5 @@ Length convertTo100PercentMinusLength(const Length&);
 WTF::TextStream& operator<<(WTF::TextStream&, Length);
 
 } // namespace WebCore
+
+#endif // Length_h

@@ -26,21 +26,17 @@ namespace WebCore {
 // FIXME-java: Implemetation task is tracked at JDK-8146460.
 void Editor::pasteWithPasteboard(Pasteboard* pasteboard, OptionSet<PasteOption> options)
 {
-    auto range = selectedRange();
+    RefPtr<Range> range = selectedRange();
     if (!range)
         return;
 
     bool chosePlainText;
-    auto fragment = pasteboard->documentFragment(*m_document.frame(), *range, options.contains(PasteOption::AllowPlainText), chosePlainText);
-
-    if (fragment && options.contains(PasteOption::AsQuotation))
-        quoteFragmentForPasting(*fragment);
-
-    if (fragment && shouldInsertFragment(*fragment, *range, EditorInsertAction::Pasted))
+    RefPtr<DocumentFragment> fragment = pasteboard->documentFragment(m_frame, *range, options.contains(PasteOption::AllowPlainText), chosePlainText);
+    if (fragment && shouldInsertFragment(*fragment, range.get(), EditorInsertAction::Pasted))
         pasteAsFragment(fragment.releaseNonNull(), canSmartReplaceWithPasteboard(*pasteboard), chosePlainText, options.contains(PasteOption::IgnoreMailBlockquote) ? MailBlockquoteHandling::IgnoreBlockquote : MailBlockquoteHandling::RespectBlockquote);
 }
 
-RefPtr<DocumentFragment> Editor::webContentFromPasteboard(Pasteboard&, const SimpleRange&, bool /*allowPlainText*/, bool& /*chosePlainText*/)
+RefPtr<DocumentFragment> Editor::webContentFromPasteboard(Pasteboard&, Range&, bool /*allowPlainText*/, bool& /*chosePlainText*/)
 {
     notImplemented();
     return RefPtr<DocumentFragment>();
@@ -53,7 +49,7 @@ void Editor::writeImageToPasteboard(Pasteboard& pasteboard, Element& element, co
 
 void Editor::writeSelectionToPasteboard(Pasteboard& pasteboard)
 {
-    pasteboard.writeSelection(*selectedRange(), canSmartCopyOrDelete(), *m_document.frame(), DefaultSelectedTextType);
+    pasteboard.writeSelection(*selectedRange(), canSmartCopyOrDelete(), m_frame, DefaultSelectedTextType);
 }
 
 } // namespace WebCore

@@ -32,8 +32,10 @@
 #include "AccessibilityObjectInterface.h"
 #include "ContainerNode.h"
 #include "Document.h"
-#include "ElementIterator.h"
+#include "Element.h"
+#include "ElementDescendantIterator.h"
 #include "HTMLNames.h"
+#include "Node.h"
 #include "SpaceSplitString.h"
 #include <wtf/Vector.h>
 #include <wtf/text/WTFString.h>
@@ -68,7 +70,7 @@ ExceptionOr<Vector<Ref<Node>>> InspectorAuditAccessibilityObject::getElementsByC
 
     Vector<Ref<Node>> nodes;
 
-    for (Element& element : descendantsOfType<Element>(is<ContainerNode>(container) ? downcast<ContainerNode>(*container) : document)) {
+    for (Element& element : elementDescendants(is<ContainerNode>(container) ? downcast<ContainerNode>(*container) : document)) {
         if (AXCoreObject* axObject = accessiblityObjectForNode(element)) {
             if (axObject->computedRoleString() == role)
                 nodes.append(element);

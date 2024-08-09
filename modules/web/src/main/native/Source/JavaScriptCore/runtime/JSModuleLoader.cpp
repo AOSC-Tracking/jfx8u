@@ -29,9 +29,14 @@
 
 #include "BuiltinNames.h"
 #include "CatchScope.h"
+#include "CodeProfiling.h"
+#include "Error.h"
+#include "Exception.h"
 #include "JSCInlines.h"
+#include "JSGlobalObjectFunctions.h"
 #include "JSInternalPromise.h"
 #include "JSMap.h"
+#include "JSModuleEnvironment.h"
 #include "JSModuleNamespaceObject.h"
 #include "JSModuleRecord.h"
 #include "JSSourceCode.h"
@@ -127,13 +132,14 @@ JSArray* JSModuleLoader::dependencyKeysIfEvaluated(JSGlobalObject* globalObject,
 
     JSObject* function = jsCast<JSObject*>(get(globalObject, vm.propertyNames->builtinNames().dependencyKeysIfEvaluatedPublicName()));
     RETURN_IF_EXCEPTION(scope, nullptr);
-    auto callData = JSC::getCallData(vm, function);
-    ASSERT(callData.type != CallData::Type::None);
+    CallData callData;
+    CallType callType = JSC::getCallData(vm, function, callData);
+    ASSERT(callType != CallType::None);
 
     MarkedArgumentBuffer arguments;
     arguments.append(key);
 
-    JSValue result = call(globalObject, function, callData, this, arguments);
+    JSValue result = call(globalObject, function, callType, callData, this, arguments);
     RETURN_IF_EXCEPTION(scope, nullptr);
 
     return jsDynamicCast<JSArray*>(vm, result);
@@ -146,8 +152,9 @@ JSValue JSModuleLoader::provideFetch(JSGlobalObject* globalObject, JSValue key, 
 
     JSObject* function = jsCast<JSObject*>(get(globalObject, vm.propertyNames->builtinNames().provideFetchPublicName()));
     RETURN_IF_EXCEPTION(scope, { });
-    auto callData = JSC::getCallData(vm, function);
-    ASSERT(callData.type != CallData::Type::None);
+    CallData callData;
+    CallType callType = JSC::getCallData(vm, function, callData);
+    ASSERT(callType != CallType::None);
 
     SourceCode source { sourceCode };
     MarkedArgumentBuffer arguments;
@@ -155,7 +162,7 @@ JSValue JSModuleLoader::provideFetch(JSGlobalObject* globalObject, JSValue key, 
     arguments.append(JSSourceCode::create(vm, WTFMove(source)));
     ASSERT(!arguments.hasOverflowed());
 
-    RELEASE_AND_RETURN(scope, call(globalObject, function, callData, this, arguments));
+    RELEASE_AND_RETURN(scope, call(globalObject, function, callType, callData, this, arguments));
 }
 
 JSInternalPromise* JSModuleLoader::loadAndEvaluateModule(JSGlobalObject* globalObject, JSValue moduleName, JSValue parameters, JSValue scriptFetcher)
@@ -165,8 +172,9 @@ JSInternalPromise* JSModuleLoader::loadAndEvaluateModule(JSGlobalObject* globalO
 
     JSObject* function = jsCast<JSObject*>(get(globalObject, vm.propertyNames->builtinNames().loadAndEvaluateModulePublicName()));
     RETURN_IF_EXCEPTION(scope, nullptr);
-    auto callData = JSC::getCallData(vm, function);
-    ASSERT(callData.type != CallData::Type::None);
+    CallData callData;
+    CallType callType = JSC::getCallData(vm, function, callData);
+    ASSERT(callType != CallType::None);
 
     MarkedArgumentBuffer arguments;
     arguments.append(moduleName);
@@ -174,7 +182,7 @@ JSInternalPromise* JSModuleLoader::loadAndEvaluateModule(JSGlobalObject* globalO
     arguments.append(scriptFetcher);
     ASSERT(!arguments.hasOverflowed());
 
-    JSValue promise = call(globalObject, function, callData, this, arguments);
+    JSValue promise = call(globalObject, function, callType, callData, this, arguments);
     RETURN_IF_EXCEPTION(scope, nullptr);
     return jsCast<JSInternalPromise*>(promise);
 }
@@ -186,8 +194,9 @@ JSInternalPromise* JSModuleLoader::loadModule(JSGlobalObject* globalObject, JSVa
 
     JSObject* function = jsCast<JSObject*>(get(globalObject, vm.propertyNames->builtinNames().loadModulePublicName()));
     RETURN_IF_EXCEPTION(scope, nullptr);
-    auto callData = JSC::getCallData(vm, function);
-    ASSERT(callData.type != CallData::Type::None);
+    CallData callData;
+    CallType callType = JSC::getCallData(vm, function, callData);
+    ASSERT(callType != CallType::None);
 
     MarkedArgumentBuffer arguments;
     arguments.append(moduleName);
@@ -195,7 +204,7 @@ JSInternalPromise* JSModuleLoader::loadModule(JSGlobalObject* globalObject, JSVa
     arguments.append(scriptFetcher);
     ASSERT(!arguments.hasOverflowed());
 
-    JSValue promise = call(globalObject, function, callData, this, arguments);
+    JSValue promise = call(globalObject, function, callType, callData, this, arguments);
     RETURN_IF_EXCEPTION(scope, nullptr);
     return jsCast<JSInternalPromise*>(promise);
 }
@@ -207,15 +216,16 @@ JSValue JSModuleLoader::linkAndEvaluateModule(JSGlobalObject* globalObject, JSVa
 
     JSObject* function = jsCast<JSObject*>(get(globalObject, vm.propertyNames->builtinNames().linkAndEvaluateModulePublicName()));
     RETURN_IF_EXCEPTION(scope, { });
-    auto callData = JSC::getCallData(vm, function);
-    ASSERT(callData.type != CallData::Type::None);
+    CallData callData;
+    CallType callType = JSC::getCallData(vm, function, callData);
+    ASSERT(callType != CallType::None);
 
     MarkedArgumentBuffer arguments;
     arguments.append(moduleKey);
     arguments.append(scriptFetcher);
     ASSERT(!arguments.hasOverflowed());
 
-    RELEASE_AND_RETURN(scope, call(globalObject, function, callData, this, arguments));
+    RELEASE_AND_RETURN(scope, call(globalObject, function, callType, callData, this, arguments));
 }
 
 JSInternalPromise* JSModuleLoader::requestImportModule(JSGlobalObject* globalObject, const Identifier& moduleKey, JSValue parameters, JSValue scriptFetcher)
@@ -225,8 +235,9 @@ JSInternalPromise* JSModuleLoader::requestImportModule(JSGlobalObject* globalObj
 
     auto* function = jsCast<JSObject*>(get(globalObject, vm.propertyNames->builtinNames().requestImportModulePublicName()));
     RETURN_IF_EXCEPTION(scope, nullptr);
-    auto callData = JSC::getCallData(vm, function);
-    ASSERT(callData.type != CallData::Type::None);
+    CallData callData;
+    auto callType = JSC::getCallData(vm, function, callData);
+    ASSERT(callType != CallType::None);
 
     MarkedArgumentBuffer arguments;
     arguments.append(jsString(vm, moduleKey.impl()));
@@ -234,7 +245,7 @@ JSInternalPromise* JSModuleLoader::requestImportModule(JSGlobalObject* globalObj
     arguments.append(scriptFetcher);
     ASSERT(!arguments.hasOverflowed());
 
-    JSValue promise = call(globalObject, function, callData, this, arguments);
+    JSValue promise = call(globalObject, function, callType, callData, this, arguments);
     RETURN_IF_EXCEPTION(scope, nullptr);
     return jsCast<JSInternalPromise*>(promise);
 }
@@ -254,9 +265,9 @@ JSInternalPromise* JSModuleLoader::importModule(JSGlobalObject* globalObject, JS
     auto catchScope = DECLARE_CATCH_SCOPE(vm);
     auto moduleNameString = moduleName->value(globalObject);
     if (UNLIKELY(catchScope.exception())) {
-        JSValue error = catchScope.exception()->value();
+        JSValue exception = catchScope.exception()->value();
         catchScope.clearException();
-        promise->reject(globalObject, error);
+        promise->reject(globalObject, exception);
         catchScope.clearException();
         return promise;
     }
@@ -284,9 +295,9 @@ JSInternalPromise* JSModuleLoader::resolve(JSGlobalObject* globalObject, JSValue
 
     const Identifier moduleKey = resolveSync(globalObject, name, referrer, scriptFetcher);
     if (UNLIKELY(catchScope.exception())) {
-        JSValue error = catchScope.exception()->value();
+        JSValue exception = catchScope.exception();
         catchScope.clearException();
-        promise->reject(globalObject, error);
+        promise->reject(globalObject, exception);
         catchScope.clearException();
         return promise;
     }
@@ -311,9 +322,9 @@ JSInternalPromise* JSModuleLoader::fetch(JSGlobalObject* globalObject, JSValue k
 
     String moduleKey = key.toWTFString(globalObject);
     if (UNLIKELY(catchScope.exception())) {
-        JSValue error = catchScope.exception()->value();
+        JSValue exception = catchScope.exception()->value();
         catchScope.clearException();
-        promise->reject(globalObject, error);
+        promise->reject(globalObject, exception);
         catchScope.clearException();
         return promise;
     }
@@ -378,7 +389,7 @@ EncodedJSValue JSC_HOST_CALL moduleLoaderParseModule(JSGlobalObject* globalObjec
 
     const Identifier moduleKey = callFrame->argument(0).toPropertyKey(globalObject);
     if (UNLIKELY(catchScope.exception()))
-        return reject(catchScope.exception()->value());
+        return reject(catchScope.exception());
 
     JSValue source = callFrame->argument(1);
     auto* jsSourceCode = jsCast<JSSourceCode*>(source);
@@ -388,6 +399,8 @@ EncodedJSValue JSC_HOST_CALL moduleLoaderParseModule(JSGlobalObject* globalObjec
     if (sourceCode.provider()->sourceType() == SourceProviderSourceType::WebAssembly)
         return JSValue::encode(JSWebAssembly::instantiate(globalObject, promise, moduleKey, jsSourceCode));
 #endif
+
+    CodeProfiling profile(sourceCode);
 
     ParserError error;
     std::unique_ptr<ModuleProgramNode> moduleProgramNode = parse<ModuleProgramNode>(
@@ -399,7 +412,7 @@ EncodedJSValue JSC_HOST_CALL moduleLoaderParseModule(JSGlobalObject* globalObjec
 
     ModuleAnalyzer moduleAnalyzer(globalObject, moduleKey, sourceCode, moduleProgramNode->varDeclarations(), moduleProgramNode->lexicalVariables());
     if (UNLIKELY(catchScope.exception()))
-        return reject(catchScope.exception()->value());
+        return reject(catchScope.exception());
 
     promise->resolve(globalObject, moduleAnalyzer.analyze(*moduleProgramNode));
     catchScope.clearException();

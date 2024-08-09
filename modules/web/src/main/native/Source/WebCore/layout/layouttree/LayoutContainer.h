@@ -36,10 +36,10 @@ class RenderStyle;
 
 namespace Layout {
 
-class ContainerBox : public Box {
-    WTF_MAKE_ISO_ALLOCATED(ContainerBox);
+class Container final : public Box {
+    WTF_MAKE_ISO_ALLOCATED(Container);
 public:
-    ContainerBox(Optional<ElementAttributes>, RenderStyle&&, BaseTypeFlags = Box::ContainerBoxFlag);
+    Container(Optional<ElementAttributes>, RenderStyle&&, BaseTypeFlags = ContainerFlag);
 
     const Box* firstChild() const { return m_firstChild; }
     const Box* firstInFlowChild() const;
@@ -67,6 +67,6 @@ private:
 }
 }
 
-SPECIALIZE_TYPE_TRAITS_LAYOUT_BOX(ContainerBox, isContainerBox())
+SPECIALIZE_TYPE_TRAITS_LAYOUT_BOX(Container, isContainer())
 
 #endif

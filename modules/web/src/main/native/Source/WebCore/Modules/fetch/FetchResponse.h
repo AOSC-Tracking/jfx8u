@@ -66,9 +66,11 @@ public:
     using NotificationCallback = WTF::Function<void(ExceptionOr<FetchResponse&>&&)>;
     static void fetch(ScriptExecutionContext&, FetchRequest&, NotificationCallback&&);
 
+#if ENABLE(STREAMS_API)
     void startConsumingStream(unsigned);
     void consumeChunk(Ref<JSC::Uint8Array>&&);
     void finishConsumingStream(Ref<DeferredPromise>&&);
+#endif
 
     Type type() const { return filteredResponse().type(); }
     const String& url() const;
@@ -81,9 +83,11 @@ public:
     FetchHeaders& headers() { return m_headers; }
     ExceptionOr<Ref<FetchResponse>> clone(ScriptExecutionContext&);
 
+#if ENABLE(STREAMS_API)
     void consumeBodyAsStream() final;
     void feedStream() final;
     void cancel() final;
+#endif
 
     using ResponseData = Variant<std::nullptr_t, Ref<FormData>, Ref<SharedBuffer>>;
     ResponseData consumeBody();
@@ -116,7 +120,9 @@ private:
 
     const ResourceResponse& filteredResponse() const;
 
+#if ENABLE(STREAMS_API)
     void closeStream();
+#endif
 
     void addAbortSteps(Ref<AbortSignal>&&);
 
@@ -131,7 +137,9 @@ private:
 
         void consumeDataByChunk(ConsumeDataByChunkCallback&&);
 
+#if ENABLE(STREAMS_API)
         RefPtr<SharedBuffer> startStreaming();
+#endif
         NotificationCallback takeNotificationCallback() { return WTFMove(m_responseCallback); }
         ConsumeDataByChunkCallback takeConsumeDataCallback() { return WTFMove(m_consumeDataCallback); }
 
@@ -147,7 +155,6 @@ private:
         ConsumeDataByChunkCallback m_consumeDataCallback;
         std::unique_ptr<FetchLoader> m_loader;
         Ref<PendingActivity<FetchResponse>> m_pendingActivity;
-        FetchOptions::Credentials m_credentials;
     };
 
     mutable Optional<ResourceResponse> m_filteredResponse;

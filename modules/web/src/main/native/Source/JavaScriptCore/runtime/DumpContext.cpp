@@ -29,7 +29,7 @@
 namespace JSC {
 
 DumpContext::DumpContext()
-    : graph(nullptr)
+    : graph(0)
 {
 }
 

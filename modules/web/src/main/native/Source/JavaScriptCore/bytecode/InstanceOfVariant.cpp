@@ -26,7 +26,8 @@
 #include "config.h"
 #include "InstanceOfVariant.h"
 
-#include "JSCJSValueInlines.h"
+#include "JSCInlines.h"
+#include <wtf/ListDump.h>
 
 namespace JSC {
 

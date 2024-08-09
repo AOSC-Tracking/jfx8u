@@ -72,8 +72,7 @@ public:
     void setContainingFragment(RenderFragmentContainer&);
     void clearContainingFragment();
 
-    enum class ForHitTesting : bool { No, Yes };
-    LayoutUnit selectionTop(ForHitTesting = ForHitTesting::No) const;
+    LayoutUnit selectionTop() const;
     LayoutUnit selectionBottom() const;
     LayoutUnit selectionHeight() const { return std::max<LayoutUnit>(0, selectionBottom() - selectionTop()); }
 
@@ -127,7 +126,7 @@ public:
     using InlineBox::hasSelectedChildren;
     using InlineBox::setHasSelectedChildren;
 
-    RenderObject::HighlightState selectionState() final;
+    RenderObject::SelectionState selectionState() final;
     InlineBox* firstSelectedBox();
     InlineBox* lastSelectedBox();
 

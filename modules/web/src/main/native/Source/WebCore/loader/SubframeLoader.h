@@ -30,7 +30,10 @@
 
 #pragma once
 
-#include "FrameLoader.h"
+#include "FrameLoaderTypes.h"
+#include <wtf/Forward.h>
+#include <wtf/Noncopyable.h>
+#include <wtf/text/WTFString.h>
 
 namespace WebCore {
 
@@ -45,7 +48,7 @@ class IntSize;
 class Widget;
 
 // This is a slight misnomer. It handles the higher level logic of loading both subframes and plugins.
-class FrameLoader::SubframeLoader {
+class SubframeLoader {
     WTF_MAKE_NONCOPYABLE(SubframeLoader); WTF_MAKE_FAST_ALLOCATED;
 public:
     explicit SubframeLoader(Frame&);
@@ -57,6 +60,8 @@ public:
         const String& serviceType, const Vector<String>& paramNames, const Vector<String>& paramValues);
 
     RefPtr<Widget> createJavaAppletWidget(const IntSize&, HTMLAppletElement&, const Vector<String>& paramNames, const Vector<String>& paramValues);
+
+    WEBCORE_EXPORT bool allowPlugins();
 
     bool containsPlugins() const { return m_containsPlugins; }
 
@@ -75,7 +80,7 @@ private:
 
     bool shouldConvertInvalidURLsToBlank() const;
 
-    bool m_containsPlugins { false };
+    bool m_containsPlugins;
     Frame& m_frame;
 };
 

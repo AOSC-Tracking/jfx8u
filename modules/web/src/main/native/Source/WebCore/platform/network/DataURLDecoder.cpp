@@ -97,6 +97,52 @@ public:
     Result result;
 };
 
+#if HAVE(RUNLOOP_TIMER)
+
+class DecodingResultDispatcher : public ThreadSafeRefCounted<DecodingResultDispatcher> {
+public:
+    static void dispatch(std::unique_ptr<DecodeTask> decodeTask)
+    {
+        Ref<DecodingResultDispatcher> dispatcher = adoptRef(*new DecodingResultDispatcher(WTFMove(decodeTask)));
+        dispatcher->startTimer();
+    }
+
+private:
+    DecodingResultDispatcher(std::unique_ptr<DecodeTask> decodeTask)
+        : m_timer(*this, &DecodingResultDispatcher::timerFired)
+        , m_decodeTask(WTFMove(decodeTask))
+    {
+    }
+
+    void startTimer()
+    {
+        // Keep alive until the timer has fired.
+        ref();
+
+        auto scheduledPairs = m_decodeTask->scheduleContext.scheduledPairs;
+        m_timer.startOneShot(0_s);
+        m_timer.schedule(scheduledPairs);
+    }
+
+    void timerFired()
+    {
+        if (m_decodeTask->result.data)
+            m_decodeTask->completionHandler(WTFMove(m_decodeTask->result));
+        else
+            m_decodeTask->completionHandler({ });
+
+        // Ensure DecodeTask gets deleted in the main thread.
+        m_decodeTask = nullptr;
+
+        deref();
+    }
+
+    RunLoopTimer<DecodingResultDispatcher> m_timer;
+    std::unique_ptr<DecodeTask> m_decodeTask;
+};
+
+#endif // HAVE(RUNLOOP_TIMER)
+
 static std::unique_ptr<DecodeTask> createDecodeTask(const URL& url, const ScheduleContext& scheduleContext, DecodeCompletionHandler&& completionHandler)
 {
     return makeUnique<DecodeTask>(
@@ -106,21 +152,15 @@ static std::unique_ptr<DecodeTask> createDecodeTask(const URL& url, const Schedu
     );
 }
 
-static void decodeBase64(DecodeTask& task, Mode mode)
+static void decodeBase64(DecodeTask& task)
 {
     Vector<char> buffer;
-    if (mode == Mode::ForgivingBase64) {
+    // First try base64url.
+    if (!base64URLDecode(task.encodedData.toStringWithoutCopying(), buffer)) {
+        // Didn't work, try unescaping and decoding as base64.
         auto unescapedString = decodeURLEscapeSequences(task.encodedData.toStringWithoutCopying());
-        if (!base64Decode(unescapedString, buffer, Base64ValidatePadding | Base64IgnoreSpacesAndNewLines | Base64DiscardVerticalTab))
+        if (!base64Decode(unescapedString, buffer, Base64IgnoreSpacesAndNewLines))
             return;
-    } else {
-        // First try base64url.
-        if (!base64URLDecode(task.encodedData.toStringWithoutCopying(), buffer)) {
-            // Didn't work, try unescaping and decoding as base64.
-            auto unescapedString = decodeURLEscapeSequences(task.encodedData.toStringWithoutCopying());
-            if (!base64Decode(unescapedString, buffer, Base64IgnoreSpacesAndNewLines | Base64DiscardVerticalTab))
-                return;
-        }
     }
     buffer.shrinkToFit();
     task.result.data = SharedBuffer::create(WTFMove(buffer));
@@ -136,34 +176,28 @@ static void decodeEscaped(DecodeTask& task)
     task.result.data = SharedBuffer::create(WTFMove(buffer));
 }
 
-void decode(const URL& url, const ScheduleContext& scheduleContext, Mode mode, DecodeCompletionHandler&& completionHandler)
+void decode(const URL& url, const ScheduleContext& scheduleContext, DecodeCompletionHandler&& completionHandler)
 {
     ASSERT(url.protocolIsData());
 
-    decodeQueue().dispatch([decodeTask = createDecodeTask(url, scheduleContext, WTFMove(completionHandler)), mode]() mutable {
+    decodeQueue().dispatch([decodeTask = createDecodeTask(url, scheduleContext, WTFMove(completionHandler))]() mutable {
         if (decodeTask->process()) {
             if (decodeTask->isBase64)
-                decodeBase64(*decodeTask, mode);
+                decodeBase64(*decodeTask);
             else
                 decodeEscaped(*decodeTask);
         }
 
-#if USE(COCOA_EVENT_LOOP) && !PLATFORM(JAVA)
-        auto scheduledPairs = decodeTask->scheduleContext.scheduledPairs;
-#endif
-
-        auto callCompletionHandler = [decodeTask = WTFMove(decodeTask)] {
+#if HAVE(RUNLOOP_TIMER)
+        DecodingResultDispatcher::dispatch(WTFMove(decodeTask));
+#else
+        callOnMainThread([decodeTask = WTFMove(decodeTask)] {
             if (!decodeTask->result.data) {
                 decodeTask->completionHandler({ });
                 return;
             }
             decodeTask->completionHandler(WTFMove(decodeTask->result));
-        };
-
-#if USE(COCOA_EVENT_LOOP) && !PLATFORM(JAVA)
-        RunLoop::dispatch(scheduledPairs, WTFMove(callCompletionHandler));
-#else
-        RunLoop::main().dispatch(WTFMove(callCompletionHandler));
+        });
 #endif
     });
 }

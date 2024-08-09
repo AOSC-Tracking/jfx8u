@@ -1,5 +1,3 @@
-// © 2016 and later: Unicode, Inc. and others.
-// License & terms of use: http://www.unicode.org/copyright.html
 /*
 *******************************************************************************
 * Copyright (C) 2008-2015, International Business Machines Corporation and
@@ -29,9 +27,6 @@
 
 #include "unicode/format.h"
 #include "unicode/upluralrules.h"
-#ifndef U_HIDE_INTERNAL_API
-#include "unicode/numfmt.h"
-#endif  /* U_HIDE_INTERNAL_API */
 
 /**
  * Value returned by PluralRules::getUniqueKeywordValue() when there is no
@@ -43,7 +38,7 @@
 U_NAMESPACE_BEGIN
 
 class Hashtable;
-class IFixedDecimal;
+class FixedDecimal;
 class RuleChain;
 class PluralRuleParser;
 class PluralKeywordEnumeration;
@@ -350,7 +345,7 @@ public:
     /**
       * @internal
       */
-    UnicodeString select(const IFixedDecimal &number) const;
+    UnicodeString select(const FixedDecimal &number) const;
 #endif  /* U_HIDE_INTERNAL_API */
 
     /**
@@ -381,7 +376,7 @@ public:
     /**
      * Deprecated Function, does not produce useful results.
      *
-     * Originally intended to return all the values for which select() would return the keyword.
+     * Orginally intended to return all the values for which select() would return the keyword.
      * If the keyword is unknown, returns no values, but this is not an error.  If
      * the number of values is unlimited, returns no values and -1 as the
      * count.

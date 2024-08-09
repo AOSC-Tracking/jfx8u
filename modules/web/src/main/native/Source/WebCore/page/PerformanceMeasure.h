@@ -36,12 +36,9 @@ public:
 
 private:
     PerformanceMeasure(const String& name, double startTime, double duration)
-        : PerformanceEntry(name, startTime, duration)
+        : PerformanceEntry(PerformanceEntry::Type::Measure, name, "measure"_s, startTime, duration)
     {
     }
-
-    Type type() const final { return Type::Measure; }
-    ASCIILiteral entryType() const final { return "measure"_s; }
 
     ~PerformanceMeasure() = default;
 };

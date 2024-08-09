@@ -51,8 +51,7 @@ public:
     FontRenderingMode renderingMode() const { return static_cast<FontRenderingMode>(m_renderingMode); }
     TextRenderingMode textRenderingMode() const { return static_cast<TextRenderingMode>(m_textRendering); }
     UScriptCode script() const { return static_cast<UScriptCode>(m_script); }
-    const AtomString& computedLocale() const { return m_locale; } // This is what you should be using for things like text shaping and font fallback
-    const AtomString& specifiedLocale() const { return m_specifiedLocale; } // This is what you should be using for web-exposed things like -webkit-locale
+    const AtomString& locale() const { return m_locale; }
 
     FontOrientation orientation() const { return static_cast<FontOrientation>(m_orientation); }
     NonCJKGlyphOrientation nonCJKGlyphOrientation() const { return static_cast<NonCJKGlyphOrientation>(m_nonCJKGlyphOrientation); }
@@ -107,7 +106,7 @@ public:
     void setOrientation(FontOrientation orientation) { m_orientation = static_cast<unsigned>(orientation); }
     void setNonCJKGlyphOrientation(NonCJKGlyphOrientation orientation) { m_nonCJKGlyphOrientation = static_cast<unsigned>(orientation); }
     void setWidthVariant(FontWidthVariant widthVariant) { m_widthVariant = static_cast<unsigned>(widthVariant); } // Make sure new callers of this sync with FontPlatformData::isForTextCombine()!
-    WEBCORE_EXPORT void setSpecifiedLocale(const AtomString&);
+    WEBCORE_EXPORT void setLocale(const AtomString&);
     void setFeatureSettings(FontFeatureSettings&& settings) { m_featureSettings = WTFMove(settings); }
 #if ENABLE(VARIATION_FONTS)
     void setVariationSettings(FontVariationSettings&& settings) { m_variationSettings = WTFMove(settings); }
@@ -145,7 +144,6 @@ private:
     FontFeatureSettings m_featureSettings;
     FontVariationSettings m_variationSettings;
     AtomString m_locale;
-    AtomString m_specifiedLocale;
 
     FontSelectionRequest m_fontSelectionRequest;
     float m_computedSize { 0 }; // Computed size adjusted for the minimum font size and the zoom factor.
@@ -185,7 +183,7 @@ inline bool FontDescription::operator==(const FontDescription& other) const
         && m_orientation == other.m_orientation
         && m_nonCJKGlyphOrientation == other.m_nonCJKGlyphOrientation
         && m_widthVariant == other.m_widthVariant
-        && m_specifiedLocale == other.m_specifiedLocale
+        && m_locale == other.m_locale
         && m_featureSettings == other.m_featureSettings
 #if ENABLE(VARIATION_FONTS)
         && m_variationSettings == other.m_variationSettings
@@ -218,7 +216,7 @@ void FontDescription::encode(Encoder& encoder) const
 #if ENABLE(VARIATION_FONTS)
     encoder << variationSettings();
 #endif
-    encoder << computedLocale();
+    encoder << locale();
     encoder << italic();
     encoder << stretch();
     encoder << weight();
@@ -414,7 +412,7 @@ Optional<FontDescription> FontDescription::decode(Decoder& decoder)
 #if ENABLE(VARIATION_FONTS)
     fontDescription.setVariationSettings(WTFMove(*variationSettings));
 #endif
-    fontDescription.setSpecifiedLocale(*locale);
+    fontDescription.setLocale(*locale);
     fontDescription.setItalic(*italic);
     fontDescription.setStretch(*stretch);
     fontDescription.setWeight(*weight);

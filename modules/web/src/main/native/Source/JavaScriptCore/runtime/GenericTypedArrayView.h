@@ -32,6 +32,9 @@ namespace JSC {
 
 template<typename Adaptor>
 class GenericTypedArrayView final : public ArrayBufferView {
+protected:
+    GenericTypedArrayView(RefPtr<ArrayBuffer>&&, unsigned byteOffset, unsigned length);
+
 public:
     static Ref<GenericTypedArrayView> create(unsigned length);
     static Ref<GenericTypedArrayView> create(const typename Adaptor::Type* array, unsigned length);
@@ -110,15 +113,12 @@ public:
     RefPtr<GenericTypedArrayView> subarray(int start) const;
     RefPtr<GenericTypedArrayView> subarray(int start, int end) const;
 
-    TypedArrayType getType() const final
+    TypedArrayType getType() const override
     {
         return Adaptor::typeValue;
     }
 
-    JSArrayBufferView* wrap(JSGlobalObject*, JSGlobalObject*) final;
-
-private:
-    GenericTypedArrayView(RefPtr<ArrayBuffer>&&, unsigned byteOffset, unsigned length);
+    JSArrayBufferView* wrap(JSGlobalObject*, JSGlobalObject*) override;
 };
 
 } // namespace JSC

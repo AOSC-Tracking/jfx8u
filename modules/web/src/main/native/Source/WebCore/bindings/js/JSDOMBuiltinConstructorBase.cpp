@@ -32,8 +32,9 @@ void JSDOMBuiltinConstructorBase::callFunctionWithCurrentArguments(JSC::JSGlobal
 {
     JSC::VM& vm = lexicalGlobalObject.vm();
     auto scope = DECLARE_THROW_SCOPE(vm);
-    auto callData = JSC::getCallData(vm, &function);
-    ASSERT(callData.type != CallData::Type::None);
+    JSC::CallData callData;
+    JSC::CallType callType = JSC::getCallData(vm, &function, callData);
+    ASSERT(callType != CallType::None);
 
     JSC::MarkedArgumentBuffer arguments;
     for (unsigned i = 0; i < callFrame.argumentCount(); ++i)
@@ -42,7 +43,7 @@ void JSDOMBuiltinConstructorBase::callFunctionWithCurrentArguments(JSC::JSGlobal
         throwOutOfMemoryError(&lexicalGlobalObject, scope);
         return;
     }
-    JSC::call(&lexicalGlobalObject, &function, callData, &thisObject, arguments);
+    JSC::call(&lexicalGlobalObject, &function, callType, callData, &thisObject, arguments);
 }
 
 void JSDOMBuiltinConstructorBase::visitChildren(JSC::JSCell* cell, JSC::SlotVisitor& visitor)

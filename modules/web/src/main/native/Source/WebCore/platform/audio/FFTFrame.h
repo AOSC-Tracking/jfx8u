@@ -70,9 +70,6 @@ public:
     float* realData() const;
     float* imagData() const;
 
-    static int minFFTSize();
-    static int maxFFTSize();
-
     void print(); // for debugging
 
     // CROSS-PLATFORM

@@ -25,7 +25,7 @@
 
 #pragma once
 
-#if ENABLE(MEDIA_SOURCE)
+#if ENABLE(MEDIA_SOURCE) && ENABLE(VIDEO_TRACK)
 
 #include "AudioTrack.h"
 
@@ -38,4 +38,4 @@ public:
 
 } // namespace WebCore
 
-#endif // ENABLE(MEDIA_SOURCE)
+#endif // ENABLE(MEDIA_SOURCE) && ENABLE(VIDEO_TRACK)

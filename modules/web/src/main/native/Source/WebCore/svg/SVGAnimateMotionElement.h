@@ -58,12 +58,14 @@ private:
     RotateMode rotateMode() const;
     void buildTransformForProgress(AffineTransform*, float percentage);
 
+    bool m_hasToPointAtEndOfDuration;
+
     void updateAnimationMode() override;
 
     // Note: we do not support percentage values for to/from coords as the spec implies we should (opera doesn't either)
     FloatPoint m_fromPoint;
     FloatPoint m_toPoint;
-    Optional<FloatPoint> m_toPointAtEndOfDuration;
+    FloatPoint m_toPointAtEndOfDuration;
 
     Path m_path;
     Path m_animationPath;

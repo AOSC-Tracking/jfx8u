@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2009 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -28,45 +28,55 @@
 
 #pragma once
 
-#include "AudioListener.h"
+#include <wtf/SchedulePair.h>
+#include <wtf/Seconds.h>
+#include <wtf/RetainPtr.h>
 
-namespace WebCore {
+namespace WTF {
 
-class WebKitAudioListener final : public AudioListener {
+// Time intervals are all in seconds.
+
+class WTF_EXPORT_PRIVATE RunLoopTimerBase {
+    WTF_MAKE_NONCOPYABLE(RunLoopTimerBase);
+    WTF_MAKE_FAST_ALLOCATED;
 public:
-    static Ref<WebKitAudioListener> create(BaseAudioContext& context)
-    {
-        return adoptRef(*new WebKitAudioListener(context));
-    }
+    RunLoopTimerBase() { }
+    WTF_EXPORT_PRIVATE virtual ~RunLoopTimerBase();
 
-    // Velocity
-    void setVelocity(float x, float y, float z) { setVelocity(FloatPoint3D(x, y, z)); }
-    void setVelocity(const FloatPoint3D& velocity) { m_velocity = velocity; }
-    const FloatPoint3D& velocity() const { return m_velocity; }
+    WTF_EXPORT_PRIVATE void schedule(const SchedulePair*);
+    WTF_EXPORT_PRIVATE void schedule(const SchedulePairHashSet&);
 
-    // Doppler factor
-    void setDopplerFactor(double dopplerFactor) { m_dopplerFactor = dopplerFactor; }
-    double dopplerFactor() const { return m_dopplerFactor; }
+    WTF_EXPORT_PRIVATE void start(Seconds nextFireInterval, Seconds repeatInterval);
 
-    // Speed of sound
-    void setSpeedOfSound(double speedOfSound) { m_speedOfSound = speedOfSound; }
-    double speedOfSound() const { return m_speedOfSound; }
+    void startRepeating(Seconds repeatInterval) { start(repeatInterval, repeatInterval); }
+    void startOneShot(Seconds interval) { start(interval, 0_s); }
+
+    WTF_EXPORT_PRIVATE void stop();
+    bool isActive() const;
+
+    virtual void fired() = 0;
 
 private:
-    WebKitAudioListener(BaseAudioContext& context)
-        : AudioListener(context)
-        , m_velocity(0, 0, 0)
-    { }
-
-    bool isWebKitAudioListener() const final { return true; }
-
-    FloatPoint3D m_velocity;
-    double m_dopplerFactor { 1.0 };
-    double m_speedOfSound { 343.3 };
+#if USE(CF)
+    RetainPtr<CFRunLoopTimerRef> m_timer;
+#endif
 };
 
-} // namespace WebCore
+// FIXME: This doesn't have to be a class template.
+template <typename TimerFiredClass> class RunLoopTimer : public RunLoopTimerBase {
+public:
+    typedef void (TimerFiredClass::*TimerFiredFunction)();
 
-SPECIALIZE_TYPE_TRAITS_BEGIN(WebCore::WebKitAudioListener)
-    static bool isType(const WebCore::AudioListener& listener) { return listener.isWebKitAudioListener(); }
-SPECIALIZE_TYPE_TRAITS_END()
+    RunLoopTimer(TimerFiredClass& o, TimerFiredFunction f)
+        : m_object(&o), m_function(f) { }
+
+    virtual void fired() { (m_object->*m_function)(); }
+
+private:
+    TimerFiredClass* m_object;
+    TimerFiredFunction m_function;
+};
+
+} // namespace WTF
+
+using WTF::RunLoopTimer;

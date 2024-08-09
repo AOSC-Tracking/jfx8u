@@ -26,7 +26,6 @@
 
 #include "AudioNode.h"
 #include "AudioParam.h"
-#include "GainOptions.h"
 #include <wtf/Threading.h>
 
 namespace WebCore {
@@ -39,7 +38,10 @@ class AudioContext;
 class GainNode final : public AudioNode {
     WTF_MAKE_ISO_ALLOCATED(GainNode);
 public:
-    static ExceptionOr<Ref<GainNode>> create(BaseAudioContext& context, const GainOptions& = { });
+    static Ref<GainNode> create(AudioContext& context, float sampleRate)
+    {
+        return adoptRef(*new GainNode(context, sampleRate));
+    }
 
     // AudioNode
     void process(size_t framesToProcess) override;
@@ -49,17 +51,18 @@ public:
     void checkNumberOfChannelsForInput(AudioNodeInput*) override;
 
     // JavaScript interface
-    AudioParam& gain() { return m_gain.get(); }
+    AudioParam* gain() { return m_gain.get(); }
 
 private:
     double tailTime() const override { return 0; }
     double latencyTime() const override { return 0; }
 
-    explicit GainNode(BaseAudioContext&);
+    GainNode(AudioContext&, float sampleRate);
 
-    float m_lastGain { 1.0 }; // for de-zippering
+    float m_lastGain; // for de-zippering
+    RefPtr<AudioParam> m_gain;
+
     AudioFloatArray m_sampleAccurateGainValues;
-    Ref<AudioParam> m_gain;
 };
 
 } // namespace WebCore

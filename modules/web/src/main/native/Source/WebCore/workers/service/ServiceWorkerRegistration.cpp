@@ -49,7 +49,7 @@ WTF_MAKE_ISO_ALLOCATED_IMPL(ServiceWorkerRegistration);
 Ref<ServiceWorkerRegistration> ServiceWorkerRegistration::getOrCreate(ScriptExecutionContext& context, Ref<ServiceWorkerContainer>&& container, ServiceWorkerRegistrationData&& data)
 {
     if (auto* registration = container->registration(data.identifier)) {
-        ASSERT(!registration->isContextStopped());
+        ASSERT(!registration->m_isStopped);
         return *registration;
     }
 
@@ -112,7 +112,7 @@ ServiceWorker* ServiceWorkerRegistration::getNewestWorker() const
 
 const String& ServiceWorkerRegistration::scope() const
 {
-    return m_registrationData.scopeURL.string();
+    return m_registrationData.scopeURL;
 }
 
 ServiceWorkerUpdateViaCache ServiceWorkerRegistration::updateViaCache() const
@@ -137,7 +137,7 @@ void ServiceWorkerRegistration::setUpdateViaCache(ServiceWorkerUpdateViaCache up
 
 void ServiceWorkerRegistration::update(Ref<DeferredPromise>&& promise)
 {
-    if (isContextStopped()) {
+    if (m_isStopped) {
         promise->reject(Exception(InvalidStateError));
         return;
     }
@@ -154,12 +154,12 @@ void ServiceWorkerRegistration::update(Ref<DeferredPromise>&& promise)
 
 void ServiceWorkerRegistration::unregister(Ref<DeferredPromise>&& promise)
 {
-    if (isContextStopped()) {
+    if (m_isStopped) {
         promise->reject(Exception(InvalidStateError));
         return;
     }
 
-    m_container->unregisterRegistration(identifier(), WTFMove(promise));
+    m_container->removeRegistration(m_registrationData.scopeURL, WTFMove(promise));
 }
 
 void ServiceWorkerRegistration::updateStateFromServer(ServiceWorkerRegistrationState state, RefPtr<ServiceWorker>&& serviceWorker)
@@ -182,7 +182,7 @@ void ServiceWorkerRegistration::updateStateFromServer(ServiceWorkerRegistrationS
 
 void ServiceWorkerRegistration::queueTaskToFireUpdateFoundEvent()
 {
-    if (isContextStopped())
+    if (m_isStopped)
         return;
 
     REGISTRATION_RELEASE_LOG_IF_ALLOWED("fireUpdateFoundEvent: Firing updatefound event for registration %llu", identifier().toUInt64());
@@ -207,12 +207,16 @@ const char* ServiceWorkerRegistration::activeDOMObjectName() const
 
 void ServiceWorkerRegistration::stop()
 {
+    m_isStopped = true;
     removeAllEventListeners();
 }
 
-bool ServiceWorkerRegistration::virtualHasPendingActivity() const
+bool ServiceWorkerRegistration::hasPendingActivity() const
 {
-    return getNewestWorker() && hasEventListeners();
+    if (!m_isStopped && getNewestWorker() && hasEventListeners())
+        return true;
+
+    return ActiveDOMObject::hasPendingActivity();
 }
 
 } // namespace WebCore

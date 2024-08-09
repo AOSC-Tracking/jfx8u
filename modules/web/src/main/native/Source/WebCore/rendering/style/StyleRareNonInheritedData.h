@@ -27,6 +27,7 @@
 #include "CSSPropertyNames.h"
 #include "ClipPathOperation.h"
 #include "CounterDirectives.h"
+#include "DataRef.h"
 #include "FillLayer.h"
 #include "GapLength.h"
 #include "LengthPoint.h"
@@ -35,11 +36,8 @@
 #include "ShapeValue.h"
 #include "StyleContentAlignmentData.h"
 #include "StyleSelfAlignmentData.h"
-#include "TouchAction.h"
 #include "WillChangeData.h"
 #include <memory>
-#include <wtf/DataRef.h>
-#include <wtf/OptionSet.h>
 #include <wtf/Vector.h>
 
 namespace WebCore {
@@ -86,8 +84,6 @@ public:
 
     bool operator==(const StyleRareNonInheritedData&) const;
     bool operator!=(const StyleRareNonInheritedData& other) const { return !(*this == other); }
-
-    LengthPoint perspectiveOrigin() const { return { perspectiveOriginX, perspectiveOriginY }; }
 
     bool contentDataEquivalent(const StyleRareNonInheritedData&) const;
 
@@ -154,8 +150,6 @@ public:
     Length shapeMargin;
     float shapeImageThreshold;
 
-    int order;
-
     RefPtr<ClipPathOperation> clipPath;
 
     Color textDecorationColor;
@@ -167,6 +161,8 @@ public:
     Color visitedLinkBorderTopColor;
     Color visitedLinkBorderBottomColor;
 
+    int order;
+
     StyleContentAlignmentData alignContent;
     StyleSelfAlignmentData alignItems;
     StyleSelfAlignmentData alignSelf;
@@ -177,7 +173,9 @@ public:
     DataRef<StyleCustomPropertyData> customProperties;
     std::unique_ptr<HashSet<String>> customPaintWatchedProperties;
 
-    OptionSet<TouchAction> touchActions;
+#if ENABLE(POINTER_EVENTS)
+    unsigned touchActions : 6; // TouchAction
+#endif
 
     unsigned pageSizeType : 2; // PageSizeType
     unsigned transformStyle3D : 1; // TransformStyle3D
@@ -203,7 +201,7 @@ public:
 
 #if ENABLE(APPLE_PAY)
     unsigned applePayButtonStyle : 2;
-    unsigned applePayButtonType : 4;
+    unsigned applePayButtonType : 3;
 #endif
 
     unsigned objectFit : 3; // ObjectFit

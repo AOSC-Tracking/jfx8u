@@ -79,7 +79,7 @@ public:
     MallocPtr<CharType, StringBufferMalloc> release()
     {
         CharType* data = m_data;
-        m_data = nullptr;
+        m_data = 0;
         return adoptMallocPtr<CharType, StringBufferMalloc>(data);
     }
 

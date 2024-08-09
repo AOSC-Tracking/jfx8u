@@ -25,8 +25,11 @@
 
 #pragma once
 
-#include "JSScope.h"
+#include "JSCast.h"
 #include "VM.h"
+#include "Watchpoint.h"
+#include "WriteBarrier.h"
+#include <wtf/Nonmovable.h>
 
 namespace JSC {
 

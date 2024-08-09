@@ -44,27 +44,30 @@ namespace WebCore {
 
 WTF_MAKE_ISO_ALLOCATED_IMPL(MediaRecorder);
 
-MediaRecorder::CreatorFunction MediaRecorder::m_customCreator = nullptr;
+creatorFunction MediaRecorder::m_customCreator = nullptr;
 
 ExceptionOr<Ref<MediaRecorder>> MediaRecorder::create(Document& document, Ref<MediaStream>&& stream, Options&& options)
 {
     auto privateInstance = MediaRecorder::createMediaRecorderPrivate(document, stream->privateStream());
     if (!privateInstance)
         return Exception { NotSupportedError, "The MediaRecorder is unsupported on this platform"_s };
-    auto recorder = adoptRef(*new MediaRecorder(document, WTFMove(stream), WTFMove(options)));
+    auto recorder = adoptRef(*new MediaRecorder(document, WTFMove(stream), WTFMove(privateInstance), WTFMove(options)));
     recorder->suspendIfNeeded();
+    recorder->m_private->setErrorCallback([recorder = recorder.copyRef()](auto&& exception) mutable {
+        recorder->dispatchError(WTFMove(*exception));
+    });
     return recorder;
 }
 
-void MediaRecorder::setCustomPrivateRecorderCreator(CreatorFunction creator)
+void MediaRecorder::setCustomPrivateRecorderCreator(creatorFunction creator)
 {
     m_customCreator = creator;
 }
 
-std::unique_ptr<MediaRecorderPrivate> MediaRecorder::createMediaRecorderPrivate(Document& document, MediaStreamPrivate& stream)
+std::unique_ptr<MediaRecorderPrivate> MediaRecorder::createMediaRecorderPrivate(Document& document, const MediaStreamPrivate& stream)
 {
     if (m_customCreator)
-        return m_customCreator(stream);
+        return m_customCreator();
 
 #if PLATFORM(COCOA)
     auto* page = document.page();
@@ -79,21 +82,21 @@ std::unique_ptr<MediaRecorderPrivate> MediaRecorder::createMediaRecorderPrivate(
 #endif
 }
 
-MediaRecorder::MediaRecorder(Document& document, Ref<MediaStream>&& stream, Options&& option)
+MediaRecorder::MediaRecorder(Document& document, Ref<MediaStream>&& stream, std::unique_ptr<MediaRecorderPrivate>&& privateImpl, Options&& option)
     : ActiveDOMObject(document)
     , m_options(WTFMove(option))
     , m_stream(WTFMove(stream))
-    , m_timeSliceTimer([this] { requestData(); })
+    , m_private(WTFMove(privateImpl))
 {
     m_tracks = WTF::map(m_stream->getTracks(), [] (auto&& track) -> Ref<MediaStreamTrackPrivate> {
         return track->privateTrack();
     });
-    m_stream->privateStream().addObserver(*this);
+    m_stream->addObserver(this);
 }
 
 MediaRecorder::~MediaRecorder()
 {
-    m_stream->privateStream().removeObserver(*this);
+    m_stream->removeObserver(this);
     stopRecordingInternal();
 }
 
@@ -118,7 +121,9 @@ void MediaRecorder::suspend(ReasonForSuspension reason)
 
     stopRecordingInternal();
 
-    queueTaskToDispatchEvent(*this, TaskSource::Networking, MediaRecorderErrorEvent::create(eventNames().errorEvent, Exception { UnknownError, "MediaStream recording was interrupted"_s }));
+    scheduleDeferredTask([this] {
+        dispatchEvent(MediaRecorderErrorEvent::create(eventNames().errorEvent, Exception { UnknownError, "MediaStream recording was interrupted"_s }));
+    });
 }
 
 const char* MediaRecorder::activeDOMObjectName() const
@@ -126,48 +131,16 @@ const char* MediaRecorder::activeDOMObjectName() const
     return "MediaRecorder";
 }
 
-ExceptionOr<void> MediaRecorder::startRecording(Optional<unsigned> timeSlice)
+ExceptionOr<void> MediaRecorder::startRecording(Optional<int> timeslice)
 {
-    if (!m_isActive)
-        return Exception { InvalidStateError, "The MediaRecorder is not active"_s };
-
+    UNUSED_PARAM(timeslice);
     if (state() != RecordingState::Inactive)
         return Exception { InvalidStateError, "The MediaRecorder's state must be inactive in order to start recording"_s };
-
-    ASSERT(!m_private);
-    m_private = createMediaRecorderPrivate(*document(), m_stream->privateStream());
-
-    if (!m_private)
-        return Exception { NotSupportedError, "The MediaRecorder is unsupported on this platform"_s };
-
-    m_private->startRecording([this, pendingActivity = makePendingActivity(*this)](auto&& exception) mutable {
-        if (!m_isActive)
-            return;
-
-        if (exception) {
-            stopRecordingInternal();
-            queueTaskKeepingObjectAlive(*this, TaskSource::Networking, [this, exception = WTFMove(*exception)]() mutable {
-                if (!m_isActive)
-                    return;
-                dispatchError(WTFMove(exception));
-            });
-            return;
-        }
-
-        queueTaskKeepingObjectAlive(*this, TaskSource::Networking, [this] {
-            if (!m_isActive)
-                return;
-            dispatchEvent(Event::create(eventNames().startEvent, Event::CanBubble::No, Event::IsCancelable::No));
-        });
-    });
 
     for (auto& track : m_tracks)
         track->addObserver(*this);
 
     m_state = RecordingState::Recording;
-    m_timeSlice = timeSlice;
-    if (m_timeSlice)
-        m_timeSliceTimer.startOneShot(Seconds::fromMilliseconds(*m_timeSlice));
     return { };
 }
 
@@ -176,16 +149,21 @@ ExceptionOr<void> MediaRecorder::stopRecording()
     if (state() == RecordingState::Inactive)
         return Exception { InvalidStateError, "The MediaRecorder's state cannot be inactive"_s };
 
-    stopRecordingInternal();
-    auto& privateRecorder = *m_private;
-    privateRecorder.fetchData([this, pendingActivity = makePendingActivity(*this), privateRecorder = WTFMove(m_private)](auto&& buffer, auto& mimeType) {
-        queueTaskKeepingObjectAlive(*this, TaskSource::Networking, [this, buffer = WTFMove(buffer), mimeType]() mutable {
+    scheduleDeferredTask([this] {
+        if (!m_isActive || state() == RecordingState::Inactive)
+            return;
+
+        stopRecordingInternal();
+        ASSERT(m_state == RecordingState::Inactive);
+        m_private->fetchData([this, protectedThis = makeRef(*this)](auto&& buffer, auto& mimeType) {
             if (!m_isActive)
                 return;
+
             dispatchEvent(BlobEvent::create(eventNames().dataavailableEvent, Event::CanBubble::No, Event::IsCancelable::No, buffer ? Blob::create(buffer.releaseNonNull(), mimeType) : Blob::create()));
 
             if (!m_isActive)
                 return;
+
             dispatchEvent(Event::create(eventNames().stopEvent, Event::CanBubble::No, Event::IsCancelable::No));
         });
     });
@@ -197,18 +175,11 @@ ExceptionOr<void> MediaRecorder::requestData()
     if (state() == RecordingState::Inactive)
         return Exception { InvalidStateError, "The MediaRecorder's state cannot be inactive"_s };
 
-    if (m_timeSliceTimer.isActive())
-        m_timeSliceTimer.stop();
-    m_private->fetchData([this, pendingActivity = makePendingActivity(*this)](auto&& buffer, auto& mimeType) {
-        queueTaskKeepingObjectAlive(*this, TaskSource::Networking, [this, buffer = WTFMove(buffer), mimeType]() mutable {
-            if (!m_isActive)
-                return;
+    m_private->fetchData([this, protectedThis = makeRef(*this)](auto&& buffer, auto& mimeType) {
+        if (!m_isActive)
+            return;
 
-            dispatchEvent(BlobEvent::create(eventNames().dataavailableEvent, Event::CanBubble::No, Event::IsCancelable::No, buffer ? Blob::create(buffer.releaseNonNull(), mimeType) : Blob::create()));
-
-            if (m_timeSlice)
-                m_timeSliceTimer.startOneShot(Seconds::fromMilliseconds(*m_timeSlice));
-        });
+        dispatchEvent(BlobEvent::create(eventNames().dataavailableEvent, Event::CanBubble::No, Event::IsCancelable::No, buffer ? Blob::create(buffer.releaseNonNull(), mimeType) : Blob::create()));
     });
     return { };
 }
@@ -225,9 +196,9 @@ void MediaRecorder::stopRecordingInternal()
     m_private->stopRecording();
 }
 
-void MediaRecorder::handleTrackChange()
+void MediaRecorder::didAddOrRemoveTrack()
 {
-    queueTaskKeepingObjectAlive(*this, TaskSource::Networking, [this] {
+    scheduleDeferredTask([this] {
         if (!m_isActive || state() == RecordingState::Inactive)
             return;
         stopRecordingInternal();
@@ -253,9 +224,26 @@ void MediaRecorder::trackEnded(MediaStreamTrackPrivate&)
     stopRecording();
 }
 
-bool MediaRecorder::virtualHasPendingActivity() const
+void MediaRecorder::sampleBufferUpdated(MediaStreamTrackPrivate& track, MediaSample& mediaSample)
 {
-    return m_state != RecordingState::Inactive;
+    m_private->sampleBufferUpdated(track, mediaSample);
+}
+
+void MediaRecorder::audioSamplesAvailable(MediaStreamTrackPrivate& track, const MediaTime& mediaTime, const PlatformAudioData& audioData, const AudioStreamDescription& description, size_t sampleCount)
+{
+    m_private->audioSamplesAvailable(track, mediaTime, audioData, description, sampleCount);
+}
+
+void MediaRecorder::scheduleDeferredTask(Function<void()>&& function)
+{
+    ASSERT(function);
+    auto* document = this->document();
+    if (!document)
+        return;
+
+    document->eventLoop().queueTask(TaskSource::Networking, [pendingActivity = makePendingActivity(*this), function = WTFMove(function)] {
+        function();
+    });
 }
 
 } // namespace WebCore

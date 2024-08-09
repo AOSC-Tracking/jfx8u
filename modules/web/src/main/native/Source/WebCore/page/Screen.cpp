@@ -29,13 +29,10 @@
 #include "config.h"
 #include "Screen.h"
 
-#include "DOMWindow.h"
-#include "Document.h"
 #include "FloatRect.h"
 #include "Frame.h"
 #include "FrameView.h"
 #include "PlatformScreen.h"
-#include "Quirks.h"
 #include "ResourceLoadObserver.h"
 #include "RuntimeEnabledFeatures.h"
 #include <wtf/IsoMallocInlines.h>
@@ -88,12 +85,7 @@ unsigned Screen::pixelDepth() const
         return 0;
     if (RuntimeEnabledFeatures::sharedFeatures().webAPIStatisticsEnabled())
         ResourceLoadObserver::shared().logScreenAPIAccessed(*frame->document(), ResourceLoadStatistics::ScreenAPI::PixelDepth);
-
-    auto* document = window()->document();
-    if (!document || !document->quirks().needsHDRPixelDepthQuirk() || !screenSupportsHighDynamicRange(frame->view()))
-        return static_cast<unsigned>(screenDepth(frame->view()));
-
-    return static_cast<unsigned>(screenDepth(frame->view())) + 1;
+    return static_cast<unsigned>(screenDepth(frame->view()));
 }
 
 int Screen::availLeft() const

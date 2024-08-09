@@ -40,15 +40,13 @@ enum AnimationReplaceState {
     ActiveDOMObject,
     EnabledAtRuntime=WebAnimations,
     InterfaceName=Animation,
-    CustomToJSObject,
-    ExportMacro=WEBCORE_EXPORT
+    CustomConstructor(),
+    CustomToJSObject
 ] interface WebAnimation : EventTarget {
-    [Custom] constructor();
-
     attribute DOMString id;
-    [ImplementedAs=bindingsEffect] attribute AnimationEffect? effect;
+    attribute AnimationEffect? effect;
     [RuntimeConditionallyReadWrite=WebAnimationsMutableTimelines] attribute AnimationTimeline? timeline;
-    [ImplementedAs=bindingsStartTime] attribute double? startTime;
+    attribute double? startTime;
     [MayThrowException, ImplementedAs=bindingsCurrentTime] attribute double? currentTime;
     attribute double playbackRate;
     [ImplementedAs=bindingsPlayState] readonly attribute AnimationPlayState playState;
@@ -64,7 +62,7 @@ enum AnimationReplaceState {
     [MayThrowException, ImplementedAs=bindingsPlay] void play();
     [MayThrowException, ImplementedAs=bindingsPause] void pause();
     void updatePlaybackRate(double playbackRate);
-    [MayThrowException, ImplementedAs=bindingsReverse] void reverse();
+    [MayThrowException] void reverse();
     void persist();
     [MayThrowException] void commitStyles();
 };

@@ -28,12 +28,13 @@
 #include "DocumentFragment.h"
 #include "Frame.h"
 #include "Pasteboard.h"
-#include "SimpleRange.h"
+#include "Range.h"
 #include "markup.h"
 
 namespace WebCore {
 
 class ArchiveResource;
+class Blob;
 
 class FrameWebContentReader : public PasteboardWebContentReader {
 public:
@@ -51,13 +52,13 @@ protected:
 
 class WebContentReader final : public FrameWebContentReader {
 public:
-    const SimpleRange context;
+    Range& context;
     const bool allowPlainText;
 
     RefPtr<DocumentFragment> fragment;
     bool madeFragmentFromPlainText;
 
-    WebContentReader(Frame& frame, const SimpleRange& context, bool allowPlainText)
+    WebContentReader(Frame& frame, Range& context, bool allowPlainText)
         : FrameWebContentReader(frame)
         , context(context)
         , allowPlainText(allowPlainText)
@@ -68,20 +69,17 @@ public:
     void addFragment(Ref<DocumentFragment>&&);
 
 private:
-#if PLATFORM(COCOA) || PLATFORM(GTK)
+#if PLATFORM(COCOA)
+    bool readWebArchive(SharedBuffer&) override;
     bool readFilePath(const String&, PresentationSize preferredPresentationSize = { }, const String& contentType = { }) override;
     bool readFilePaths(const Vector<String>&) override;
     bool readHTML(const String&) override;
-    bool readImage(Ref<SharedBuffer>&&, const String& type, PresentationSize preferredPresentationSize = { }) override;
-    bool readURL(const URL&, const String& title) override;
-    bool readPlainText(const String&) override;
-#endif
-
-#if PLATFORM(COCOA)
-    bool readWebArchive(SharedBuffer&) override;
     bool readRTFD(SharedBuffer&) override;
     bool readRTF(SharedBuffer&) override;
+    bool readImage(Ref<SharedBuffer>&&, const String& type, PresentationSize preferredPresentationSize = { }) override;
+    bool readURL(const URL&, const String& title) override;
     bool readDataBuffer(SharedBuffer&, const String& type, const String& name, PresentationSize preferredPresentationSize = { }) override;
+    bool readPlainText(const String&) override;
 #endif
 };
 
@@ -95,20 +93,17 @@ public:
     }
 
 private:
-#if PLATFORM(COCOA) || PLATFORM(GTK)
+#if PLATFORM(COCOA)
+    bool readWebArchive(SharedBuffer&) override;
     bool readFilePath(const String&, PresentationSize = { }, const String& = { }) override { return false; }
     bool readFilePaths(const Vector<String>&) override { return false; }
     bool readHTML(const String&) override;
-    bool readImage(Ref<SharedBuffer>&&, const String&, PresentationSize = { }) override { return false; }
-    bool readURL(const URL&, const String&) override { return false; }
-    bool readPlainText(const String&) override { return false; }
-#endif
-
-#if PLATFORM(COCOA)
-    bool readWebArchive(SharedBuffer&) override;
     bool readRTFD(SharedBuffer&) override;
     bool readRTF(SharedBuffer&) override;
+    bool readImage(Ref<SharedBuffer>&&, const String&, PresentationSize = { }) override { return false; }
+    bool readURL(const URL&, const String&) override { return false; }
     bool readDataBuffer(SharedBuffer&, const String&, const String&, PresentationSize = { }) override { return false; }
+    bool readPlainText(const String&) override { return false; }
 #endif
 };
 

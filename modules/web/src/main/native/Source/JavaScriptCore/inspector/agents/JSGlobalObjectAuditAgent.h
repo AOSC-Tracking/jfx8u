@@ -38,10 +38,10 @@ class JSGlobalObjectAuditAgent final : public InspectorAuditAgent {
     WTF_MAKE_FAST_ALLOCATED;
 public:
     JSGlobalObjectAuditAgent(JSAgentContext&);
-    ~JSGlobalObjectAuditAgent() final;
+    ~JSGlobalObjectAuditAgent() override;
 
 private:
-    InjectedScript injectedScriptForEval(ErrorString&, const int* executionContextId) final;
+    InjectedScript injectedScriptForEval(ErrorString&, const int* executionContextId) override;
 
     JSC::JSGlobalObject& m_globalObject;
 };

@@ -155,7 +155,9 @@ struct FrequentExitSiteHash {
 namespace WTF {
 
 template<typename T> struct DefaultHash;
-template<> struct DefaultHash<JSC::DFG::FrequentExitSite> : JSC::DFG::FrequentExitSiteHash { };
+template<> struct DefaultHash<JSC::DFG::FrequentExitSite> {
+    typedef JSC::DFG::FrequentExitSiteHash Hash;
+};
 
 template<typename T> struct HashTraits;
 template<> struct HashTraits<JSC::DFG::FrequentExitSite> : SimpleClassHashTraits<JSC::DFG::FrequentExitSite> { };

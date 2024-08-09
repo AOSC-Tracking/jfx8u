@@ -75,7 +75,9 @@ ExceptionOr<void> FetchEvent::respondWith(Ref<DOMPromise>&& promise)
     m_respondPromise = WTFMove(promise);
     addExtendLifetimePromise(*m_respondPromise);
 
-    auto isRegistered = m_respondPromise->whenSettled([this, protectedThis = makeRef(*this)] {
+    m_respondPromise->whenSettled([this, weakThis = makeWeakPtr(*this)] () {
+        if (!weakThis)
+            return;
         promiseIsSettled();
     });
 
@@ -84,9 +86,6 @@ ExceptionOr<void> FetchEvent::respondWith(Ref<DOMPromise>&& promise)
 
     m_respondWithEntered = true;
     m_waitToRespond = true;
-
-    if (isRegistered == DOMPromise::IsCallbackRegistered::No)
-        respondWithError(createResponseError(m_request->url(), "FetchEvent unable to handle respondWith promise."_s));
 
     return { };
 }

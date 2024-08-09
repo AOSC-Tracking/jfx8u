@@ -27,11 +27,14 @@
 #include "config.h"
 #include "LiteralParser.h"
 
+#include "ButterflyInlines.h"
 #include "CodeBlock.h"
 #include "JSArray.h"
-#include "JSCInlines.h"
+#include "JSString.h"
 #include "Lexer.h"
 #include "ObjectConstructor.h"
+#include "JSCInlines.h"
+#include "StrongInlines.h"
 #include <wtf/ASCIICType.h>
 #include <wtf/dtoa.h>
 #include <wtf/text/StringConcatenate.h>
@@ -829,7 +832,7 @@ JSValue LiteralParser<CharType>::parse(ParserState initialState)
         switch(state) {
             startParseArray:
             case StartParseArray: {
-                JSArray* array = constructEmptyArray(m_globalObject, nullptr);
+                JSArray* array = constructEmptyArray(m_globalObject, 0);
                 RETURN_IF_EXCEPTION(scope, JSValue());
                 objectStack.appendWithCrashOnOverflow(array);
             }
@@ -930,7 +933,7 @@ JSValue LiteralParser<CharType>::parse(ParserState initialState)
                         m_parseErrorMessage = "Attempted to redefine __proto__ property"_s;
                         return JSValue();
                     }
-                    PutPropertySlot slot(object, m_nullOrCodeBlock ? m_nullOrCodeBlock->ownerExecutable()->isInStrictContext() : false);
+                    PutPropertySlot slot(object, m_nullOrCodeBlock ? m_nullOrCodeBlock->isStrictMode() : false);
                     objectStack.last().put(m_globalObject, ident, lastValue, slot);
                 } else {
                     if (Optional<uint32_t> index = parseIndex(ident))
@@ -993,23 +996,10 @@ JSValue LiteralParser<CharType>::parse(ParserState initialState)
                         return JSValue();
                     case TokIdentifier: {
                         typename Lexer::LiteralParserTokenPtr token = m_lexer.currentToken();
-
-                        auto tryMakeErrorString = [=] (typename Lexer::LiteralParserTokenPtr token, unsigned length, bool addEllipsis) -> String {
-                            if (token->stringIs8Bit)
-                                return tryMakeString("Unexpected identifier \"", StringView { token->stringToken8, length }, addEllipsis ? "..." : "", '"');
-                            return tryMakeString("Unexpected identifier \"", StringView { token->stringToken16, length }, addEllipsis ? "..." : "", '"');
-                        };
-
-                        String errorString = tryMakeErrorString(token, token->stringLength, false);
-                        if (!errorString) {
-                            constexpr unsigned shortLength = 10;
-                            if (token->stringLength > shortLength)
-                                errorString = tryMakeErrorString(token, shortLength, true);
-                            if (!errorString)
-                                errorString = "Unexpected identifier";
-                        }
-
-                        m_parseErrorMessage = errorString;
+                        if (token->stringIs8Bit)
+                            m_parseErrorMessage = makeString("Unexpected identifier \"", StringView { token->stringToken8, token->stringLength }, '"');
+                        else
+                            m_parseErrorMessage = makeString("Unexpected identifier \"", StringView { token->stringToken16, token->stringLength }, '"');
                         return JSValue();
                     }
                     case TokColon:

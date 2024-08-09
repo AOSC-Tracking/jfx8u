@@ -26,7 +26,6 @@
 
 #include <cmath>
 #include <wtf/MonotonicTime.h>
-#include <wtf/Ref.h>
 #include <wtf/RefCounted.h>
 
 namespace WTF {
@@ -42,8 +41,8 @@ public:
     void start();
     void stop();
 
-    Seconds elapsedTime() const;
-    Seconds elapsedTimeSince(MonotonicTime) const;
+    Seconds elapsedTime();
+    Seconds elapsedTimeSince(MonotonicTime);
 
     bool isActive() const { return !std::isnan(m_lastStartTime); }
 private:
@@ -74,7 +73,7 @@ inline void Stopwatch::stop()
     m_lastStartTime = MonotonicTime::nan();
 }
 
-inline Seconds Stopwatch::elapsedTime() const
+inline Seconds Stopwatch::elapsedTime()
 {
     if (!isActive())
         return m_elapsedTime;
@@ -82,7 +81,7 @@ inline Seconds Stopwatch::elapsedTime() const
     return m_elapsedTime + (MonotonicTime::now() - m_lastStartTime);
 }
 
-inline Seconds Stopwatch::elapsedTimeSince(MonotonicTime timeStamp) const
+inline Seconds Stopwatch::elapsedTimeSince(MonotonicTime timeStamp)
 {
     if (!isActive())
         return m_elapsedTime;

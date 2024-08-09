@@ -27,12 +27,10 @@
 #pragma once
 
 #include "StoredCredentialsPolicy.h"
-#include <wtf/Expected.h>
 #include <wtf/HashMap.h>
 #include <wtf/HashSet.h>
 #include <wtf/MonotonicTime.h>
 #include <wtf/URLHash.h>
-#include <wtf/UniqueRef.h>
 
 namespace WebCore {
 
@@ -42,17 +40,17 @@ class ResourceResponse;
 class CrossOriginPreflightResultCacheItem {
     WTF_MAKE_NONCOPYABLE(CrossOriginPreflightResultCacheItem); WTF_MAKE_FAST_ALLOCATED;
 public:
-    static Expected<UniqueRef<CrossOriginPreflightResultCacheItem>, String> create(StoredCredentialsPolicy, const ResourceResponse&);
+    explicit CrossOriginPreflightResultCacheItem(StoredCredentialsPolicy storedCredentialsPolicy)
+        : m_storedCredentialsPolicy(storedCredentialsPolicy)
+    {
+    }
 
-    CrossOriginPreflightResultCacheItem(MonotonicTime, StoredCredentialsPolicy, HashSet<String>&&, HashSet<String, ASCIICaseInsensitiveHash>&&);
-
-    Optional<String> validateMethodAndHeaders(const String& method, const HTTPHeaderMap&) const;
-    bool allowsRequest(StoredCredentialsPolicy, const String& method, const HTTPHeaderMap&) const;
+    WEBCORE_EXPORT bool parse(const ResourceResponse&);
+    WEBCORE_EXPORT bool allowsCrossOriginMethod(const String&, StoredCredentialsPolicy, String& errorDescription) const;
+    WEBCORE_EXPORT bool allowsCrossOriginHeaders(const HTTPHeaderMap&, StoredCredentialsPolicy, String& errorDescription) const;
+    bool allowsRequest(StoredCredentialsPolicy, const String& method, const HTTPHeaderMap& requestHeaders) const;
 
 private:
-    bool allowsCrossOriginMethod(const String&, StoredCredentialsPolicy) const;
-    Optional<String> validateCrossOriginHeaders(const HTTPHeaderMap&, StoredCredentialsPolicy) const;
-
     // FIXME: A better solution to holding onto the absolute expiration time might be
     // to start a timer for the expiration delta that removes this from the cache when
     // it fires.
@@ -76,13 +74,5 @@ private:
 
     HashMap<std::pair<String, URL>, std::unique_ptr<CrossOriginPreflightResultCacheItem>> m_preflightHashMap;
 };
-
-inline CrossOriginPreflightResultCacheItem::CrossOriginPreflightResultCacheItem(MonotonicTime absoluteExpiryTime, StoredCredentialsPolicy  storedCredentialsPolicy, HashSet<String>&& methods, HashSet<String, ASCIICaseInsensitiveHash>&& headers)
-    : m_absoluteExpiryTime(absoluteExpiryTime)
-    , m_storedCredentialsPolicy(storedCredentialsPolicy)
-    , m_methods(WTFMove(methods))
-    , m_headers(WTFMove(headers))
-{
-}
 
 } // namespace WebCore

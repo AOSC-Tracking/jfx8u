@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2017-2019 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -28,9 +28,12 @@
 
 #include "AlignedMemoryAllocator.h"
 #include "AllocatorInlines.h"
-#include "JSCellInlines.h"
+#include "BlockDirectoryInlines.h"
+#include "JSCInlines.h"
 #include "LocalAllocatorInlines.h"
+#include "MarkedBlockInlines.h"
 #include "MarkedSpaceInlines.h"
+#include "PreventCollectionScope.h"
 #include "SubspaceInlines.h"
 
 namespace JSC {
@@ -119,8 +122,8 @@ void* CompleteSubspace::allocateSlow(VM& vm, size_t size, GCDeferralContext* def
 
 void* CompleteSubspace::tryAllocateSlow(VM& vm, size_t size, GCDeferralContext* deferralContext)
 {
-    if constexpr (validateDFGDoesGC)
-        vm.heap.verifyCanGC();
+    if (validateDFGDoesGC)
+        RELEASE_ASSERT(vm.heap.expectDoesGC());
 
     sanitizeStackForVM(vm);
 
@@ -155,8 +158,8 @@ void* CompleteSubspace::tryAllocateSlow(VM& vm, size_t size, GCDeferralContext* 
 
 void* CompleteSubspace::reallocatePreciseAllocationNonVirtual(VM& vm, HeapCell* oldCell, size_t size, GCDeferralContext* deferralContext, AllocationFailureMode failureMode)
 {
-    if constexpr (validateDFGDoesGC)
-        vm.heap.verifyCanGC();
+    if (validateDFGDoesGC)
+        RELEASE_ASSERT(vm.heap.expectDoesGC());
 
     // The following conditions are met in Butterfly for example.
     ASSERT(oldCell->isPreciseAllocation());

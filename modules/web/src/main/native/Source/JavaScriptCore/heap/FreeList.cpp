@@ -26,6 +26,10 @@
 #include "config.h"
 #include "FreeList.h"
 
+#include "FreeListInlines.h"
+#include "MarkedBlock.h"
+#include <wtf/CommaPrinter.h>
+
 namespace JSC {
 
 FreeList::FreeList(unsigned cellSize)

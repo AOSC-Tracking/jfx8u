@@ -40,7 +40,7 @@ template<typename T> struct Converter<IDLCallbackFunction<T>> : DefaultConverter
         JSC::VM& vm = JSC::getVM(&lexicalGlobalObject);
         auto scope = DECLARE_THROW_SCOPE(vm);
 
-        if (!value.isCallable(vm)) {
+        if (!value.isFunction(vm)) {
             exceptionThrower(lexicalGlobalObject, scope);
             return nullptr;
         }

@@ -27,7 +27,7 @@
 
 #pragma once
 
-#if ENABLE(VIDEO)
+#if ENABLE(VIDEO_TRACK)
 
 #include <wtf/LoggerHelper.h>
 #include <wtf/MediaTime.h>

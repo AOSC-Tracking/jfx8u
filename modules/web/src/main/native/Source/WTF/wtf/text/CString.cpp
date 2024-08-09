@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2003-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2003-2017 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -28,7 +28,7 @@
 #include <wtf/text/CString.h>
 
 #include <string.h>
-#include <wtf/CheckedArithmetic.h>
+#include <wtf/NeverDestroyed.h>
 #include <wtf/text/StringHasher.h>
 
 namespace WTF {
@@ -37,9 +37,11 @@ DEFINE_ALLOCATOR_WITH_HEAP_IDENTIFIER(CStringBuffer);
 
 Ref<CStringBuffer> CStringBuffer::createUninitialized(size_t length)
 {
+    RELEASE_ASSERT(length < (std::numeric_limits<unsigned>::max() - sizeof(CStringBuffer)));
+
     // The +1 is for the terminating null character.
-    auto size = (Checked<size_t>(sizeof(CStringBuffer)) + length + 1U).unsafeGet();
-    auto* stringBuffer = static_cast<CStringBuffer*>(CStringBufferMalloc::malloc(size));
+    size_t size = sizeof(CStringBuffer) + length + 1;
+    CStringBuffer* stringBuffer = static_cast<CStringBuffer*>(CStringBufferMalloc::malloc(size));
     return adoptRef(*new (NotNull, stringBuffer) CStringBuffer(length));
 }
 
@@ -74,7 +76,7 @@ char* CString::mutableData()
 {
     copyBufferIfNeeded();
     if (!m_buffer)
-        return nullptr;
+        return 0;
     return m_buffer->mutableData();
 }
 
@@ -102,15 +104,6 @@ void CString::copyBufferIfNeeded()
 bool CString::isSafeToSendToAnotherThread() const
 {
     return !m_buffer || m_buffer->hasOneRef();
-}
-
-void CString::grow(size_t newLength)
-{
-    ASSERT(newLength > length());
-
-    auto newBuffer = CStringBuffer::createUninitialized(newLength);
-    memcpy(newBuffer->mutableData(), m_buffer->data(), length() + 1);
-    m_buffer = WTFMove(newBuffer);
 }
 
 bool operator==(const CString& a, const CString& b)

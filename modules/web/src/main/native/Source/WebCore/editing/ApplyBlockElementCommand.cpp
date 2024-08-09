@@ -133,9 +133,6 @@ void ApplyBlockElementCommand::formatSelection(const VisiblePosition& startOfSel
             atEnd = true;
 
         rangeForParagraphSplittingTextNodesIfNeeded(endOfCurrentParagraph, start, end);
-        if (start.isNull() || end.isNull())
-            break;
-
         endOfCurrentParagraph = end;
 
         // FIXME: endOfParagraph can errornously return a position at the beginning of a block element
@@ -175,8 +172,8 @@ void ApplyBlockElementCommand::formatSelection(const VisiblePosition& startOfSel
 static bool isNewLineAtPosition(const Position& position)
 {
     Node* textNode = position.containerNode();
-    unsigned offset = position.offsetInContainerNode();
-    if (!is<Text>(textNode) || offset >= downcast<Text>(*textNode).length())
+    int offset = position.offsetInContainerNode();
+    if (!is<Text>(textNode) || offset < 0 || offset >= textNode->maxCharacterOffset())
         return false;
     return downcast<Text>(*textNode).data()[offset] == '\n';
 }
@@ -232,30 +229,25 @@ void ApplyBlockElementCommand::rangeForParagraphSplittingTextNodesIfNeeded(const
     if (auto* endStyle = renderStyleOfEnclosingTextNode(end)) {
         bool isEndAndEndOfLastParagraphOnSameNode = renderStyleOfEnclosingTextNode(m_endOfLastParagraph) && end.deprecatedNode() == m_endOfLastParagraph.deprecatedNode();
         // Include \n at the end of line if we're at an empty paragraph
-        unsigned endOffset = end.offsetInContainerNode();
-        if (endStyle->preserveNewline() && start == end && endOffset < end.containerNode()->length()) {
+        if (endStyle->preserveNewline() && start == end && end.offsetInContainerNode() < end.containerNode()->maxCharacterOffset()) {
+            int endOffset = end.offsetInContainerNode();
             if (!isNewLineAtPosition(end.previous()) && isNewLineAtPosition(end))
-                end = Position(end.containerText(), ++endOffset);
+                end = Position(end.containerText(), endOffset + 1);
             if (isEndAndEndOfLastParagraphOnSameNode && end.offsetInContainerNode() >= m_endOfLastParagraph.offsetInContainerNode())
                 m_endOfLastParagraph = end;
         }
 
         // If end is in the middle of a text node and the text node is editable, split.
-        if (endStyle->userModify() != UserModify::ReadOnly && !endStyle->collapseWhiteSpace() && endOffset && endOffset < end.containerNode()->length()) {
+        if (endStyle->userModify() != UserModify::ReadOnly && !endStyle->collapseWhiteSpace() && end.offsetInContainerNode() && end.offsetInContainerNode() < end.containerNode()->maxCharacterOffset()) {
             RefPtr<Text> endContainer = end.containerText();
-            splitTextNode(*endContainer, endOffset);
-            if (is<Text>(endContainer) && !endContainer->previousSibling()) {
-                start = { };
-                end = { };
-                return;
-            }
+            splitTextNode(*endContainer, end.offsetInContainerNode());
             if (isStartAndEndOnSameNode)
                 start = firstPositionInOrBeforeNode(endContainer->previousSibling());
             if (isEndAndEndOfLastParagraphOnSameNode) {
-                if (static_cast<unsigned>(m_endOfLastParagraph.offsetInContainerNode()) == endOffset)
+                if (m_endOfLastParagraph.offsetInContainerNode() == end.offsetInContainerNode())
                     m_endOfLastParagraph = lastPositionInOrAfterNode(endContainer->previousSibling());
                 else
-                    m_endOfLastParagraph = Position(endContainer.get(), m_endOfLastParagraph.offsetInContainerNode() - endOffset);
+                    m_endOfLastParagraph = Position(endContainer.get(), m_endOfLastParagraph.offsetInContainerNode() - end.offsetInContainerNode());
             }
             end = lastPositionInNode(endContainer->previousSibling());
         }

@@ -88,7 +88,7 @@ int main(int argc, char** argv)
     }
 
     WTF::initializeMainThread();
-    JSC::initialize();
+    JSC::initializeThreading();
 
     VM& vm = VM::create(LargeHeap).leakRef();
     {

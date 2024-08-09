@@ -28,7 +28,6 @@
 
 #include "Event.h"
 #include "EventNames.h"
-#include "HTMLImageElement.h"
 #include "HTMLNames.h"
 #include "HTMLPictureElement.h"
 #include "Logging.h"
@@ -77,16 +76,8 @@ Node::InsertedIntoAncestorResult HTMLSourceElement::insertedIntoAncestor(Inserti
             downcast<HTMLMediaElement>(*parent).sourceWasAdded(*this);
         else
 #endif
-        if (is<HTMLPictureElement>(*parent)) {
-            // The new source element only is a relevant mutation if it precedes any img element.
-            m_shouldCallSourcesChanged = true;
-            for (const Node* node = previousSibling(); node; node = node->previousSibling()) {
-                if (is<HTMLImageElement>(*node))
-                    m_shouldCallSourcesChanged = false;
-            }
-            if (m_shouldCallSourcesChanged)
-                downcast<HTMLPictureElement>(*parent).sourcesChanged();
-        }
+        if (is<HTMLPictureElement>(*parent))
+            downcast<HTMLPictureElement>(*parent).sourcesChanged();
     }
     return InsertedIntoAncestorResult::Done;
 }
@@ -100,10 +91,8 @@ void HTMLSourceElement::removedFromAncestor(RemovalType removalType, ContainerNo
             downcast<HTMLMediaElement>(oldParentOfRemovedTree).sourceWasRemoved(*this);
         else
 #endif
-        if (m_shouldCallSourcesChanged) {
+        if (is<HTMLPictureElement>(oldParentOfRemovedTree))
             downcast<HTMLPictureElement>(oldParentOfRemovedTree).sourcesChanged();
-            m_shouldCallSourcesChanged = false;
-        }
     }
 }
 
@@ -167,7 +156,7 @@ void HTMLSourceElement::parseAttribute(const QualifiedName& name, const AtomStri
         if (name == mediaAttr)
             m_cachedParsedMediaAttribute = WTF::nullopt;
         auto parent = makeRefPtr(parentNode());
-        if (m_shouldCallSourcesChanged)
+        if (is<HTMLPictureElement>(parent))
             downcast<HTMLPictureElement>(*parent).sourcesChanged();
     }
 }

@@ -26,6 +26,5 @@
 // https://wicg.github.io/IntersectionObserver/
 
 [
-    Conditional=INTERSECTION_OBSERVER,
-    CallbackThisObject=IntersectionObserver,
+    Conditional=INTERSECTION_OBSERVER
 ] callback IntersectionObserverCallback = void (sequence<IntersectionObserverEntry> entries, IntersectionObserver observer);

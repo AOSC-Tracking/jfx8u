@@ -37,20 +37,16 @@ public:
     static Ref<AccessibilityProgressIndicator> create(RenderProgress*);
 #if ENABLE(METER_ELEMENT)
     static Ref<AccessibilityProgressIndicator> create(RenderMeter*);
+    String gaugeRegionValueDescription() const;
 #endif
     Element* element() const override;
 
 private:
     AccessibilityRole roleValue() const override;
+
     bool isProgressIndicator() const override { return true; }
 
-    // Used in type checking function is<AccessibilityProgressIndicator>.
-    bool isAccessibilityProgressIndicatorInstance() const final { return true; }
-
     String valueDescription() const override;
-#if ENABLE(METER_ELEMENT)
-    String gaugeRegionValueDescription() const;
-#endif
     float valueForRange() const override;
     float maxValueForRange() const override;
     float minValueForRange() const override;
@@ -68,4 +64,4 @@ private:
 
 } // namespace WebCore
 
-SPECIALIZE_TYPE_TRAITS_ACCESSIBILITY(AccessibilityProgressIndicator, isAccessibilityProgressIndicatorInstance())
+SPECIALIZE_TYPE_TRAITS_ACCESSIBILITY(AccessibilityProgressIndicator, isProgressIndicator())

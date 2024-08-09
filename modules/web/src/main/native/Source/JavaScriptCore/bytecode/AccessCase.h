@@ -85,9 +85,6 @@ public:
     enum AccessType : uint8_t {
         Load,
         Transition,
-        Delete,
-        DeleteNonConfigurable,
-        DeleteMiss,
         Replace,
         Miss,
         GetGetter,
@@ -148,11 +145,9 @@ public:
     static std::unique_ptr<AccessCase> create(VM&, JSCell* owner, AccessType, CacheableIdentifier, PropertyOffset = invalidOffset,
         Structure* = nullptr, const ObjectPropertyConditionSet& = ObjectPropertyConditionSet(), std::unique_ptr<PolyProtoAccessChain> = nullptr);
 
-    static std::unique_ptr<AccessCase> createTransition(VM&, JSCell* owner, CacheableIdentifier, PropertyOffset, Structure* oldStructure,
+    // This create method should be used for transitions.
+    static std::unique_ptr<AccessCase> create(VM&, JSCell* owner, CacheableIdentifier, PropertyOffset, Structure* oldStructure,
         Structure* newStructure, const ObjectPropertyConditionSet&, std::unique_ptr<PolyProtoAccessChain>);
-
-    static std::unique_ptr<AccessCase> createDelete(VM&, JSCell* owner, CacheableIdentifier, PropertyOffset, Structure* oldStructure,
-        Structure* newStructure);
 
     static std::unique_ptr<AccessCase> fromStructureStubInfo(VM&, JSCell* owner, CacheableIdentifier, StructureStubInfo&);
 
@@ -162,7 +157,7 @@ public:
 
     Structure* structure() const
     {
-        if (m_type == Transition || m_type == Delete)
+        if (m_type == Transition)
             return m_structure->previousID();
         return m_structure.get();
     }
@@ -170,7 +165,7 @@ public:
 
     Structure* newStructure() const
     {
-        ASSERT(m_type == Transition || m_type == Delete);
+        ASSERT(m_type == Transition);
         return m_structure.get();
     }
 

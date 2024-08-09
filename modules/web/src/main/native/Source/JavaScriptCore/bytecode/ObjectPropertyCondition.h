@@ -292,7 +292,9 @@ struct ObjectPropertyConditionHash {
 namespace WTF {
 
 template<typename T> struct DefaultHash;
-template<> struct DefaultHash<JSC::ObjectPropertyCondition> : JSC::ObjectPropertyConditionHash { };
+template<> struct DefaultHash<JSC::ObjectPropertyCondition> {
+    typedef JSC::ObjectPropertyConditionHash Hash;
+};
 
 template<typename T> struct HashTraits;
 template<> struct HashTraits<JSC::ObjectPropertyCondition> : SimpleClassHashTraits<JSC::ObjectPropertyCondition> { };

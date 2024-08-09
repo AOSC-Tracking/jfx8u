@@ -26,10 +26,11 @@
 #pragma once
 
 #include "ActiveDOMObject.h"
+#include "ComputedEffectTiming.h"
 #include "EventTarget.h"
 #include "ExceptionOr.h"
 #include "IDLTypes.h"
-#include "WebAnimationTypes.h"
+#include "WebAnimationUtilities.h"
 #include <wtf/Forward.h>
 #include <wtf/Markable.h>
 #include <wtf/Optional.h>
@@ -56,23 +57,22 @@ public:
     static Ref<WebAnimation> create(Document&, AnimationEffect*, AnimationTimeline*);
     ~WebAnimation();
 
-    WEBCORE_EXPORT static HashSet<WebAnimation*>& instances();
+    static HashSet<WebAnimation*>& instances(const LockHolder&);
+    static Lock& instancesMutex();
 
     virtual bool isDeclarativeAnimation() const { return false; }
     virtual bool isCSSAnimation() const { return false; }
     virtual bool isCSSTransition() const { return false; }
 
     const String& id() const { return m_id; }
-    void setId(const String&);
+    void setId(const String& id) { m_id = id; }
 
-    AnimationEffect* bindingsEffect() const { return effect(); }
-    virtual void setBindingsEffect(RefPtr<AnimationEffect>&&);
     AnimationEffect* effect() const { return m_effect.get(); }
     void setEffect(RefPtr<AnimationEffect>&&);
-    AnimationTimeline* timeline() const { return m_timeline.get(); }
+    AnimationTimeline* timeline() const;
     virtual void setTimeline(RefPtr<AnimationTimeline>&&);
 
-    Optional<Seconds> currentTime(Optional<Seconds> = WTF::nullopt) const;
+    Optional<Seconds> currentTime() const;
     ExceptionOr<void> setCurrentTime(Optional<Seconds>);
 
     enum class Silently : uint8_t { Yes, No };
@@ -94,20 +94,18 @@ public:
     using FinishedPromise = DOMPromiseProxyWithResolveCallback<IDLInterface<WebAnimation>>;
     FinishedPromise& finished() { return m_finishedPromise.get(); }
 
-    virtual void cancel(Silently = Silently::No);
+    virtual void cancel();
+    void cancel(Silently);
     ExceptionOr<void> finish();
     ExceptionOr<void> play();
     void updatePlaybackRate(double);
     ExceptionOr<void> pause();
-    virtual ExceptionOr<void> bindingsReverse();
     ExceptionOr<void> reverse();
     void persist();
     ExceptionOr<void> commitStyles();
 
-    virtual Optional<double> bindingsStartTime() const;
-    virtual void setBindingsStartTime(Optional<double>);
-    Optional<Seconds> startTime() const { return m_startTime; }
-    void setStartTime(Optional<Seconds>);
+    virtual Optional<double> startTime() const;
+    virtual void setStartTime(Optional<double>);
     virtual Optional<double> bindingsCurrentTime() const;
     virtual ExceptionOr<void> setBindingsCurrentTime(Optional<double>);
     virtual PlayState bindingsPlayState() const { return playState(); }
@@ -120,8 +118,8 @@ public:
 
     bool needsTick() const;
     virtual void tick();
-    WEBCORE_EXPORT Seconds timeToNextTick() const;
-    virtual void resolve(RenderStyle&, Optional<Seconds> = WTF::nullopt);
+    Seconds timeToNextTick() const;
+    virtual void resolve(RenderStyle&);
     void effectTargetDidChange(Element* previousTarget, Element* newTarget);
     void acceleratedStateDidChange();
     void applyPendingAcceleratedActions();
@@ -131,7 +129,7 @@ public:
     bool isCompletelyAccelerated() const;
     bool isRelevant() const { return m_isRelevant; }
     void updateRelevance();
-    void effectTimingDidChange();
+    void effectTimingDidChange(Optional<ComputedEffectTiming> = WTF::nullopt);
     void suspendEffectInvalidation();
     void unsuspendEffectInvalidation();
     void setSuspended(bool);
@@ -142,6 +140,8 @@ public:
 
     uint64_t globalPosition() const { return m_globalPosition; }
     void setGlobalPosition(uint64_t globalPosition) { m_globalPosition = globalPosition; }
+
+    bool hasPendingActivity() const final;
 
     virtual bool canHaveGlobalPosition() { return true; }
 
@@ -169,7 +169,7 @@ private:
     Seconds effectEndTime() const;
     WebAnimation& readyPromiseResolve();
     WebAnimation& finishedPromiseResolve();
-    Optional<Seconds> currentTime(RespectHoldTime, Optional<Seconds> = WTF::nullopt) const;
+    Optional<Seconds> currentTime(RespectHoldTime) const;
     ExceptionOr<void> silentlySetCurrentTime(Optional<Seconds>);
     void finishNotificationSteps();
     bool hasPendingPauseTask() const { return m_timeToRunPendingPauseTask != TimeToRunPendingTask::NotScheduled; }
@@ -187,7 +187,7 @@ private:
     void applyPendingPlaybackRate();
 
     RefPtr<AnimationEffect> m_effect;
-    RefPtr<AnimationTimeline> m_timeline;
+    WeakPtr<AnimationTimeline> m_timeline;
     UniqueRef<ReadyPromise> m_readyPromise;
     UniqueRef<FinishedPromise> m_finishedPromise;
     Markable<Seconds, Seconds::MarkableTraits> m_previousCurrentTime;
@@ -214,7 +214,6 @@ private:
     void suspend(ReasonForSuspension) final;
     void resume() final;
     void stop() final;
-    bool virtualHasPendingActivity() const final;
 
     // EventTarget
     EventTargetInterface eventTargetInterface() const final { return WebAnimationEventTargetInterfaceType; }

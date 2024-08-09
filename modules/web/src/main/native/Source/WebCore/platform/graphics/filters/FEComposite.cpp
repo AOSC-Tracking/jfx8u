@@ -28,13 +28,13 @@
 #endif
 #include "Filter.h"
 #include "GraphicsContext.h"
-#include "ImageData.h"
+#include <JavaScriptCore/Uint8ClampedArray.h>
 #include <wtf/text/TextStream.h>
 
 namespace WebCore {
 
 FEComposite::FEComposite(Filter& filter, const CompositeOperationType& type, float k1, float k2, float k3, float k4)
-    : FilterEffect(filter, Type::Composite)
+    : FilterEffect(filter)
     , m_type(type)
     , m_k1(k1)
     , m_k2(k2)
@@ -230,18 +230,17 @@ void FEComposite::platformApplySoftware()
     FilterEffect* in2 = inputEffect(1);
 
     if (m_type == FECOMPOSITE_OPERATOR_ARITHMETIC) {
-        auto* resultImage = createPremultipliedImageResult();
-        auto* dstPixelArray = resultImage ? resultImage->data() : nullptr;
+        Uint8ClampedArray* dstPixelArray = createPremultipliedImageResult();
         if (!dstPixelArray)
             return;
 
         IntRect effectADrawingRect = requestedRegionOfInputImageData(in->absolutePaintRect());
-        auto srcPixelArray = in->premultipliedResult(effectADrawingRect, operatingColorSpace());
+        auto srcPixelArray = in->premultipliedResult(effectADrawingRect);
         if (!srcPixelArray)
             return;
 
         IntRect effectBDrawingRect = requestedRegionOfInputImageData(in2->absolutePaintRect());
-        in2->copyPremultipliedResult(*dstPixelArray, effectBDrawingRect, operatingColorSpace());
+        in2->copyPremultipliedResult(*dstPixelArray, effectBDrawingRect);
 
         platformArithmeticSoftware(*srcPixelArray, *dstPixelArray, m_k1, m_k2, m_k3, m_k4);
         return;

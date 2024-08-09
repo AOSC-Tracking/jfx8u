@@ -1,6 +1,6 @@
 /*
  *  Copyright (C) 1999-2001 Harri Porten (porten@kde.org)
- *  Copyright (C) 2004-2020 Apple Inc. All rights reserved.
+ *  Copyright (C) 2004-2019 Apple Inc. All rights reserved.
  *  Copyright (C) 2009 Torch Mobile, Inc.
  *  Copyright (C) 2015 Jordan Harband (ljharb@gmail.com)
  *
@@ -24,30 +24,39 @@
 #include "StringPrototype.h"
 
 #include "BuiltinNames.h"
+#include "ButterflyInlines.h"
 #include "CachedCall.h"
-#include "ExecutableBaseInlines.h"
+#include "Error.h"
 #include "FrameTracers.h"
-#include "IntegrityInlines.h"
 #include "InterpreterInlines.h"
 #include "IntlCollator.h"
-#include "IntlObjectInlines.h"
+#include "IntlObject.h"
 #include "JITCodeInlines.h"
 #include "JSArray.h"
+#include "JSCBuiltins.h"
 #include "JSCInlines.h"
+#include "JSFunction.h"
+#include "JSGlobalObjectFunctions.h"
 #include "JSStringIterator.h"
+#include "Lookup.h"
 #include "ObjectConstructor.h"
+#include "ObjectPrototype.h"
 #include "ParseInt.h"
+#include "PropertyNameArray.h"
+#include "RegExpCache.h"
 #include "RegExpConstructor.h"
 #include "RegExpGlobalDataInlines.h"
 #include "StringPrototypeInlines.h"
 #include "SuperSampler.h"
 #include <algorithm>
+#include <unicode/uconfig.h>
 #include <unicode/unorm2.h>
 #include <unicode/ustring.h>
 #include <wtf/ASCIICType.h>
+#include <wtf/MathExtras.h>
 #include <wtf/text/StringBuilder.h>
 #include <wtf/text/StringView.h>
-#include <wtf/unicode/icu/ICUHelpers.h>
+#include <wtf/unicode/Collator.h>
 
 namespace JSC {
 
@@ -142,8 +151,13 @@ void StringPrototype::finishCreation(VM& vm, JSGlobalObject* globalObject, JSStr
     JSC_NATIVE_INTRINSIC_FUNCTION_WITHOUT_TRANSITION("toLowerCase", stringProtoFuncToLowerCase, static_cast<unsigned>(PropertyAttribute::DontEnum), 0, StringPrototypeToLowerCaseIntrinsic);
     JSC_NATIVE_FUNCTION_WITHOUT_TRANSITION("toUpperCase", stringProtoFuncToUpperCase, static_cast<unsigned>(PropertyAttribute::DontEnum), 0);
     JSC_NATIVE_FUNCTION_WITHOUT_TRANSITION("localeCompare", stringProtoFuncLocaleCompare, static_cast<unsigned>(PropertyAttribute::DontEnum), 1);
+#if ENABLE(INTL)
     JSC_NATIVE_FUNCTION_WITHOUT_TRANSITION("toLocaleLowerCase", stringProtoFuncToLocaleLowerCase, static_cast<unsigned>(PropertyAttribute::DontEnum), 0);
     JSC_NATIVE_FUNCTION_WITHOUT_TRANSITION("toLocaleUpperCase", stringProtoFuncToLocaleUpperCase, static_cast<unsigned>(PropertyAttribute::DontEnum), 0);
+#else
+    JSC_NATIVE_FUNCTION_WITHOUT_TRANSITION("toLocaleLowerCase", stringProtoFuncToLowerCase, static_cast<unsigned>(PropertyAttribute::DontEnum), 0);
+    JSC_NATIVE_FUNCTION_WITHOUT_TRANSITION("toLocaleUpperCase", stringProtoFuncToUpperCase, static_cast<unsigned>(PropertyAttribute::DontEnum), 0);
+#endif
     JSC_NATIVE_FUNCTION_WITHOUT_TRANSITION("trim", stringProtoFuncTrim, static_cast<unsigned>(PropertyAttribute::DontEnum), 0);
     JSC_NATIVE_FUNCTION_WITHOUT_TRANSITION("startsWith", stringProtoFuncStartsWith, static_cast<unsigned>(PropertyAttribute::DontEnum), 1);
     JSC_NATIVE_FUNCTION_WITHOUT_TRANSITION("endsWith", stringProtoFuncEndsWith, static_cast<unsigned>(PropertyAttribute::DontEnum), 1);
@@ -473,7 +487,7 @@ static ALWAYS_INLINE JSString* removeUsingRegExpSearch(VM& vm, JSGlobalObject* g
     unsigned sourceLen = source.length();
 
     while (true) {
-        MatchResult result = globalObject->regExpGlobalData().performMatch(globalObject, regExp, string, source, startPosition);
+        MatchResult result = globalObject->regExpGlobalData().performMatch(vm, globalObject, regExp, string, source, startPosition);
         RETURN_IF_EXCEPTION(scope, nullptr);
         if (!result)
             break;
@@ -504,8 +518,8 @@ static ALWAYS_INLINE JSString* removeUsingRegExpSearch(VM& vm, JSGlobalObject* g
 }
 
 static ALWAYS_INLINE JSString* replaceUsingRegExpSearch(
-    VM& vm, JSGlobalObject* globalObject, CallFrame* callFrame, JSString* string, JSValue searchValue, const CallData& callData,
-    String& replacementString, JSValue replaceValue)
+    VM& vm, JSGlobalObject* globalObject, CallFrame* callFrame, JSString* string, JSValue searchValue, CallData& callData,
+    CallType callType, String& replacementString, JSValue replaceValue)
 {
     auto scope = DECLARE_THROW_SCOPE(vm);
 
@@ -523,7 +537,7 @@ static ALWAYS_INLINE JSString* replaceUsingRegExpSearch(
         regExpObject->setLastIndex(globalObject, 0);
         RETURN_IF_EXCEPTION(scope, nullptr);
 
-        if (callData.type == CallData::Type::None && !replacementString.length())
+        if (callType == CallType::None && !replacementString.length())
             RELEASE_AND_RETURN(scope, removeUsingRegExpSearch(vm, globalObject, string, source, regExp));
     }
 
@@ -534,7 +548,7 @@ static ALWAYS_INLINE JSString* replaceUsingRegExpSearch(
     Vector<String, 16> replacements;
 
     // This is either a loop (if global is set) or a one-way (if not).
-    if (global && callData.type == CallData::Type::JS) {
+    if (global && callType == CallType::JS) {
         // regExp->numSubpatterns() + 1 for pattern args, + 2 for match start and string
         int argCount = regExp->numSubpatterns() + 1 + 2;
         if (hasNamedCaptures)
@@ -544,7 +558,7 @@ static ALWAYS_INLINE JSString* replaceUsingRegExpSearch(
         RETURN_IF_EXCEPTION(scope, nullptr);
         while (true) {
             int* ovector;
-            MatchResult result = globalObject->regExpGlobalData().performMatch(globalObject, regExp, string, source, startPosition, &ovector);
+            MatchResult result = globalObject->regExpGlobalData().performMatch(vm, globalObject, regExp, string, source, startPosition, &ovector);
             RETURN_IF_EXCEPTION(scope, nullptr);
             if (!result)
                 break;
@@ -604,12 +618,12 @@ static ALWAYS_INLINE JSString* replaceUsingRegExpSearch(
     } else {
         do {
             int* ovector;
-            MatchResult result = globalObject->regExpGlobalData().performMatch(globalObject, regExp, string, source, startPosition, &ovector);
+            MatchResult result = globalObject->regExpGlobalData().performMatch(vm, globalObject, regExp, string, source, startPosition, &ovector);
             RETURN_IF_EXCEPTION(scope, nullptr);
             if (!result)
                 break;
 
-            if (callData.type != CallData::Type::None) {
+            if (callType != CallType::None) {
                 if (UNLIKELY(!sourceRanges.tryConstructAndAppend(lastIndex, result.start - lastIndex)))
                     OUT_OF_MEMORY(globalObject, scope);
 
@@ -647,7 +661,7 @@ static ALWAYS_INLINE JSString* replaceUsingRegExpSearch(
                     return nullptr;
                 }
 
-                JSValue replacement = call(globalObject, replaceValue, callData, jsUndefined(), args);
+                JSValue replacement = call(globalObject, replaceValue, callType, callData, jsUndefined(), args);
                 RETURN_IF_EXCEPTION(scope, nullptr);
                 String replacementString = replacement.toWTFString(globalObject);
                 RETURN_IF_EXCEPTION(scope, nullptr);
@@ -714,7 +728,7 @@ JSCell* JIT_OPERATION operationStringProtoFuncReplaceRegExpEmptyStr(JSGlobalObje
     CallData callData;
     String replacementString = emptyString();
     RELEASE_AND_RETURN(scope, replaceUsingRegExpSearch(
-        vm, globalObject, callFrame, thisValue, searchValue, callData, replacementString, JSValue()));
+        vm, globalObject, callFrame, thisValue, searchValue, callData, CallType::None, replacementString, JSValue()));
 }
 
 JSCell* JIT_OPERATION operationStringProtoFuncReplaceRegExpString(JSGlobalObject* globalObject, JSString* thisValue, RegExpObject* searchValue, JSString* replaceString)
@@ -728,7 +742,7 @@ JSCell* JIT_OPERATION operationStringProtoFuncReplaceRegExpString(JSGlobalObject
     String replacementString = replaceString->value(globalObject);
     RETURN_IF_EXCEPTION(scope, nullptr);
     RELEASE_AND_RETURN(scope, replaceUsingRegExpSearch(
-        vm, globalObject, callFrame, thisValue, searchValue, callData, replacementString, replaceString));
+        vm, globalObject, callFrame, thisValue, searchValue, callData, CallType::None, replacementString, replaceString));
 }
 
 static ALWAYS_INLINE JSString* replaceUsingRegExpSearch(VM& vm, JSGlobalObject* globalObject, CallFrame* callFrame, JSString* string, JSValue searchValue, JSValue replaceValue)
@@ -736,14 +750,15 @@ static ALWAYS_INLINE JSString* replaceUsingRegExpSearch(VM& vm, JSGlobalObject* 
     auto scope = DECLARE_THROW_SCOPE(vm);
 
     String replacementString;
-    auto callData = getCallData(vm, replaceValue);
-    if (callData.type == CallData::Type::None) {
+    CallData callData;
+    CallType callType = getCallData(vm, replaceValue, callData);
+    if (callType == CallType::None) {
         replacementString = replaceValue.toWTFString(globalObject);
         RETURN_IF_EXCEPTION(scope, nullptr);
     }
 
     RELEASE_AND_RETURN(scope, replaceUsingRegExpSearch(
-        vm, globalObject, callFrame, string, searchValue, callData, replacementString, replaceValue));
+        vm, globalObject, callFrame, string, searchValue, callData, callType, replacementString, replaceValue));
 }
 
 enum class ReplaceMode : bool { Single, Global };
@@ -757,13 +772,14 @@ static ALWAYS_INLINE JSString* replaceUsingStringSearch(VM& vm, JSGlobalObject* 
     String searchString = searchValue.toWTFString(globalObject);
     RETURN_IF_EXCEPTION(scope, nullptr);
 
-    auto callData = getCallData(vm, replaceValue);
+    CallData callData;
+    CallType callType = getCallData(vm, replaceValue, callData);
     Optional<CachedCall> cachedCall;
     String replaceString;
-    if (callData.type == CallData::Type::None) {
+    if (callType == CallType::None) {
         replaceString = replaceValue.toWTFString(globalObject);
         RETURN_IF_EXCEPTION(scope, nullptr);
-    } else if (callData.type == CallData::Type::JS) {
+    } else if (callType == CallType::JS) {
         cachedCall.emplace(globalObject, callFrame, jsCast<JSFunction*>(replaceValue), 3);
         RETURN_IF_EXCEPTION(scope, nullptr);
         cachedCall->setThis(jsUndefined());
@@ -778,7 +794,7 @@ static ALWAYS_INLINE JSString* replaceUsingStringSearch(VM& vm, JSGlobalObject* 
     Vector<StringRange, 16> sourceRanges;
     Vector<String, 16> replacements;
     do {
-        if (callData.type != CallData::Type::None) {
+        if (callType != CallType::None) {
             JSValue replacement;
             if (cachedCall) {
                 auto* substring = jsSubstring(vm, string, matchStart, searchStringLength);
@@ -797,7 +813,7 @@ static ALWAYS_INLINE JSString* replaceUsingStringSearch(VM& vm, JSGlobalObject* 
                 args.append(jsNumber(matchStart));
                 args.append(jsString);
                 ASSERT(!args.hasOverflowed());
-                replacement = call(globalObject, replaceValue, callData, jsUndefined(), args);
+                replacement = call(globalObject, replaceValue, callType, callData, jsUndefined(), args);
             }
             RETURN_IF_EXCEPTION(scope, nullptr);
             replaceString = replacement.toWTFString(globalObject);
@@ -808,7 +824,7 @@ static ALWAYS_INLINE JSString* replaceUsingStringSearch(VM& vm, JSGlobalObject* 
             OUT_OF_MEMORY(globalObject, scope);
 
         size_t matchEnd = matchStart + searchStringLength;
-        if (callData.type != CallData::Type::None)
+        if (callType != CallType::None)
             replacements.append(replaceString);
         else {
             StringBuilder replacement(StringBuilder::OverflowHandler::RecordOverflow);
@@ -958,17 +974,14 @@ EncodedJSValue JSC_HOST_CALL stringProtoFuncToString(JSGlobalObject* globalObjec
     JSValue thisValue = callFrame->thisValue();
     // Also used for valueOf.
 
-    if (thisValue.isString()) {
-        Integrity::auditStructureID(vm, thisValue.asCell()->structureID());
+    if (thisValue.isString())
         return JSValue::encode(thisValue);
-    }
 
     auto* stringObject = jsDynamicCast<StringObject*>(vm, thisValue);
-    if (!stringObject)
-        return throwVMTypeError(globalObject, scope);
+    if (stringObject)
+        return JSValue::encode(stringObject->internalValue());
 
-    Integrity::auditStructureID(vm, stringObject->structureID());
-    return JSValue::encode(stringObject->internalValue());
+    return throwVMTypeError(globalObject, scope);
 }
 
 EncodedJSValue JSC_HOST_CALL stringProtoFuncCharAt(JSGlobalObject* globalObject, CallFrame* callFrame)
@@ -979,11 +992,10 @@ EncodedJSValue JSC_HOST_CALL stringProtoFuncCharAt(JSGlobalObject* globalObject,
     JSValue thisValue = callFrame->thisValue();
     if (!checkObjectCoercible(thisValue))
         return throwVMTypeError(globalObject, scope);
-    auto* thisString = thisValue.toString(globalObject);
-    RETURN_IF_EXCEPTION(scope, { });
-    auto viewWithString = thisString->viewWithUnderlyingString(globalObject);
-    RETURN_IF_EXCEPTION(scope, { });
+    auto viewWithString = thisValue.toString(globalObject)->viewWithUnderlyingString(globalObject);
+    RETURN_IF_EXCEPTION(scope, encodedJSValue());
     StringView view = viewWithString.view;
+    RETURN_IF_EXCEPTION(scope, encodedJSValue());
     JSValue a0 = callFrame->argument(0);
     if (a0.isUInt32()) {
         uint32_t i = a0.asUInt32();
@@ -992,7 +1004,7 @@ EncodedJSValue JSC_HOST_CALL stringProtoFuncCharAt(JSGlobalObject* globalObject,
         return JSValue::encode(jsEmptyString(vm));
     }
     double dpos = a0.toInteger(globalObject);
-    RETURN_IF_EXCEPTION(scope, { });
+    RETURN_IF_EXCEPTION(scope, encodedJSValue());
     if (dpos >= 0 && dpos < view.length())
         return JSValue::encode(jsSingleCharacterString(vm, view[static_cast<unsigned>(dpos)]));
     return JSValue::encode(jsEmptyString(vm));
@@ -1006,10 +1018,8 @@ EncodedJSValue JSC_HOST_CALL stringProtoFuncCharCodeAt(JSGlobalObject* globalObj
     JSValue thisValue = callFrame->thisValue();
     if (!checkObjectCoercible(thisValue))
         return throwVMTypeError(globalObject, scope);
-    auto* thisString = thisValue.toString(globalObject);
-    RETURN_IF_EXCEPTION(scope, { });
-    auto viewWithString = thisString->viewWithUnderlyingString(globalObject);
-    RETURN_IF_EXCEPTION(scope, { });
+    auto viewWithString = thisValue.toString(globalObject)->viewWithUnderlyingString(globalObject);
+    RETURN_IF_EXCEPTION(scope, encodedJSValue());
     StringView view = viewWithString.view;
     JSValue a0 = callFrame->argument(0);
     if (a0.isUInt32()) {
@@ -1019,7 +1029,7 @@ EncodedJSValue JSC_HOST_CALL stringProtoFuncCharCodeAt(JSGlobalObject* globalObj
         return JSValue::encode(jsNaN());
     }
     double dpos = a0.toInteger(globalObject);
-    RETURN_IF_EXCEPTION(scope, { });
+    RETURN_IF_EXCEPTION(scope, encodedJSValue());
     if (dpos >= 0 && dpos < view.length())
         return JSValue::encode(jsNumber(view[static_cast<int>(dpos)]));
     return JSValue::encode(jsNaN());
@@ -1065,7 +1075,7 @@ EncodedJSValue JSC_HOST_CALL stringProtoFuncCodePointAt(JSGlobalObject* globalOb
     return JSValue::encode(jsUndefined());
 }
 
-static EncodedJSValue stringIndexOfImpl(JSGlobalObject* globalObject, CallFrame* callFrame)
+EncodedJSValue JSC_HOST_CALL stringProtoFuncIndexOf(JSGlobalObject* globalObject, CallFrame* callFrame)
 {
     VM& vm = globalObject->vm();
     auto scope = DECLARE_THROW_SCOPE(vm);
@@ -1110,19 +1120,6 @@ static EncodedJSValue stringIndexOfImpl(JSGlobalObject* globalObject, CallFrame*
     if (result == notFound)
         return JSValue::encode(jsNumber(-1));
     return JSValue::encode(jsNumber(result));
-}
-
-EncodedJSValue JSC_HOST_CALL stringProtoFuncIndexOf(JSGlobalObject* globalObject, CallFrame* callFrame)
-{
-    return stringIndexOfImpl(globalObject, callFrame);
-}
-
-EncodedJSValue JSC_HOST_CALL builtinStringIndexOfInternal(JSGlobalObject* globalObject, CallFrame* callFrame)
-{
-    ASSERT(callFrame->thisValue().isString());
-    ASSERT(callFrame->argument(0).isString());
-    ASSERT(callFrame->argument(1).isNumber() || callFrame->argument(1).isUndefined());
-    return stringIndexOfImpl(globalObject, callFrame);
 }
 
 EncodedJSValue JSC_HOST_CALL stringProtoFuncLastIndexOf(JSGlobalObject* globalObject, CallFrame* callFrame)
@@ -1246,7 +1243,7 @@ EncodedJSValue JSC_HOST_CALL stringProtoFuncSplitFast(JSGlobalObject* globalObje
 
     // 4. Let A be a new array created as if by the expression new Array()
     //    where Array is the standard built-in constructor with that name.
-    JSArray* result = constructEmptyArray(globalObject, nullptr);
+    JSArray* result = constructEmptyArray(globalObject, 0);
     RETURN_IF_EXCEPTION(scope, encodedJSValue());
 
     // 5. Let lengthA be 0.
@@ -1367,7 +1364,7 @@ EncodedJSValue JSC_HOST_CALL stringProtoFuncSplitFast(JSGlobalObject* globalObje
     return JSValue::encode(result);
 }
 
-EncodedJSValue JSC_HOST_CALL stringProtoFuncSubstr(JSGlobalObject* globalObject, CallFrame* callFrame)
+static EncodedJSValue stringProtoFuncSubstrImpl(JSGlobalObject* globalObject, CallFrame* callFrame)
 {
     VM& vm = globalObject->vm();
     auto scope = DECLARE_THROW_SCOPE(vm);
@@ -1376,7 +1373,7 @@ EncodedJSValue JSC_HOST_CALL stringProtoFuncSubstr(JSGlobalObject* globalObject,
     if (!checkObjectCoercible(thisValue))
         return throwVMTypeError(globalObject, scope);
     unsigned len;
-    JSString* jsString = nullptr;
+    JSString* jsString = 0;
     String uString;
     if (thisValue.isString()) {
         jsString = asString(thisValue);
@@ -1411,7 +1408,26 @@ EncodedJSValue JSC_HOST_CALL stringProtoFuncSubstr(JSGlobalObject* globalObject,
     return JSValue::encode(jsSubstring(vm, uString, substringStart, substringLength));
 }
 
-static EncodedJSValue stringSubstringImpl(JSGlobalObject* globalObject, CallFrame* callFrame)
+EncodedJSValue JSC_HOST_CALL stringProtoFuncSubstr(JSGlobalObject* globalObject, CallFrame* callFrame)
+{
+    return stringProtoFuncSubstrImpl(globalObject, callFrame);
+}
+
+EncodedJSValue JSC_HOST_CALL builtinStringSubstrInternal(JSGlobalObject* globalObject, CallFrame* callFrame)
+{
+    // @substrInternal should not have any observable side effects (e.g. it should not call
+    // GetMethod(..., @@toPrimitive) on the thisValue).
+
+    // It is ok to use the default stringProtoFuncSubstr as the implementation of
+    // @substrInternal because @substrInternal will only be called by builtins, which will
+    // guarantee that we only pass it a string thisValue. As a result, stringProtoFuncSubstr
+    // will not need to call toString() on the thisValue, and there will be no observable
+    // side-effects.
+    ASSERT(callFrame->thisValue().isString());
+    return stringProtoFuncSubstrImpl(globalObject, callFrame);
+}
+
+EncodedJSValue JSC_HOST_CALL stringProtoFuncSubstring(JSGlobalObject* globalObject, CallFrame* callFrame)
 {
     VM& vm = globalObject->vm();
     auto scope = DECLARE_THROW_SCOPE(vm);
@@ -1453,19 +1469,6 @@ static EncodedJSValue stringSubstringImpl(JSGlobalObject* globalObject, CallFram
     unsigned substringStart = static_cast<unsigned>(start);
     unsigned substringLength = static_cast<unsigned>(end) - substringStart;
     RELEASE_AND_RETURN(scope, JSValue::encode(jsSubstring(globalObject, jsString, substringStart, substringLength)));
-}
-
-EncodedJSValue JSC_HOST_CALL stringProtoFuncSubstring(JSGlobalObject* globalObject, CallFrame* callFrame)
-{
-    return stringSubstringImpl(globalObject, callFrame);
-}
-
-EncodedJSValue JSC_HOST_CALL builtinStringSubstringInternal(JSGlobalObject* globalObject, CallFrame* callFrame)
-{
-    ASSERT(callFrame->thisValue().isString());
-    ASSERT(callFrame->argument(0).isNumber());
-    ASSERT(callFrame->argument(1).isNumber() || callFrame->argument(1).isUndefined());
-    return stringSubstringImpl(globalObject, callFrame);
 }
 
 EncodedJSValue JSC_HOST_CALL stringProtoFuncToLowerCase(JSGlobalObject* globalObject, CallFrame* callFrame)
@@ -1528,6 +1531,7 @@ EncodedJSValue JSC_HOST_CALL stringProtoFuncLocaleCompare(JSGlobalObject* global
     String that = thatValue.toWTFString(globalObject);
     RETURN_IF_EXCEPTION(scope, encodedJSValue());
 
+#if ENABLE(INTL)
     JSValue locales = callFrame->argument(1);
     JSValue options = callFrame->argument(2);
     IntlCollator* collator = nullptr;
@@ -1539,14 +1543,12 @@ EncodedJSValue JSC_HOST_CALL stringProtoFuncLocaleCompare(JSGlobalObject* global
         RETURN_IF_EXCEPTION(scope, encodedJSValue());
     }
     RELEASE_AND_RETURN(scope, JSValue::encode(collator->compareStrings(globalObject, string, that)));
+#else
+    return JSValue::encode(jsNumber(Collator().collate(string, that)));
+#endif
 }
 
-template<typename StringType>
-static constexpr uint32_t computeTwoCharacters16Code(const StringType& string)
-{
-    return static_cast<uint16_t>(string.characterAt(0)) | (static_cast<uint32_t>(static_cast<uint16_t>(string.characterAt(1))) << 16);
-}
-
+#if ENABLE(INTL)
 enum class CaseConversionMode {
     Upper,
     Lower,
@@ -1556,6 +1558,12 @@ static EncodedJSValue toLocaleCase(JSGlobalObject* globalObject, CallFrame* call
 {
     VM& vm = globalObject->vm();
     auto scope = DECLARE_THROW_SCOPE(vm);
+
+    auto convertCase = [&] (auto&&... args) {
+        if (mode == CaseConversionMode::Lower)
+            return u_strToLower(std::forward<decltype(args)>(args)...);
+        return u_strToUpper(std::forward<decltype(args)>(args)...);
+    };
 
     // 1. Let O be RequireObjectCoercible(this value).
     JSValue thisValue = callFrame->thisValue();
@@ -1593,25 +1601,19 @@ static EncodedJSValue toLocaleCase(JSGlobalObject* globalObject, CallFrame* call
     String noExtensionsLocale = removeUnicodeLocaleExtension(requestedLocale);
 
     // 10. Let availableLocales be a List with the language tags of the languages for which the Unicode character database contains language sensitive case mappings.
-    // Note 1: As of Unicode 5.1, the availableLocales list contains the elements "az", "el", "lt", and "tr".
+    // Note 1: As of Unicode 5.1, the availableLocales list contains the elements "az", "lt", and "tr".
+    const HashSet<String> availableLocales({ "az"_s, "lt"_s, "tr"_s });
+
     // 11. Let locale be BestAvailableLocale(availableLocales, noExtensionsLocale).
-    String locale = bestAvailableLocale(noExtensionsLocale, [](const String& candidate) {
-        if (candidate.length() != 2)
-            return false;
-        switch (computeTwoCharacters16Code(candidate)) {
-        case computeTwoCharacters16Code("az"_s):
-        case computeTwoCharacters16Code("el"_s):
-        case computeTwoCharacters16Code("lt"_s):
-        case computeTwoCharacters16Code("tr"_s):
-            return true;
-        default:
-            return false;
-        }
-    });
+    String locale = bestAvailableLocale(availableLocales, noExtensionsLocale);
 
     // 12. If locale is undefined, let locale be "und".
     if (locale.isNull())
         locale = "und"_s;
+
+    CString utf8LocaleBuffer = locale.utf8();
+    const StringView view(s);
+    const int32_t viewLength = view.length();
 
     // Delegate the following steps to icu u_strToLower or u_strToUpper.
     // 13. Let cpList be a List containing in order the code points of S as defined in ES2015, 6.1.4, starting at the first element of S.
@@ -1621,15 +1623,25 @@ static EncodedJSValue toLocaleCase(JSGlobalObject* globalObject, CallFrame* call
     // 17. Let L be a String whose elements are, in order, the elements of cuList.
 
     // Most strings lower/upper case will be the same size as original, so try that first.
-    Vector<UChar> buffer;
-    buffer.reserveInitialCapacity(s.length());
-    auto convertCase = mode == CaseConversionMode::Lower ? u_strToLower : u_strToUpper;
-    auto status = callBufferProducingFunction(convertCase, buffer, StringView { s }.upconvertedCharacters().get(), s.length(), locale.utf8().data());
-    if (U_FAILURE(status))
-        return throwVMTypeError(globalObject, scope, u_errorName(status));
+    UErrorCode error(U_ZERO_ERROR);
+    Vector<UChar> buffer(viewLength);
+    String lower;
+    const int32_t resultLength = convertCase(buffer.data(), viewLength, view.upconvertedCharacters(), viewLength, utf8LocaleBuffer.data(), &error);
+    if (U_SUCCESS(error))
+        lower = String(buffer.data(), resultLength);
+    else if (error == U_BUFFER_OVERFLOW_ERROR) {
+        // Converted case needs more space than original. Try again.
+        UErrorCode error(U_ZERO_ERROR);
+        Vector<UChar> buffer(resultLength);
+        convertCase(buffer.data(), resultLength, view.upconvertedCharacters(), viewLength, utf8LocaleBuffer.data(), &error);
+        if (U_FAILURE(error))
+            return throwVMTypeError(globalObject, scope, u_errorName(error));
+        lower = String(buffer.data(), resultLength);
+    } else
+        return throwVMTypeError(globalObject, scope, u_errorName(error));
 
     // 18. Return L.
-    RELEASE_AND_RETURN(scope, JSValue::encode(jsString(vm, String(buffer))));
+    RELEASE_AND_RETURN(scope, JSValue::encode(jsString(vm, lower)));
 }
 
 EncodedJSValue JSC_HOST_CALL stringProtoFuncToLocaleLowerCase(JSGlobalObject* globalObject, CallFrame* callFrame)
@@ -1644,8 +1656,9 @@ EncodedJSValue JSC_HOST_CALL stringProtoFuncToLocaleUpperCase(JSGlobalObject* gl
     // 13.1.3 String.prototype.toLocaleUpperCase ([locales])
     // http://ecma-international.org/publications/standards/Ecma-402.htm
     // This function interprets a string value as a sequence of code points, as described in ES2015, 6.1.4. This function behaves in exactly the same way as String.prototype.toLocaleLowerCase, except that characters are mapped to their uppercase equivalents as specified in the Unicode character database.
-    return toLocaleCase<CaseConversionMode::Upper>(globalObject, callFrame);
+    return toLocaleCase<CaseConversionMode::Upper>(globalObject,callFrame);
 }
+#endif // ENABLE(INTL)
 
 enum {
     TrimStart = 1,
@@ -1917,7 +1930,7 @@ static JSValue normalize(JSGlobalObject* globalObject, JSString* string, Normali
         RELEASE_AND_RETURN(scope, string);
 
     int32_t normalizedStringLength = unorm2_normalize(normalizer, characters, view.length(), nullptr, 0, &status);
-    ASSERT(needsToGrowToProduceBuffer(status));
+    ASSERT(status == U_BUFFER_OVERFLOW_ERROR);
 
     UChar* buffer;
     auto result = StringImpl::tryCreateUninitialized(normalizedStringLength, buffer);

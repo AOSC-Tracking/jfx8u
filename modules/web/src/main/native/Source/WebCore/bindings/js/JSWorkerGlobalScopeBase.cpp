@@ -65,7 +65,6 @@ const GlobalObjectMethodTable JSWorkerGlobalScopeBase::s_globalObjectMethodTable
     nullptr, // moduleLoaderCreateImportMetaProperties
     nullptr, // moduleLoaderEvaluate
     &promiseRejectionTracker,
-    &reportUncaughtExceptionAtEventLoop,
     &defaultLanguage,
     nullptr, // compileStreaming
     nullptr, // instantiateStreaming

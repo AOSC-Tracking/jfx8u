@@ -38,7 +38,7 @@ public:
     virtual ~LegacyCDMSessionClient() = default;
     virtual void sendMessage(Uint8Array*, String destinationURL) = 0;
 
-    enum : uint8_t {
+    enum {
         MediaKeyErrorUnknown = 1,
         MediaKeyErrorClient,
         MediaKeyErrorService,
@@ -58,10 +58,9 @@ enum LegacyCDMSessionType {
     CDMSessionTypeAVFoundationObjC,
     CDMSessionTypeAVStreamSession,
     CDMSessionTypeAVContentKeySession,
-    CDMSessionTypeRemote,
 };
 
-class WEBCORE_EXPORT LegacyCDMSession {
+class LegacyCDMSession {
 public:
     virtual ~LegacyCDMSession() = default;
 

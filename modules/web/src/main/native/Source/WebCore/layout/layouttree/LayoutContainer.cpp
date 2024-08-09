@@ -24,7 +24,7 @@
  */
 
 #include "config.h"
-#include "LayoutContainerBox.h"
+#include "LayoutContainer.h"
 
 #if ENABLE(LAYOUT_FORMATTING_CONTEXT)
 
@@ -34,14 +34,14 @@
 namespace WebCore {
 namespace Layout {
 
-WTF_MAKE_ISO_ALLOCATED_IMPL(ContainerBox);
+WTF_MAKE_ISO_ALLOCATED_IMPL(Container);
 
-ContainerBox::ContainerBox(Optional<ElementAttributes> attributes, RenderStyle&& style, BaseTypeFlags baseTypeFlags)
-    : Box(attributes, WTFMove(style), baseTypeFlags | ContainerBoxFlag)
+Container::Container(Optional<ElementAttributes> attributes, RenderStyle&& style, BaseTypeFlags baseTypeFlags)
+    : Box(attributes, { }, WTFMove(style), baseTypeFlags | ContainerFlag)
 {
 }
 
-const Box* ContainerBox::firstInFlowChild() const
+const Box* Container::firstInFlowChild() const
 {
     if (auto* firstChild = this->firstChild()) {
         if (firstChild->isInFlow())
@@ -51,7 +51,7 @@ const Box* ContainerBox::firstInFlowChild() const
     return nullptr;
 }
 
-const Box* ContainerBox::firstInFlowOrFloatingChild() const
+const Box* Container::firstInFlowOrFloatingChild() const
 {
     if (auto* firstChild = this->firstChild()) {
         if (firstChild->isInFlow() || firstChild->isFloatingPositioned())
@@ -61,7 +61,7 @@ const Box* ContainerBox::firstInFlowOrFloatingChild() const
     return nullptr;
 }
 
-const Box* ContainerBox::lastInFlowChild() const
+const Box* Container::lastInFlowChild() const
 {
     if (auto* lastChild = this->lastChild()) {
         if (lastChild->isInFlow())
@@ -71,7 +71,7 @@ const Box* ContainerBox::lastInFlowChild() const
     return nullptr;
 }
 
-const Box* ContainerBox::lastInFlowOrFloatingChild() const
+const Box* Container::lastInFlowOrFloatingChild() const
 {
     if (auto* lastChild = this->lastChild()) {
         if (lastChild->isInFlow() || lastChild->isFloatingPositioned())
@@ -81,17 +81,17 @@ const Box* ContainerBox::lastInFlowOrFloatingChild() const
     return nullptr;
 }
 
-void ContainerBox::setFirstChild(Box& childBox)
+void Container::setFirstChild(Box& childBox)
 {
     m_firstChild = &childBox;
 }
 
-void ContainerBox::setLastChild(Box& childBox)
+void Container::setLastChild(Box& childBox)
 {
     m_lastChild = &childBox;
 }
 
-void ContainerBox::appendChild(Box& childBox)
+void Container::appendChild(Box& childBox)
 {
     childBox.setParent(*this);
 

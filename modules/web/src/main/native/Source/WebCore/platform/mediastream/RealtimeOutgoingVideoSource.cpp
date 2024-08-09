@@ -74,35 +74,12 @@ void RealtimeOutgoingVideoSource::observeSource()
 void RealtimeOutgoingVideoSource::unobserveSource()
 {
     m_videoSource->removeObserver(*this);
-    m_videoSource->source().removeVideoSampleObserver(*this);
 }
 
 void RealtimeOutgoingVideoSource::setSource(Ref<MediaStreamTrackPrivate>&& newSource)
 {
-    ASSERT(isMainThread());
     ASSERT(!m_videoSource->hasObserver(*this));
     m_videoSource = WTFMove(newSource);
-
-    if (!m_areSinksAskingToApplyRotation)
-        return;
-    if (!m_videoSource->source().setShouldApplyRotation(true))
-        m_shouldApplyRotation = true;
-}
-
-void RealtimeOutgoingVideoSource::applyRotation()
-{
-    if (!isMainThread()) {
-        callOnMainThread([this, protectedThis = makeRef(*this)] {
-            applyRotation();
-        });
-        return;
-    }
-    if (m_areSinksAskingToApplyRotation)
-        return;
-
-    m_areSinksAskingToApplyRotation = true;
-    if (!m_videoSource->source().setShouldApplyRotation(true))
-        m_shouldApplyRotation = true;
 }
 
 void RealtimeOutgoingVideoSource::stop()
@@ -115,13 +92,11 @@ void RealtimeOutgoingVideoSource::stop()
 void RealtimeOutgoingVideoSource::updateBlackFramesSending()
 {
     if (!m_muted && m_enabled) {
-        m_videoSource->source().addVideoSampleObserver(*this);
         if (m_blackFrameTimer.isActive())
             m_blackFrameTimer.stop();
         return;
     }
 
-    m_videoSource->source().removeVideoSampleObserver(*this);
     sendBlackFramesIfNeeded();
 }
 
@@ -160,7 +135,7 @@ void RealtimeOutgoingVideoSource::AddOrUpdateSink(rtc::VideoSinkInterface<webrtc
     ASSERT(!sinkWants.black_frames);
 
     if (sinkWants.rotation_applied)
-        applyRotation();
+        m_shouldApplyRotation = true;
 
     auto locker = holdLock(m_sinksLock);
     m_sinks.add(sink);
@@ -186,7 +161,7 @@ void RealtimeOutgoingVideoSource::sendBlackFramesIfNeeded()
     if (!m_blackFrame) {
         auto width = m_width;
         auto height = m_height;
-        if (m_shouldApplyRotation && (m_currentRotation == webrtc::kVideoRotation_270 || m_currentRotation == webrtc::kVideoRotation_90))
+        if (m_shouldApplyRotation && (m_currentRotation == webrtc::kVideoRotation_0 || m_currentRotation == webrtc::kVideoRotation_90))
             std::swap(width, height);
         m_blackFrame = createBlackFrame(width, height);
         ASSERT(m_blackFrame);

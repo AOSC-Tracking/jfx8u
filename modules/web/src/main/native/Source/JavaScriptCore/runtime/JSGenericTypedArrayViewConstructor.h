@@ -32,8 +32,13 @@ namespace JSC {
 template<typename ViewClass>
 class JSGenericTypedArrayViewConstructor final : public InternalFunction {
 public:
-    using Base = InternalFunction;
+    typedef InternalFunction Base;
 
+protected:
+    JSGenericTypedArrayViewConstructor(VM&, Structure*);
+    void finishCreation(VM&, JSGlobalObject*, JSObject* prototype, const String& name, FunctionExecutable* privateAllocator);
+
+public:
     static JSGenericTypedArrayViewConstructor* create(
         VM&, JSGlobalObject*, Structure*, JSObject* prototype, const String& name, FunctionExecutable* privateAllocator);
 
@@ -43,10 +48,6 @@ public:
     IGNORE_CLANG_WARNINGS_END
 
     static Structure* createStructure(VM&, JSGlobalObject*, JSValue prototype);
-
-private:
-    JSGenericTypedArrayViewConstructor(VM&, Structure*);
-    void finishCreation(VM&, JSGlobalObject*, JSObject* prototype, const String& name, FunctionExecutable* privateAllocator);
 };
 
 } // namespace JSC

@@ -28,7 +28,7 @@
 # OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-find_package(PkgConfig QUIET)
+find_package(PkgConfig)
 pkg_check_modules(PC_LIBSECCOMP libseccomp)
 
 find_path(LIBSECCOMP_INCLUDE_DIRS
@@ -42,7 +42,7 @@ find_library(LIBSECCOMP_LIBRARIES
 )
 
 include(FindPackageHandleStandardArgs)
-find_package_handle_standard_args(Libseccomp
+find_package_handle_standard_args(LIBSECCOMP
     REQUIRED_VARS LIBSECCOMP_LIBRARIES
     FOUND_VAR LIBSECCOMP_FOUND
     VERSION_VAR PC_LIBSECCOMP_VERSION)

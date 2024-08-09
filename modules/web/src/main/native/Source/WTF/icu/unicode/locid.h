@@ -1,5 +1,3 @@
-// © 2016 and later: Unicode, Inc. and others.
-// License & terms of use: http://www.unicode.org/copyright.html
 /*
 ******************************************************************************
 *
@@ -33,8 +31,10 @@
 
 #include "unicode/utypes.h"
 #include "unicode/uobject.h"
+#include "unicode/unistr.h"
 #include "unicode/putil.h"
 #include "unicode/uloc.h"
+#include "unicode/strenum.h"
 
 /**
  * \file
@@ -45,9 +45,6 @@ U_NAMESPACE_BEGIN
 
 // Forward Declarations
 void U_CALLCONV locale_available_init(); /**< @internal */
-
-class StringEnumeration;
-class UnicodeString;
 
 /**
  * A <code>Locale</code> object represents a specific geographical, political,
@@ -88,7 +85,7 @@ class UnicodeString;
  * <P>
  * The third constructor requires a third argument--the <STRONG>Variant.</STRONG>
  * The Variant codes are vendor and browser-specific.
- * For example, use REVISED for a language's revised script orthography, and POSIX for POSIX.
+ * For example, use REVISED for a langauge's revised script orthography, and POSIX for POSIX.
  * Where there are two variants, separate them with an underscore, and
  * put the most important one first. For
  * example, a Traditional Spanish collation might be referenced, with
@@ -353,7 +350,7 @@ public:
      * the default locale ID of the runtime environment.
      *
      * @param newLocale Locale to set to.  If NULL, set to the value obtained
-     *                  from the runtime environment.
+     *                  from the runtime environement.
      * @param success The error code.
      * @system
      * @stable ICU 2.0
@@ -496,6 +493,7 @@ public:
      */
     uint32_t        getLCID(void) const;
 
+#ifndef U_HIDE_DRAFT_API
     /**
      * Returns whether this locale's script is written right-to-left.
      * If there is no script subtag, then the likely script is used, see uloc_addLikelySubtags().
@@ -507,9 +505,10 @@ public:
      * Returns TRUE for "ar" and "en-Hebr", FALSE for "zh" and "fa-Cyrl".
      *
      * @return TRUE if the locale's script is written right-to-left
-     * @stable ICU 54
+     * @draft ICU 54
      */
     UBool isRightToLeft() const;
+#endif  /* U_HIDE_DRAFT_API */
 
     /**
      * Fills in "dispLang" with the name of this locale's language in a format suitable for
@@ -629,7 +628,7 @@ public:
 
     /**
      * Fills in "name" with the name of this locale in a format suitable for user display
-     * in the locale specified by "displayLocale".  This function uses getDisplayLanguage(),
+     * in the locale specfied by "displayLocale".  This function uses getDisplayLanguage(),
      * getDisplayCountry(), and getDisplayVariant() to do its work, and outputs the display
      * name in the format "language (country[,variant])".  For example, if displayLocale is
      * fr_FR, then en_US's display name would be "Anglais (&Eacute;tats-Unis)", and no_NO_NY's

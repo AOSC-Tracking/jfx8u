@@ -503,17 +503,19 @@ class WCGraphicsPrismContext extends WCGraphicsContext {
     }
 
     @Override
-    public void fillRect(final float x, final float y, final float w, final float h, final Color color) {
+    public void fillRect(final float x, final float y, final float w, final float h, final Integer rgba) {
         if (log.isLoggable(Level.FINE)) {
-            String format = "fillRect(%f, %f, %f, %f, %s)";
-            log.fine(String.format(format, x, y, w, h, color));
+            String format = (rgba != null)
+                    ? "fillRect(%f, %f, %f, %f, 0x%x)"
+                    : "fillRect(%f, %f, %f, %f, null)";
+            log.fine(String.format(format, x, y, w, h, rgba));
         }
         if (!shouldRenderRect(x, y, w, h, state.getShadowNoClone(), null)) {
             return;
         }
         new Composite() {
             @Override void doPaint(Graphics g) {
-                Paint paint = (color != null) ? color : state.getPaintNoClone();
+                Paint paint = (rgba != null) ? createColor(rgba) : state.getPaintNoClone();
                 DropShadow shadow = state.getShadowNoClone();
                 // TextureMapperJava::drawSolidColor calls fillRect with perspective
                 // projection.
@@ -533,13 +535,13 @@ class WCGraphicsPrismContext extends WCGraphicsContext {
     public void fillRoundedRect(final float x, final float y, final float w, final float h,
         final float topLeftW, final float topLeftH, final float topRightW, final float topRightH,
         final float bottomLeftW, final float bottomLeftH, final float bottomRightW, final float bottomRightH,
-        final Color color)
+        final int rgba)
     {
         if (log.isLoggable(Level.FINE)) {
             log.fine(String.format("fillRoundedRect(%f, %f, %f, %f, "
-                    + "%f, %f, %f, %f, %f, %f, %f, %f, %s)",
+                    + "%f, %f, %f, %f, %f, %f, %f, %f, 0x%x)",
                     x, y, w, h, topLeftW, topLeftH, topRightW, topRightH,
-                    bottomLeftW, bottomLeftH, bottomRightW, bottomRightH, color));
+                    bottomLeftW, bottomLeftH, bottomRightW, bottomRightH, rgba));
         }
         if (!shouldRenderRect(x, y, w, h, state.getShadowNoClone(), null)) {
             return;
@@ -552,13 +554,14 @@ class WCGraphicsPrismContext extends WCGraphicsContext {
                 float arcW = (topLeftW + topRightW + bottomLeftW + bottomRightW) / 2;
                 float arcH = (topLeftH + topRightH + bottomLeftH + bottomRightH) / 2;
 
+                Paint paint = createColor(rgba);
                 DropShadow shadow = state.getShadowNoClone();
                 if (shadow != null) {
                     final NGRectangle node = new NGRectangle();
                     node.updateRectangle(x, y, w, h, arcW, arcH);
-                    render(g, shadow, color, null, node);
+                    render(g, shadow, paint, null, node);
                 } else {
-                    g.setPaint(color);
+                    g.setPaint(paint);
                     g.fillRoundRect(x, y, w, h, arcW, arcH);
                 }
             }
@@ -582,11 +585,11 @@ class WCGraphicsPrismContext extends WCGraphicsContext {
     }
 
     @Override
-    public void setFillColor(Color color) {
+    public void setFillColor(int rgba) {
         if (log.isLoggable(Level.FINE)) {
-            log.log(Level.FINE, String.format("setFillColor(0x%x)", color));
+            log.log(Level.FINE, String.format("setFillColor(0x%x)", rgba));
         }
-        state.setPaint(color);
+        state.setPaint(createColor(rgba));
     }
 
     @Override
@@ -624,11 +627,11 @@ class WCGraphicsPrismContext extends WCGraphicsContext {
     }
 
     @Override
-    public void setStrokeColor(Color color) {
+    public void setStrokeColor(int rgba) {
         if (log.isLoggable(Level.FINE)) {
-            log.log(Level.FINE, String.format("setStrokeColor(0x%x)", color));
+            log.log(Level.FINE, String.format("setStrokeColor(0x%x)", rgba));
         }
-        state.getStrokeNoClone().setPaint(color);
+        state.getStrokeNoClone().setPaint(createColor(rgba));
     }
 
     @Override
@@ -698,12 +701,12 @@ class WCGraphicsPrismContext extends WCGraphicsContext {
     }
 
     @Override
-    public void setShadow(float dx, float dy, float blur, Color color) {
+    public void setShadow(float dx, float dy, float blur, int rgba) {
         if (log.isLoggable(Level.FINE)) {
-            String format = "setShadow(%f, %f, %f, %s)";
-            log.fine(String.format(format, dx, dy, blur, color));
+            String format = "setShadow(%f, %f, %f, 0x%x)";
+            log.fine(String.format(format, dx, dy, blur, rgba));
         }
-        state.setShadow(createShadow(dx, dy, blur, color));
+        state.setShadow(createShadow(dx, dy, blur, rgba));
     }
 
     @Override
@@ -1020,18 +1023,18 @@ class WCGraphicsPrismContext extends WCGraphicsContext {
                          new float[] {1.0f}, 0.0f);
 
     @Override
-    public void drawFocusRing(final int x, final int y, final int w, final int h, final Color color) {
+    public void drawFocusRing(final int x, final int y, final int w, final int h, final int rgba) {
         if (log.isLoggable(Level.FINE)) {
             log.log(Level.FINE,
                     String.format("drawFocusRing: %d, %d, %d, %d, 0x%x",
-                                  x, y, w, h, color));
+                                  x, y, w, h, rgba));
         }
         if (!shouldRenderRect(x, y, w, h, null, focusRingStroke)) {
             return;
         }
         new Composite() {
             @Override void doPaint(Graphics g) {
-                g.setPaint(color);
+                g.setPaint(createColor(rgba));
                 BasicStroke stroke = g.getStroke();
                 g.setStroke(focusRingStroke);
                 g.drawRoundRect(x, y, w, h, 4, 4);
@@ -1119,14 +1122,23 @@ class WCGraphicsPrismContext extends WCGraphicsContext {
         return what;
     }
 
-    private static Color4f createColor4f(Color color) {
-        return new Color4f(color.getRed(),
-                           color.getGreen(),
-                           color.getBlue(),
-                           color.getAlpha());
+    static Color createColor(int rgba) {
+        float a = (0xFF & (rgba >> 24)) / 255.0f;
+        float r = (0xFF & (rgba >> 16)) / 255.0f;
+        float g = (0xFF & (rgba >> 8)) / 255.0f;
+        float b = (0xFF & (rgba)) / 255.0f;
+        return new Color(r, g, b, a);
     }
 
-    private DropShadow createShadow(float dx, float dy, float blur, Color color) {
+    private static Color4f createColor4f(int rgba) {
+        float a = (0xFF & (rgba >> 24)) / 255.0f;
+        float r = (0xFF & (rgba >> 16)) / 255.0f;
+        float g = (0xFF & (rgba >> 8)) / 255.0f;
+        float b = (0xFF & (rgba)) / 255.0f;
+        return new Color4f(r, g, b, a);
+    }
+
+    private DropShadow createShadow(float dx, float dy, float blur, int rgba) {
         if (dx == 0f && dy == 0f && blur == 0f) {
             return null;
         }
@@ -1134,7 +1146,7 @@ class WCGraphicsPrismContext extends WCGraphicsContext {
         shadow.setOffsetX((int) dx);
         shadow.setOffsetY((int) dy);
         shadow.setRadius((blur < 0f) ? 0f : (blur > 127f) ? 127f : blur);
-        shadow.setColor(createColor4f(color));
+        shadow.setColor(createColor4f(rgba));
         return shadow;
     }
 

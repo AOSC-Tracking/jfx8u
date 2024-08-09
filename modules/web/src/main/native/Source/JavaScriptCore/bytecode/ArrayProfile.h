@@ -207,8 +207,10 @@ public:
     void setOutOfBounds() { m_outOfBounds = true; }
     bool* addressOfOutOfBounds() { return &m_outOfBounds; }
 
-    void observeStructureID(StructureID structureID) { m_lastSeenStructureID = structureID; }
-    void observeStructure(Structure* structure) { m_lastSeenStructureID = structure->id(); }
+    void observeStructure(Structure* structure)
+    {
+        m_lastSeenStructureID = structure->id();
+    }
 
     void computeUpdatedPrediction(const ConcurrentJSLocker&, CodeBlock*);
     void computeUpdatedPrediction(const ConcurrentJSLocker&, CodeBlock*, Structure* lastSeenStructure);

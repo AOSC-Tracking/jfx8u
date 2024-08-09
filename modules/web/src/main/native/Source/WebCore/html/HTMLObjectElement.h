@@ -58,7 +58,8 @@ public:
 
 private:
     HTMLObjectElement(const QualifiedName&, Document&, HTMLFormElement*);
-    ~HTMLObjectElement();
+
+    RenderWidget* renderWidgetLoadingPlugin() const final;
 
     int defaultTabIndex() const final;
 

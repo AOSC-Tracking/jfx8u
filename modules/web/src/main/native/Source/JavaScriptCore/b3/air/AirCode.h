@@ -346,7 +346,6 @@ public:
     WeakRandom& weakRandom() { return m_weakRandom; }
 
     void emitDefaultPrologue(CCallHelpers&);
-    void emitEpilogue(CCallHelpers&);
 
     std::unique_ptr<GenerateAndAllocateRegisters> m_generateAndAllocateRegisters;
 

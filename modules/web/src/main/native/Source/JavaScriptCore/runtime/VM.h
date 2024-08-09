@@ -32,10 +32,11 @@
 #include "CodeSpecializationKind.h"
 #include "CompleteSubspace.h"
 #include "ConcurrentJSLock.h"
+#include "ControlFlowProfiler.h"
 #include "DateInstanceCache.h"
 #include "DeleteAllCodeEffort.h"
-#include "DisallowVMEntry.h"
 #include "ExceptionEventLocation.h"
+#include "ExecutableAllocator.h"
 #include "FunctionHasExecutedCache.h"
 #include "FuzzerAgent.h"
 #include "Heap.h"
@@ -43,6 +44,7 @@
 #include "Intrinsic.h"
 #include "IsoCellSet.h"
 #include "IsoSubspace.h"
+#include "JITThunks.h"
 #include "JSCJSValue.h"
 #include "JSLock.h"
 #include "MacroAssemblerCodeRef.h"
@@ -52,7 +54,6 @@
 #include "Strong.h"
 #include "StructureCache.h"
 #include "SubspaceAccess.h"
-#include "ThunkGenerator.h"
 #include "VMTraps.h"
 #include "WasmContext.h"
 #include "Watchpoint.h"
@@ -93,14 +94,12 @@
 #endif
 
 namespace WTF {
-class RunLoop;
 class SimpleStats;
 } // namespace WTF
 using WTF::SimpleStats;
 
 namespace JSC {
 
-class BasicBlockLocation;
 class BuiltinExecutables;
 class BytecodeIntrinsicRegistry;
 class CallFrame;
@@ -110,7 +109,6 @@ class CodeCache;
 class CommonIdentifiers;
 class CompactVariableMap;
 class ConservativeRoots;
-class ControlFlowProfiler;
 class CustomGetterSetter;
 class DOMAttributeGetterSetter;
 class DateInstance;
@@ -120,17 +118,16 @@ class ExceptionScope;
 class FastMallocAlignedMemoryAllocator;
 class GigacageAlignedMemoryAllocator;
 class HandleStack;
+class TypeProfiler;
+class TypeProfilerLog;
 class HasOwnPropertyCache;
 class HeapProfiler;
 class Identifier;
 class Interpreter;
 class IntlCollator;
 class IntlDateTimeFormat;
-class IntlDisplayNames;
-class IntlLocale;
 class IntlNumberFormat;
 class IntlPluralRules;
-class IntlRelativeTimeFormat;
 class JSAPIGlobalObject;
 class JSAPIWrapperGlobalObject;
 class JSAPIWrapperObject;
@@ -156,11 +153,10 @@ class JSWebAssemblyInstance;
 class JSWebAssemblyMemory;
 class JSWebAssemblyModule;
 class JSWebAssemblyTable;
-class JITThunks;
 class LLIntOffsetsExtractor;
 class NativeExecutable;
 class ObjCCallbackFunction;
-class DeferredWorkTimer;
+class PromiseTimer;
 class RegExp;
 class RegExpCache;
 class Register;
@@ -187,8 +183,6 @@ class UnlinkedModuleProgramCodeBlock;
 class VirtualRegister;
 class VMEntryScope;
 class TopLevelGlobalObjectScope;
-class TypeProfiler;
-class TypeProfilerLog;
 class Watchdog;
 class Watchpoint;
 class WatchpointSet;
@@ -316,8 +310,7 @@ public:
     JS_EXPORT_PRIVATE static bool sharedInstanceExists();
     JS_EXPORT_PRIVATE static VM& sharedInstance();
 
-    JS_EXPORT_PRIVATE static Ref<VM> create(HeapType = SmallHeap, WTF::RunLoop* = nullptr);
-    JS_EXPORT_PRIVATE static RefPtr<VM> tryCreate(HeapType = SmallHeap, WTF::RunLoop* = nullptr);
+    JS_EXPORT_PRIVATE static Ref<VM> create(HeapType = SmallHeap);
     static Ref<VM> createContextGroup(HeapType = SmallHeap);
     JS_EXPORT_PRIVATE ~VM();
 
@@ -329,7 +322,7 @@ public:
 
 #if ENABLE(SAMPLING_PROFILER)
     SamplingProfiler* samplingProfiler() { return m_samplingProfiler.get(); }
-    JS_EXPORT_PRIVATE SamplingProfiler& ensureSamplingProfiler(Ref<Stopwatch>&&);
+    JS_EXPORT_PRIVATE SamplingProfiler& ensureSamplingProfiler(RefPtr<Stopwatch>&&);
 #endif
 
     FuzzerAgent* fuzzerAgent() const { return m_fuzzerAgent.get(); }
@@ -358,7 +351,10 @@ private:
 
     unsigned m_id;
     RefPtr<JSLock> m_apiLock;
-    Ref<WTF::RunLoop> m_runLoop;
+#if USE(CF)
+    // These need to be initialized before heap below.
+    RetainPtr<CFRunLoopRef> m_runLoop;
+#endif
 
     WeakRandom m_random;
     Integrity::Random m_integrityRandom;
@@ -380,11 +376,8 @@ public:
     std::unique_ptr<IsoHeapCellType> callbackObjectHeapCellType;
     std::unique_ptr<IsoHeapCellType> dateInstanceHeapCellType;
     std::unique_ptr<IsoHeapCellType> errorInstanceHeapCellType;
-    std::unique_ptr<IsoHeapCellType> finalizationRegistryCellType;
     std::unique_ptr<IsoHeapCellType> globalLexicalEnvironmentHeapCellType;
     std::unique_ptr<IsoHeapCellType> globalObjectHeapCellType;
-    std::unique_ptr<IsoHeapCellType> injectedScriptHostSpaceHeapCellType;
-    std::unique_ptr<IsoHeapCellType> javaScriptCallFrameHeapCellType;
     std::unique_ptr<IsoHeapCellType> jsModuleRecordHeapCellType;
     std::unique_ptr<IsoHeapCellType> moduleNamespaceObjectHeapCellType;
     std::unique_ptr<IsoHeapCellType> nativeStdFunctionHeapCellType;
@@ -401,13 +394,12 @@ public:
     std::unique_ptr<IsoHeapCellType> callbackAPIWrapperGlobalObjectHeapCellType;
     std::unique_ptr<IsoHeapCellType> jscCallbackFunctionHeapCellType;
 #endif
+#if ENABLE(INTL)
     std::unique_ptr<IsoHeapCellType> intlCollatorHeapCellType;
     std::unique_ptr<IsoHeapCellType> intlDateTimeFormatHeapCellType;
-    std::unique_ptr<IsoHeapCellType> intlDisplayNamesHeapCellType;
-    std::unique_ptr<IsoHeapCellType> intlLocaleHeapCellType;
     std::unique_ptr<IsoHeapCellType> intlNumberFormatHeapCellType;
     std::unique_ptr<IsoHeapCellType> intlPluralRulesHeapCellType;
-    std::unique_ptr<IsoHeapCellType> intlRelativeTimeFormatHeapCellType;
+#endif
 #if ENABLE(WEBASSEMBLY)
     std::unique_ptr<IsoHeapCellType> webAssemblyCodeBlockHeapCellType;
     std::unique_ptr<IsoHeapCellType> webAssemblyFunctionHeapCellType;
@@ -448,7 +440,6 @@ public:
     CompleteSubspace variableSizedCellSpace; // FIXME: This space is problematic because we have things in here like DirectArguments and ScopedArguments; those should be split into JSValueOOB cells and JSValueStrict auxiliaries. https://bugs.webkit.org/show_bug.cgi?id=182858
     CompleteSubspace destructibleObjectSpace;
 
-    IsoSubspace arraySpace;
     IsoSubspace bigIntSpace;
     IsoSubspace calleeSpace;
     IsoSubspace clonedArgumentsSpace;
@@ -464,7 +455,6 @@ public:
     IsoSubspace jsProxySpace;
     IsoSubspace nativeExecutableSpace;
     IsoSubspace numberObjectSpace;
-    IsoSubspace plainObjectSpace;
     IsoSubspace promiseSpace;
     IsoSubspace propertyNameEnumeratorSpace;
     IsoSubspace propertyTableSpace;
@@ -522,11 +512,9 @@ public:
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(functionRareDataSpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(generatorSpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(globalObjectSpace)
-    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(injectedScriptHostSpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(int8ArraySpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(int16ArraySpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(int32ArraySpace)
-    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(javaScriptCallFrameSpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(jsModuleRecordSpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(mapBucketSpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(mapIteratorSpace)
@@ -555,18 +543,16 @@ public:
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(unlinkedFunctionCodeBlockSpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(unlinkedModuleProgramCodeBlockSpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(unlinkedProgramCodeBlockSpace)
-    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(finalizationRegistrySpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(weakObjectRefSpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(weakSetSpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(weakMapSpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(withScopeSpace)
+#if ENABLE(INTL)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(intlCollatorSpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(intlDateTimeFormatSpace)
-    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(intlDisplayNamesSpace)
-    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(intlLocaleSpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(intlNumberFormatSpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(intlPluralRulesSpace)
-    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(intlRelativeTimeFormatSpace)
+#endif
 #if ENABLE(WEBASSEMBLY)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(jsToWasmICCalleeSpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(webAssemblyCodeBlockSpace)
@@ -706,6 +692,9 @@ public:
     Strong<Structure> bigIntStructure;
     Strong<Structure> executableToCodeBlockEdgeStructure;
 
+    Strong<Structure> m_setIteratorStructure;
+    Strong<Structure> m_mapIteratorStructure;
+
     Strong<JSPropertyNameEnumerator> m_emptyPropertyNameEnumerator;
 
     Strong<JSCell> m_sentinelSetBucket;
@@ -716,7 +705,7 @@ public:
     Weak<NativeExecutable> m_slowBoundExecutable;
     Weak<NativeExecutable> m_slowCanConstructBoundExecutable;
 
-    Ref<DeferredWorkTimer> deferredWorkTimer;
+    Ref<PromiseTimer> promiseTimer;
 
     JSCell* currentlyDestructingCallbackObject;
     const ClassInfo* currentlyDestructingCallbackObjectClassInfo { nullptr };
@@ -727,6 +716,7 @@ public:
     const ArgList* emptyList;
     SmallStrings smallStrings;
     NumericStrings numericStrings;
+    DateInstanceCache dateInstanceCache;
     std::unique_ptr<SimpleStats> machineCodeBytesPerBytecodeWordForBaselineJIT;
     WeakGCMap<std::pair<CustomGetterSetter*, int>, JSCustomGetterSetterFunction> customGetterSetterFunctionMap;
     WeakGCMap<StringImpl*, JSString, PtrHash<StringImpl*>> stringCache;
@@ -735,7 +725,21 @@ public:
     AtomStringTable* atomStringTable() const { return m_atomStringTable; }
     WTF::SymbolRegistry& symbolRegistry() { return m_symbolRegistry; }
 
-    Strong<JSBigInt> heapBigIntConstantOne;
+    Strong<JSBigInt> bigIntConstantOne;
+
+    Structure* setIteratorStructure()
+    {
+        if (LIKELY(m_setIteratorStructure))
+            return m_setIteratorStructure.get();
+        return setIteratorStructureSlow();
+    }
+
+    Structure* mapIteratorStructure()
+    {
+        if (LIKELY(m_mapIteratorStructure))
+            return m_mapIteratorStructure.get();
+        return mapIteratorStructureSlow();
+    }
 
     JSCell* sentinelSetBucket()
     {
@@ -795,7 +799,7 @@ public:
     static JS_EXPORT_PRIVATE bool canUseAssembler();
     static bool isInMiniMode()
     {
-        return !Options::useJIT() || Options::forceMiniVMMode();
+        return !canUseJIT() || Options::forceMiniVMMode();
     }
 
     static bool useUnlinkedCodeBlockJettisoning()
@@ -804,6 +808,15 @@ public:
     }
 
     static void computeCanUseJIT();
+    ALWAYS_INLINE static bool canUseJIT()
+    {
+#if ENABLE(JIT)
+        ASSERT(s_canUseJITIsSet);
+        return s_canUseJIT;
+#else
+        return false;
+#endif
+    }
 
     SourceProviderCache* addSourceProviderCache(SourceProvider*);
     void clearSourceProviderCaches();
@@ -815,7 +828,10 @@ public:
     Interpreter* interpreter;
 #if ENABLE(JIT)
     std::unique_ptr<JITThunks> jitStubs;
-    MacroAssemblerCodeRef<JITThunkPtrTag> getCTIStub(ThunkGenerator);
+    MacroAssemblerCodeRef<JITThunkPtrTag> getCTIStub(ThunkGenerator generator)
+    {
+        return jitStubs->ctiStub(*this, generator);
+    }
 
 #endif // ENABLE(JIT)
 #if ENABLE(FTL_JIT)
@@ -944,28 +960,21 @@ public:
 
     void gatherScratchBufferRoots(ConservativeRoots&);
 
-    static constexpr unsigned expectedMaxActiveSideStateCount = 4;
-    void pushCheckpointOSRSideState(std::unique_ptr<CheckpointOSRExitSideState>&&);
-    std::unique_ptr<CheckpointOSRExitSideState> popCheckpointOSRSideState(CallFrame* expectedFrame);
-    void popAllCheckpointOSRSideStateUntil(CallFrame* targetFrame);
+    void addCheckpointOSRSideState(CallFrame*, std::unique_ptr<CheckpointOSRExitSideState>&&);
+    std::unique_ptr<CheckpointOSRExitSideState> findCheckpointOSRSideState(CallFrame*);
     bool hasCheckpointOSRSideState() const { return m_checkpointSideState.size(); }
     void scanSideState(ConservativeRoots&) const;
 
-    unsigned disallowVMEntryCount { 0 };
     VMEntryScope* entryScope;
 
     JSObject* stringRecursionCheckFirstObject { nullptr };
     HashSet<JSObject*> stringRecursionCheckVisitedObjects;
 
-    struct DateCache {
-        DateInstanceCache dateInstanceCache;
-        LocalTimeOffsetCache utcTimeOffsetCache;
-        LocalTimeOffsetCache localTimeOffsetCache;
+    LocalTimeOffsetCache utcTimeOffsetCache;
+    LocalTimeOffsetCache localTimeOffsetCache;
 
-        String cachedDateString;
-        double cachedDateStringValue;
-    };
-    DateCache dateCache;
+    String cachedDateString;
+    double cachedDateStringValue;
 
     std::unique_ptr<Profiler::Database> m_perBytecodeProfiler;
     RefPtr<TypedArrayController> m_typedArrayController;
@@ -1085,7 +1094,10 @@ public:
     bool needExceptionCheck() const { return m_needExceptionCheck; }
 #endif
 
-    WTF::RunLoop& runLoop() const { return m_runLoop; }
+#if USE(CF)
+    CFRunLoopRef runLoop() const { return m_runLoop.get(); }
+    JS_EXPORT_PRIVATE void setRunLoop(CFRunLoopRef);
+#endif // USE(CF)
 
     static void setCrashOnVMCreation(bool);
 
@@ -1102,19 +1114,17 @@ public:
         SetForScope<Exception*> m_savedLastException;
     };
 
-    void addLoopHintExecutionCounter(const Instruction*);
-    uint64_t* getLoopHintExecutionCounter(const Instruction*);
-    void removeLoopHintExecutionCounter(const Instruction*);
-
 private:
     friend class LLIntOffsetsExtractor;
 
-    VM(VMType, HeapType, WTF::RunLoop* = nullptr, bool* success = nullptr);
+    VM(VMType, HeapType);
     static VM*& sharedInstanceInternal();
     void createNativeThunk();
 
-    JS_EXPORT_PRIVATE JSCell* sentinelSetBucketSlow();
-    JS_EXPORT_PRIVATE JSCell* sentinelMapBucketSlow();
+    JS_EXPORT_PRIVATE Structure* setIteratorStructureSlow();
+    JS_EXPORT_PRIVATE Structure* mapIteratorStructureSlow();
+    JSCell* sentinelSetBucketSlow();
+    JSCell* sentinelMapBucketSlow();
     JSPropertyNameEnumerator* emptyPropertyNameEnumeratorSlow();
 
     void updateStackLimits();
@@ -1191,9 +1201,6 @@ private:
     RefPtr<Thread> m_throwingThread;
 #endif
 
-public:
-    bool didEnterVM { false };
-private:
     bool m_failNextNewCodeBlock { false };
     DeletePropertyMode m_deletePropertyMode { DeletePropertyMode::Default };
     bool m_globalConstRedeclarationShouldThrow { true };
@@ -1208,7 +1215,7 @@ private:
     Lock m_scratchBufferLock;
     Vector<ScratchBuffer*> m_scratchBuffers;
     size_t m_sizeOfLastScratchBuffer { 0 };
-    Vector<std::unique_ptr<CheckpointOSRExitSideState>, expectedMaxActiveSideStateCount> m_checkpointSideState;
+    HashMap<CallFrame*, std::unique_ptr<CheckpointOSRExitSideState>> m_checkpointSideState;
     InlineWatchpointSet m_primitiveGigacageEnabled;
     FunctionHasExecutedCache m_functionHasExecutedCache;
     std::unique_ptr<ControlFlowProfiler> m_controlFlowProfiler;
@@ -1231,8 +1238,12 @@ private:
     WTF::Function<void(VM&)> m_onEachMicrotaskTick;
     uintptr_t m_currentWeakRefVersion { 0 };
 
-    Lock m_loopHintExecutionCountLock;
-    HashMap<const Instruction*, std::pair<unsigned, std::unique_ptr<uint64_t>>> m_loopHintExecutionCounts;
+#if ENABLE(JIT)
+#if ASSERT_ENABLED
+    JS_EXPORT_PRIVATE static bool s_canUseJITIsSet;
+#endif
+    JS_EXPORT_PRIVATE static bool s_canUseJIT;
+#endif
 
     VM* m_prev; // Required by DoublyLinkedListNode.
     VM* m_next; // Required by DoublyLinkedListNode.

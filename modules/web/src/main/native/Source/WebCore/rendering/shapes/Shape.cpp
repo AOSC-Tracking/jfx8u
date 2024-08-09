@@ -35,7 +35,6 @@
 #include "BoxShape.h"
 #include "GraphicsContext.h"
 #include "ImageBuffer.h"
-#include "ImageData.h"
 #include "LengthFunctions.h"
 #include "PolygonShape.h"
 #include "RasterShape.h"
@@ -62,7 +61,7 @@ static std::unique_ptr<Shape> createEllipseShape(const FloatPoint& center, const
     return makeUnique<RectangleShape>(FloatRect(center.x() - radii.width(), center.y() - radii.height(), radii.width()*2, radii.height()*2), radii);
 }
 
-static std::unique_ptr<Shape> createPolygonShape(Vector<FloatPoint>&& vertices, WindRule fillRule)
+static std::unique_ptr<Shape> createPolygonShape(std::unique_ptr<Vector<FloatPoint>> vertices, WindRule fillRule)
 {
     return makeUnique<PolygonShape>(WTFMove(vertices), fillRule);
 }
@@ -129,13 +128,14 @@ std::unique_ptr<Shape> Shape::createShape(const BasicShape& basicShape, const La
         const Vector<Length>& values = polygon.values();
         size_t valuesSize = values.size();
         ASSERT(!(valuesSize % 2));
-        Vector<FloatPoint> vertices(valuesSize / 2);
+        std::unique_ptr<Vector<FloatPoint>> vertices = makeUnique<Vector<FloatPoint>>(valuesSize / 2);
         for (unsigned i = 0; i < valuesSize; i += 2) {
             FloatPoint vertex(
                 floatValueForLength(values.at(i), boxWidth),
                 floatValueForLength(values.at(i + 1), boxHeight));
-            vertices[i / 2] = physicalPointToLogical(vertex, logicalBoxSize.height(), writingMode);
+            (*vertices)[i / 2] = physicalPointToLogical(vertex, logicalBoxSize.height(), writingMode);
         }
+
         shape = createPolygonShape(WTFMove(vertices), polygon.windRule());
         break;
     }
@@ -183,56 +183,45 @@ std::unique_ptr<Shape> Shape::createRasterShape(Image* image, float threshold, c
     // FIXME (149420): This buffer should not be unconditionally unaccelerated.
     std::unique_ptr<ImageBuffer> imageBuffer = ImageBuffer::create(imageRect.size(), RenderingMode::Unaccelerated);
 
-    auto createShape = [&]() {
-        auto rasterShape = makeUnique<RasterShape>(WTFMove(intervals), marginRect.size());
-        rasterShape->m_writingMode = writingMode;
-        rasterShape->m_margin = margin;
-        return rasterShape;
-    };
+    if (imageBuffer) {
+        GraphicsContext& graphicsContext = imageBuffer->context();
+        if (image)
+            graphicsContext.drawImage(*image, IntRect(IntPoint(), imageRect.size()));
 
-    if (!imageBuffer)
-        return createShape();
+        RefPtr<Uint8ClampedArray> pixelArray = imageBuffer->getUnmultipliedImageData(IntRect(IntPoint(), imageRect.size()));
+        RELEASE_ASSERT(pixelArray);
+        unsigned pixelArrayLength = pixelArray->length();
+        unsigned pixelArrayOffset = 3; // Each pixel is four bytes: RGBA.
+        uint8_t alphaPixelThreshold = static_cast<uint8_t>(lroundf(clampTo<float>(threshold, 0, 1) * 255.0f));
 
-    GraphicsContext& graphicsContext = imageBuffer->context();
-    if (image)
-        graphicsContext.drawImage(*image, IntRect(IntPoint(), imageRect.size()));
+        int minBufferY = std::max(0, marginRect.y() - imageRect.y());
+        int maxBufferY = std::min(imageRect.height(), marginRect.maxY() - imageRect.y());
 
-    auto imageData = imageBuffer->getImageData(AlphaPremultiplication::Unpremultiplied, { IntPoint(), imageRect.size() });
-
-    // We could get to a value where imageData could be nullptr. A case where ImageRect.size() is huge, imageData::create
-    // can return a nullptr because data size has overflowed. Refer rdar://problem/61793884
-    if (!imageData || !imageData->data())
-        return createShape();
-
-    auto* pixelArray = imageData->data();
-    unsigned pixelArrayLength = pixelArray->length();
-    unsigned pixelArrayOffset = 3; // Each pixel is four bytes: RGBA.
-    uint8_t alphaPixelThreshold = static_cast<uint8_t>(lroundf(clampTo<float>(threshold, 0, 1) * 255.0f));
-
-    int minBufferY = std::max(0, marginRect.y() - imageRect.y());
-    int maxBufferY = std::min(imageRect.height(), marginRect.maxY() - imageRect.y());
-
-    if ((imageRect.area() * 4).unsafeGet() == pixelArrayLength) {
-        for (int y = minBufferY; y < maxBufferY; ++y) {
-            int startX = -1;
-            for (int x = 0; x < imageRect.width(); ++x, pixelArrayOffset += 4) {
-                uint8_t alpha = pixelArray->item(pixelArrayOffset);
-                bool alphaAboveThreshold = alpha > alphaPixelThreshold;
-                if (startX == -1 && alphaAboveThreshold) {
-                    startX = x;
-                } else if (startX != -1 && (!alphaAboveThreshold || x == imageRect.width() - 1)) {
-                    // We're creating "end-point exclusive" intervals here. The value of an interval's x1 is
-                    // the first index of an above-threshold pixel for y, and the value of x2 is 1+ the index
-                    // of the last above-threshold pixel.
-                    int endX = alphaAboveThreshold ? x + 1 : x;
-                    intervals->intervalAt(y + imageRect.y()).unite(IntShapeInterval(startX + imageRect.x(), endX + imageRect.x()));
-                    startX = -1;
+        if ((imageRect.area() * 4).unsafeGet() == pixelArrayLength) {
+            for (int y = minBufferY; y < maxBufferY; ++y) {
+                int startX = -1;
+                for (int x = 0; x < imageRect.width(); ++x, pixelArrayOffset += 4) {
+                    uint8_t alpha = pixelArray->item(pixelArrayOffset);
+                    bool alphaAboveThreshold = alpha > alphaPixelThreshold;
+                    if (startX == -1 && alphaAboveThreshold) {
+                        startX = x;
+                    } else if (startX != -1 && (!alphaAboveThreshold || x == imageRect.width() - 1)) {
+                        // We're creating "end-point exclusive" intervals here. The value of an interval's x1 is
+                        // the first index of an above-threshold pixel for y, and the value of x2 is 1+ the index
+                        // of the last above-threshold pixel.
+                        int endX = alphaAboveThreshold ? x + 1 : x;
+                        intervals->intervalAt(y + imageRect.y()).unite(IntShapeInterval(startX + imageRect.x(), endX + imageRect.x()));
+                        startX = -1;
+                    }
                 }
             }
         }
     }
 
-    return createShape();
+    auto rasterShape = makeUnique<RasterShape>(WTFMove(intervals), marginRect.size());
+    rasterShape->m_writingMode = writingMode;
+    rasterShape->m_margin = margin;
+    return rasterShape;
 }
 
 std::unique_ptr<Shape> Shape::createBoxShape(const RoundedRect& roundedRect, WritingMode writingMode, float margin)

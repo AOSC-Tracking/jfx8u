@@ -79,7 +79,7 @@ void CommandLineAPIHost::inspect(JSC::JSGlobalObject& lexicalGlobalObject, JSC::
     if (!m_instrumentingAgents)
         return;
 
-    auto* inspectorAgent = m_instrumentingAgents->persistentInspectorAgent();
+    auto* inspectorAgent = m_instrumentingAgents->inspectorAgent();
     if (!inspectorAgent)
         return;
 
@@ -114,7 +114,7 @@ CommandLineAPIHost::EventListenersRecord CommandLineAPIHost::getEventListeners(J
             if (&jsListener.isolatedWorld() != &currentWorld(lexicalGlobalObject))
                 continue;
 
-            auto* function = jsListener.ensureJSFunction(*scriptExecutionContext);
+            auto* function = jsListener.jsFunction(*scriptExecutionContext);
             if (!function)
                 continue;
 
@@ -169,7 +169,7 @@ JSC::JSValue CommandLineAPIHost::inspectedObject(JSC::JSGlobalObject& lexicalGlo
 String CommandLineAPIHost::databaseId(Database& database)
 {
     if (m_instrumentingAgents) {
-        if (auto* databaseAgent = m_instrumentingAgents->enabledDatabaseAgent())
+        if (auto* databaseAgent = m_instrumentingAgents->inspectorDatabaseAgent())
             return databaseAgent->databaseId(database);
     }
     return { };

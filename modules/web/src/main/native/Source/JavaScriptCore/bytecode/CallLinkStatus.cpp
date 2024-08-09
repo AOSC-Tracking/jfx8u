@@ -29,8 +29,11 @@
 #include "BytecodeStructs.h"
 #include "CallLinkInfo.h"
 #include "CodeBlock.h"
-#include "JSCInlines.h"
+#include "DFGJITCode.h"
+#include "InlineCallFrame.h"
+#include "InterpreterInlines.h"
 #include "LLIntCallLinkInfo.h"
+#include "JSCInlines.h"
 #include <wtf/CommaPrinter.h>
 #include <wtf/ListDump.h>
 
@@ -57,7 +60,7 @@ CallLinkStatus CallLinkStatus::computeFromLLInt(const ConcurrentJSLocker&, CodeB
     UNUSED_PARAM(profiledBlock);
     UNUSED_PARAM(bytecodeIndex);
 #if ENABLE(DFG_JIT)
-    if (profiledBlock->unlinkedCodeBlock()->hasExitSite(DFG::FrequentExitSite(bytecodeIndex, BadConstantValue))) {
+    if (profiledBlock->unlinkedCodeBlock()->hasExitSite(DFG::FrequentExitSite(bytecodeIndex, BadCell))) {
         // We could force this to be a closure call, but instead we'll just assume that it
         // takes slow path.
         return takesSlowPath();
@@ -78,13 +81,6 @@ CallLinkStatus CallLinkStatus::computeFromLLInt(const ConcurrentJSLocker&, CodeB
     case op_tail_call:
         callLinkInfo = &instruction->as<OpTailCall>().metadata(profiledBlock).m_callLinkInfo;
         break;
-    case op_iterator_open:
-        callLinkInfo = &instruction->as<OpIteratorOpen>().metadata(profiledBlock).m_callLinkInfo;
-        break;
-    case op_iterator_next:
-        callLinkInfo = &instruction->as<OpIteratorNext>().metadata(profiledBlock).m_callLinkInfo;
-        break;
-
     default:
         return CallLinkStatus();
     }
@@ -138,7 +134,7 @@ CallLinkStatus::ExitSiteData CallLinkStatus::computeExitSiteData(CodeBlock* prof
     };
 
     auto badFunction = [&] (ExitingInlineKind inlineKind) -> ExitFlag {
-        return ExitFlag(codeBlock->hasExitSite(locker, DFG::FrequentExitSite(bytecodeIndex, BadConstantValue, ExitFromAnything, inlineKind)), inlineKind);
+        return ExitFlag(codeBlock->hasExitSite(locker, DFG::FrequentExitSite(bytecodeIndex, BadCell, ExitFromAnything, inlineKind)), inlineKind);
     };
 
     exitSiteData.takesSlowPath |= takesSlowPath(ExitFromNotInlined);

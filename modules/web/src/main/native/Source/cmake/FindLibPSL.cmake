@@ -52,7 +52,7 @@ This will define the following variables in your project:
 
 #]=======================================================================]
 
-find_package(PkgConfig QUIET)
+include(FindPkgConfig)
 pkg_check_modules(PC_LIBPSL QUIET libpsl)
 set(LibPSL_COMPILE_OPTIONS ${PC_LIBPSL_CFLAGS_OTHER})
 set(LibPSL_VERSION ${PC_LIBPSL_VERSION})

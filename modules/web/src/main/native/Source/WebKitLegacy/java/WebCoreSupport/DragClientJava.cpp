@@ -61,11 +61,11 @@ void DragClientJava::willPerformDragSourceAction(
 }
 
 //We work in window rather than view coordinates here
-OptionSet<DragSourceAction> DragClientJava::dragSourceActionMaskForPoint(const IntPoint&)
+DragSourceAction DragClientJava::dragSourceActionMaskForPoint(const IntPoint&)
 {
     //TODO: check input element and produce correct respond
     notImplemented();
-    return WebCore::anyDragSourceAction();
+    return DragSourceActionAny;
 }
 
 void DragClientJava::startDrag(DragItem item, DataTransfer& dataTransfer, Frame&)
@@ -127,7 +127,7 @@ void DragClientJava::startDrag(DragItem item, DataTransfer& dataTransfer, Frame&
     jobject jimage = dragImage.get() && dragImage.get()->javaImage()
                   ? jobject(*(dragImage.get()->javaImage())) : nullptr;
 
-    bool isImageSource = dragSourceAction && (*dragSourceAction == DragSourceAction::Image);
+    bool isImageSource = dragSourceAction & DragSourceActionImage;
 
     env->CallVoidMethod(m_webPage, mid, jimage,
         eventPos.x() - dragImageOrigin.x(),

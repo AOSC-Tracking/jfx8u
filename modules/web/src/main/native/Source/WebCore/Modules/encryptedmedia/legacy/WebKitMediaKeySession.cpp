@@ -234,9 +234,9 @@ String WebKitMediaKeySession::mediaKeysStorageDirectory() const
     return FileSystem::pathByAppendingComponent(storageDirectory, document->securityOrigin().data().databaseIdentifier());
 }
 
-bool WebKitMediaKeySession::virtualHasPendingActivity() const
+bool WebKitMediaKeySession::hasPendingActivity() const
 {
-    return m_keys && m_session;
+    return (m_keys && m_session) || ActiveDOMObject::hasPendingActivity();
 }
 
 void WebKitMediaKeySession::stop()

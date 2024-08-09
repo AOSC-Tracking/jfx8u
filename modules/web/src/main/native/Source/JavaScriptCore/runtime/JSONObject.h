@@ -31,15 +31,8 @@ namespace JSC {
 
 class JSONObject final : public JSNonFinalObject {
 public:
-    using Base = JSNonFinalObject;
+    typedef JSNonFinalObject Base;
     static constexpr unsigned StructureFlags = Base::StructureFlags | HasStaticPropertyTable;
-
-    template<typename CellType, SubspaceAccess>
-    static IsoSubspace* subspaceFor(VM& vm)
-    {
-        STATIC_ASSERT_ISO_SUBSPACE_SHARABLE(JSONObject, Base);
-        return &vm.plainObjectSpace;
-    }
 
     static JSONObject* create(VM& vm, Structure* structure)
     {
@@ -55,9 +48,11 @@ public:
 
     DECLARE_INFO;
 
+protected:
+    void finishCreation(VM&);
+
 private:
     JSONObject(VM&, Structure*);
-    void finishCreation(VM&);
 };
 
 JS_EXPORT_PRIVATE JSValue JSONParse(JSGlobalObject*, const String&);

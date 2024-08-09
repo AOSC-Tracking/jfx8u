@@ -29,7 +29,6 @@
 
 #pragma once
 
-#include "AudioBufferOptions.h"
 #include "ExceptionOr.h"
 #include <JavaScriptCore/Float32Array.h>
 #include <wtf/Lock.h>
@@ -42,7 +41,7 @@ class AudioBus;
 class AudioBuffer : public RefCounted<AudioBuffer> {
 public:
     static RefPtr<AudioBuffer> create(unsigned numberOfChannels, size_t numberOfFrames, float sampleRate);
-    static ExceptionOr<Ref<AudioBuffer>> create(const AudioBufferOptions&);
+
     // Returns nullptr if data is not a valid audio file.
     static RefPtr<AudioBuffer> createFromAudioFileData(const void* data, size_t dataSize, bool mixToMono, float sampleRate);
 
@@ -54,8 +53,6 @@ public:
     // Channel data access
     unsigned numberOfChannels() const { return m_channels.size(); }
     ExceptionOr<Ref<Float32Array>> getChannelData(unsigned channelIndex);
-    ExceptionOr<void> copyFromChannel(Ref<Float32Array>&&, unsigned channelNumber, unsigned bufferOffset);
-    ExceptionOr<void> copyToChannel(Ref<Float32Array>&&, unsigned channelNumber, unsigned startInChannel);
     Float32Array* channelData(unsigned channelIndex);
     void zero();
 
@@ -71,7 +68,7 @@ public:
     size_t memoryCost() const;
 
 private:
-    AudioBuffer(unsigned numberOfChannels, size_t length, float sampleRate);
+    AudioBuffer(unsigned numberOfChannels, size_t numberOfFrames, float sampleRate);
     explicit AudioBuffer(AudioBus&);
 
     void invalidate();

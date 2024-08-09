@@ -43,7 +43,7 @@ log = logging.getLogger('global')
 
 
 def add_newline(lines):
-    if not len(lines) or lines[-1] == '':
+    if lines and lines[-1] == '':
         return
     lines.append('')
 
@@ -83,16 +83,15 @@ class ObjCProtocolTypeConversionsImplementationGenerator(ObjCGenerator):
     def _generate_type_factory_category_interface(self, domains):
         lines = []
         for domain in domains:
-            domain_lines = []
-            domain_lines.append('@interface %sTypeConversions (%sDomain)' % (self.protocol_name(), domain.domain_name))
-            add_newline(domain_lines)
+            lines.append('@interface %sTypeConversions (%sDomain)' % (self.protocol_name(), domain.domain_name))
+            lines.append('')
 
             for declaration in self.type_declarations_for_domain(domain):
-                domain_lines.append(self._generate_type_factory_method_declaration(domain, declaration))
+                lines.append(self._generate_type_factory_method_declaration(domain, declaration))
 
-            add_newline(domain_lines)
-            domain_lines.append('@end')
-            lines.append(self.wrap_with_guard_for_condition(domain.condition, '\n'.join(domain_lines)))
+            add_newline(lines)
+            lines.append('@end')
+
         return '\n'.join(lines)
 
     def _generate_type_factory_method_declaration(self, domain, declaration):
@@ -101,23 +100,20 @@ class ObjCProtocolTypeConversionsImplementationGenerator(ObjCGenerator):
             resolved_type = resolved_type.aliased_type
         if isinstance(resolved_type, (ObjectType, ArrayType, PrimitiveType)):
             objc_type = self.objc_class_for_type(resolved_type)
-            return self.wrap_with_guard_for_condition(declaration.condition, '+ (void)_parse%s:(%s **)outValue fromPayload:(id)payload;' % (declaration.type.raw_name(), objc_type))
+            return '+ (void)_parse%s:(%s **)outValue fromPayload:(id)payload;' % (declaration.type.raw_name(), objc_type)
         if isinstance(resolved_type, EnumType):
-            return self.wrap_with_guard_for_condition(declaration.condition, '+ (void)_parse%s:(NSNumber **)outValue fromPayload:(id)payload;' % declaration.type.raw_name())
+            return '+ (void)_parse%s:(NSNumber **)outValue fromPayload:(id)payload;' % declaration.type.raw_name()
 
     def _generate_type_factory_category_implementation(self, domains):
         lines = []
         for domain in domains:
-            domain_lines = []
-            domain_lines.append('@implementation %sTypeConversions (%sDomain)' % (self.protocol_name(), domain.domain_name))
-            add_newline(domain_lines)
+            lines.append('@implementation %sTypeConversions (%sDomain)' % (self.protocol_name(), domain.domain_name))
+            lines.append('')
 
             for declaration in self.type_declarations_for_domain(domain):
-                domain_lines.append(self._generate_type_factory_method_implementation(domain, declaration))
-                add_newline(domain_lines)
-
-            domain_lines.append('@end')
-            lines.append(self.wrap_with_guard_for_condition(domain.condition, '\n'.join(domain_lines)))
+                lines.append(self._generate_type_factory_method_implementation(domain, declaration))
+                add_newline(lines)
+            lines.append('@end')
         return '\n'.join(lines)
 
     def _generate_type_factory_method_implementation(self, domain, declaration):
@@ -145,4 +141,4 @@ class ObjCProtocolTypeConversionsImplementationGenerator(ObjCGenerator):
             lines.append('    THROW_EXCEPTION_FOR_BAD_TYPE(payload, [NSDictionary class]);')
             lines.append('    *outValue = [[%s alloc] initWithPayload:payload];' % (objc_class))
         lines.append('}')
-        return self.wrap_with_guard_for_condition(declaration.condition, '\n'.join(lines))
+        return '\n'.join(lines)

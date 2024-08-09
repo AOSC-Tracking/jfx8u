@@ -30,9 +30,8 @@
 
 #include "FormattingContext.h"
 #include "LayoutBox.h"
-#include "LayoutContainerBox.h"
+#include "LayoutContainer.h"
 #include "LayoutState.h"
-#include "RuntimeEnabledFeatures.h"
 #include <wtf/IsoMallocInlines.h>
 
 namespace WebCore {
@@ -53,7 +52,7 @@ FloatingState::FloatItem::FloatItem(Position position, Display::Box absoluteDisp
 {
 }
 
-FloatingState::FloatingState(LayoutState& layoutState, const ContainerBox& formattingContextRoot)
+FloatingState::FloatingState(LayoutState& layoutState, const Container& formattingContextRoot)
     : m_layoutState(layoutState)
     , m_formattingContextRoot(makeWeakPtr(formattingContextRoot))
 {
@@ -61,15 +60,7 @@ FloatingState::FloatingState(LayoutState& layoutState, const ContainerBox& forma
 
 void FloatingState::append(FloatItem floatItem)
 {
-    ASSERT(is<ContainerBox>(*m_formattingContextRoot));
-#if ASSERT_ENABLED
-    if (!RuntimeEnabledFeatures::sharedFeatures().layoutFormattingContextIntegrationEnabled()) {
-        // The integration codepath does not construct a layout box for the float item.
-        ASSERT(m_floats.findMatching([&] (auto& entry) {
-            return entry.floatBox() == floatItem.floatBox();
-        }) == notFound);
-    }
-#endif
+    ASSERT(is<Container>(*m_formattingContextRoot));
 
     if (m_floats.isEmpty())
         return m_floats.append(floatItem);
@@ -96,7 +87,7 @@ void FloatingState::append(FloatItem floatItem)
     return m_floats.insert(0, floatItem);
 }
 
-Optional<PositionInContextRoot> FloatingState::bottom(const ContainerBox& formattingContextRoot, Clear type) const
+Optional<PositionInContextRoot> FloatingState::bottom(const Container& formattingContextRoot, Clear type) const
 {
     if (m_floats.isEmpty())
         return { };
@@ -106,7 +97,7 @@ Optional<PositionInContextRoot> FloatingState::bottom(const ContainerBox& format
     Optional<PositionInContextRoot> bottom;
     for (auto& floatItem : m_floats) {
         // Ignore floats from ancestor formatting contexts when the floating state is inherited.
-        if (!floatItem.isInFormattingContextOf(formattingContextRoot))
+        if (!floatItem.isDescendantOfFormattingRoot(formattingContextRoot))
             continue;
 
         if ((type == Clear::Left && !floatItem.isLeftPositioned())
@@ -123,7 +114,7 @@ Optional<PositionInContextRoot> FloatingState::bottom(const ContainerBox& format
     return bottom;
 }
 
-Optional<PositionInContextRoot> FloatingState::top(const ContainerBox& formattingContextRoot) const
+Optional<PositionInContextRoot> FloatingState::top(const Container& formattingContextRoot) const
 {
     if (m_floats.isEmpty())
         return { };
@@ -131,12 +122,12 @@ Optional<PositionInContextRoot> FloatingState::top(const ContainerBox& formattin
     Optional<PositionInContextRoot> top;
     for (auto& floatItem : m_floats) {
         // Ignore floats from ancestor formatting contexts when the floating state is inherited.
-        if (!floatItem.isInFormattingContextOf(formattingContextRoot))
+        if (!floatItem.isDescendantOfFormattingRoot(formattingContextRoot))
             continue;
 
         auto floatTop = floatItem.rectWithMargin().top();
         if (top) {
-            top = std::min<PositionInContextRoot>(*top, { floatTop });
+            top = std::max<PositionInContextRoot>(*top, { floatTop });
             continue;
         }
         top = PositionInContextRoot { floatTop };

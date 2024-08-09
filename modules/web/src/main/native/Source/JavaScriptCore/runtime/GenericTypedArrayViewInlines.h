@@ -87,9 +87,7 @@ template<typename Adaptor>
 RefPtr<GenericTypedArrayView<Adaptor>> GenericTypedArrayView<Adaptor>::tryCreate(
     RefPtr<ArrayBuffer>&& buffer, unsigned byteOffset, unsigned length)
 {
-    if (!buffer)
-        return nullptr;
-
+    ASSERT(buffer);
     if (!ArrayBufferView::verifySubRangeLength(*buffer, byteOffset, length, sizeof(typename Adaptor::Type))
         || !verifyByteOffsetAlignment(byteOffset, sizeof(typename Adaptor::Type))) {
         return nullptr;

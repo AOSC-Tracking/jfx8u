@@ -23,6 +23,8 @@
 #include "config.h"
 #include "JSAPIValueWrapper.h"
 
+#include "NumberObject.h"
+
 namespace JSC {
 
 STATIC_ASSERT_IS_TRIVIALLY_DESTRUCTIBLE(JSAPIValueWrapper);

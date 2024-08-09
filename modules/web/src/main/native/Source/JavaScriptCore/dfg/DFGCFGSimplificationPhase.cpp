@@ -30,8 +30,10 @@
 
 #include "DFGBasicBlockInlines.h"
 #include "DFGGraph.h"
+#include "DFGInsertionSet.h"
 #include "DFGPhase.h"
-#include "JSCJSValueInlines.h"
+#include "DFGValidate.h"
+#include "JSCInlines.h"
 
 namespace JSC { namespace DFG {
 
@@ -168,17 +170,17 @@ public:
                     Node* terminal = block->terminal();
                     if (terminal->child1()->hasConstant()) {
                         FrozenValue* value = terminal->child1()->constant();
-                        TriState found = TriState::False;
-                        BasicBlock* targetBlock = nullptr;
-                        for (unsigned i = data->cases.size(); found == TriState::False && i--;) {
+                        TriState found = FalseTriState;
+                        BasicBlock* targetBlock = 0;
+                        for (unsigned i = data->cases.size(); found == FalseTriState && i--;) {
                             found = data->cases[i].value.strictEqual(value);
-                            if (found == TriState::True)
+                            if (found == TrueTriState)
                                 targetBlock = data->cases[i].target.block;
                         }
 
-                        if (found == TriState::Indeterminate)
+                        if (found == MixedTriState)
                             break;
-                        if (found == TriState::False)
+                        if (found == FalseTriState)
                             targetBlock = data->fallThrough.block;
                         ASSERT(targetBlock);
 
@@ -278,7 +280,7 @@ private:
         }
     }
 
-    void keepOperandAlive(BasicBlock* block, BasicBlock* jettisonedBlock, NodeOrigin nodeOrigin, Operand operand)
+    void keepOperandAlive(BasicBlock* block, BasicBlock* jettisonedBlock, NodeOrigin nodeOrigin, VirtualRegister operand)
     {
         Node* livenessNode = jettisonedBlock->variablesAtHead.operand(operand);
         if (!livenessNode)
@@ -300,8 +302,10 @@ private:
 
     void jettisonBlock(BasicBlock* block, BasicBlock* jettisonedBlock, NodeOrigin boundaryNodeOrigin)
     {
-        for (size_t i = 0; i < jettisonedBlock->variablesAtHead.size(); ++i)
-            keepOperandAlive(block, jettisonedBlock, boundaryNodeOrigin, jettisonedBlock->variablesAtHead.operandForIndex(i));
+        for (size_t i = 0; i < jettisonedBlock->variablesAtHead.numberOfArguments(); ++i)
+            keepOperandAlive(block, jettisonedBlock, boundaryNodeOrigin, virtualRegisterForArgumentIncludingThis(i));
+        for (size_t i = 0; i < jettisonedBlock->variablesAtHead.numberOfLocals(); ++i)
+            keepOperandAlive(block, jettisonedBlock, boundaryNodeOrigin, virtualRegisterForLocal(i));
 
         fixJettisonedPredecessors(block, jettisonedBlock);
     }
@@ -348,8 +352,11 @@ private:
             // Time to insert ghosties for things that need to be kept alive in case we OSR
             // exit prior to hitting the firstBlock's terminal, and end up going down a
             // different path than secondBlock.
-            for (size_t i = 0; i < jettisonedBlock->variablesAtHead.size(); ++i)
-                keepOperandAlive(firstBlock, jettisonedBlock, boundaryNodeOrigin, jettisonedBlock->variablesAtHead.operandForIndex(i));
+
+            for (size_t i = 0; i < jettisonedBlock->variablesAtHead.numberOfArguments(); ++i)
+                keepOperandAlive(firstBlock, jettisonedBlock, boundaryNodeOrigin, virtualRegisterForArgumentIncludingThis(i));
+            for (size_t i = 0; i < jettisonedBlock->variablesAtHead.numberOfLocals(); ++i)
+                keepOperandAlive(firstBlock, jettisonedBlock, boundaryNodeOrigin, virtualRegisterForLocal(i));
         }
 
         for (size_t i = 0; i < secondBlock->phis.size(); ++i)

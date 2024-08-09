@@ -29,6 +29,7 @@
 #if ENABLE(B3_JIT)
 
 #include <wtf/CommaPrinter.h>
+#include <wtf/DataLog.h>
 
 namespace JSC { namespace B3 {
 

@@ -26,7 +26,6 @@
 #pragma once
 
 #include "ClipboardItemDataSource.h"
-#include "ExceptionCode.h"
 #include "FileReaderLoaderClient.h"
 #include <wtf/Optional.h>
 #include <wtf/Variant.h>
@@ -81,7 +80,7 @@ private:
         void didStartLoading() final { }
         void didReceiveData() final { }
         void didFinishLoading() final;
-        void didFail(ExceptionCode) final;
+        void didFail(int) final;
 
         String m_type;
         BufferOrString m_data;

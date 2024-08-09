@@ -51,7 +51,8 @@ float SizesAttributeParser::computeLength(double value, CSSUnitType type, const 
         return 0;
     auto& style = renderer->style();
 
-    CSSToLengthConversionData conversionData(&style, &style, renderer->parentStyle(), renderer);
+    CSSToLengthConversionData conversionData(&style, &style, renderer);
+
     // Because we evaluate "sizes" at parse time (before style has been resolved), the font metrics used for these specific units
     // are not available. The font selector's internal consistency isn't guaranteed just yet, so we can just temporarily clear
     // the pointer to it for the duration of the unit evaluation. This is acceptible because the style always comes from the
@@ -64,6 +65,7 @@ float SizesAttributeParser::computeLength(double value, CSSUnitType type, const 
         style.fontCascade().update(fontSelector.get());
         return result;
     }
+
     return clampTo<float>(CSSPrimitiveValue::computeNonCalcLengthDouble(conversionData, type, value));
 }
 
@@ -157,7 +159,7 @@ unsigned SizesAttributeParser::effectiveSizeDefaultValue()
     if (!renderer)
         return 0;
     auto& style = renderer->style();
-    return clampTo<float>(CSSPrimitiveValue::computeNonCalcLengthDouble({ &style, &style, renderer->parentStyle(), renderer }, CSSUnitType::CSS_VW, 100.0));
+    return clampTo<float>(CSSPrimitiveValue::computeNonCalcLengthDouble({ &style, &style, renderer }, CSSUnitType::CSS_VW, 100.0));
 }
 
 } // namespace WebCore

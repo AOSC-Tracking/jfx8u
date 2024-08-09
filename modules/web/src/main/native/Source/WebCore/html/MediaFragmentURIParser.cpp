@@ -98,7 +98,9 @@ MediaTime MediaFragmentURIParser::endTime()
 
 void MediaFragmentURIParser::parseFragments()
 {
-    auto fragmentString = m_url.fragmentIdentifier();
+    if (!m_url.hasFragmentIdentifier())
+        return;
+    String fragmentString = m_url.fragmentIdentifier();
     if (fragmentString.isEmpty())
         return;
 

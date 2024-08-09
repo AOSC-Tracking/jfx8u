@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2010 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -27,8 +27,6 @@
 
 #include "FloatRect.h"
 #include "Image.h"
-#include <wtf/EnumTraits.h>
-#include <wtf/OptionSet.h>
 #include <wtf/RefCounted.h>
 #include <wtf/Vector.h>
 
@@ -36,8 +34,7 @@ namespace WebCore {
 
 class Frame;
 class GraphicsContext;
-
-struct SimpleRange;
+class Range;
 
 // FIXME: Move PresentationTransition to TextIndicatorWindow, because it's about presentation.
 enum class TextIndicatorPresentationTransition : uint8_t {
@@ -52,65 +49,68 @@ enum class TextIndicatorPresentationTransition : uint8_t {
 };
 
 // Make sure to keep these in sync with the ones in Internals.idl.
-enum class TextIndicatorOption : uint16_t {
+enum TextIndicatorOption : uint16_t {
+    TextIndicatorOptionDefault = 0,
+
     // Use the styled text color instead of forcing black text (the default)
-    RespectTextColor = 1 << 0,
+    TextIndicatorOptionRespectTextColor = 1 << 0,
 
     // Paint backgrounds, even if they're not part of the Range
-    PaintBackgrounds = 1 << 1,
+    TextIndicatorOptionPaintBackgrounds = 1 << 1,
 
     // Don't restrict painting to the given Range
-    PaintAllContent = 1 << 2,
+    TextIndicatorOptionPaintAllContent = 1 << 2,
 
     // Take two snapshots:
     //    - one including the selection highlight and ignoring other painting-related options
     //    - one respecting the other painting-related options
-    IncludeSnapshotWithSelectionHighlight = 1 << 3,
+    TextIndicatorOptionIncludeSnapshotWithSelectionHighlight = 1 << 3,
 
     // Tightly fit the content instead of expanding to cover the bounds of the selection highlight
-    TightlyFitContent = 1 << 4,
+    TextIndicatorOptionTightlyFitContent = 1 << 4,
 
     // If there are any non-inline or replaced elements in the Range, indicate the bounding rect
     // of the range instead of the individual subrects, and don't restrict painting to the given Range
-    UseBoundingRectAndPaintAllContentForComplexRanges = 1 << 5,
+    TextIndicatorOptionUseBoundingRectAndPaintAllContentForComplexRanges = 1 << 5,
 
     // By default, TextIndicator removes any margin if the given Range matches the
     // selection Range. If this option is set, maintain the margin in any case.
-    IncludeMarginIfRangeMatchesSelection = 1 << 6,
+    TextIndicatorOptionIncludeMarginIfRangeMatchesSelection = 1 << 6,
 
     // By default, TextIndicator clips the indicated rects to the visible content rect.
     // If this option is set, expand the clip rect outward so that slightly offscreen content will be included.
-    ExpandClipBeyondVisibleRect = 1 << 7,
+    TextIndicatorOptionExpandClipBeyondVisibleRect = 1 << 7,
 
     // By default, TextIndicator clips the indicated rects to the visible content rect.
     // If this option is set, do not clip to the visible rect.
-    DoNotClipToVisibleRect = 1 << 8,
+    TextIndicatorOptionDoNotClipToVisibleRect = 1 << 8,
 
     // Include an additional snapshot of everything in view, with the exception of nodes within the currently selected range.
-    IncludeSnapshotOfAllVisibleContentWithoutSelection = 1 << 9,
+    TextIndicatorOptionIncludeSnapshotOfAllVisibleContentWithoutSelection = 1 << 9,
 
     // By default, TextIndicator uses text rects to size the snapshot. Enabling this flag causes it to use the bounds of the
     // selection rects that would enclose the given Range instead.
     // Currently, this is only supported on iOS.
-    UseSelectionRectForSizing = 1 << 10,
+    TextIndicatorOptionUseSelectionRectForSizing = 1 << 10,
 
     // Compute a background color to use when rendering a platter around the content image, falling back to a default if the
     // content's background is too complex to be captured by a single color.
-    ComputeEstimatedBackgroundColor = 1 << 11,
+    TextIndicatorOptionComputeEstimatedBackgroundColor = 1 << 11,
 };
+typedef uint16_t TextIndicatorOptions;
 
 struct TextIndicatorData {
     FloatRect selectionRectInRootViewCoordinates;
     FloatRect textBoundingRectInRootViewCoordinates;
     FloatRect contentImageWithoutSelectionRectInRootViewCoordinates;
     Vector<FloatRect> textRectsInBoundingRectCoordinates;
-    float contentImageScaleFactor { 1 };
+    float contentImageScaleFactor;
     RefPtr<Image> contentImageWithHighlight;
     RefPtr<Image> contentImageWithoutSelection;
     RefPtr<Image> contentImage;
     Color estimatedBackgroundColor;
-    TextIndicatorPresentationTransition presentationTransition { TextIndicatorPresentationTransition::None };
-    OptionSet<TextIndicatorOption> options;
+    TextIndicatorPresentationTransition presentationTransition;
+    TextIndicatorOptions options;
 };
 
 class TextIndicator : public RefCounted<TextIndicator> {
@@ -122,8 +122,8 @@ public:
     constexpr static float defaultVerticalMargin { 1 };
 
     WEBCORE_EXPORT static Ref<TextIndicator> create(const TextIndicatorData&);
-    WEBCORE_EXPORT static RefPtr<TextIndicator> createWithSelectionInFrame(Frame&, OptionSet<TextIndicatorOption>, TextIndicatorPresentationTransition, FloatSize margin = FloatSize(defaultHorizontalMargin, defaultVerticalMargin));
-    WEBCORE_EXPORT static RefPtr<TextIndicator> createWithRange(const SimpleRange&, OptionSet<TextIndicatorOption>, TextIndicatorPresentationTransition, FloatSize margin = FloatSize(defaultHorizontalMargin, defaultVerticalMargin));
+    WEBCORE_EXPORT static RefPtr<TextIndicator> createWithSelectionInFrame(Frame&, TextIndicatorOptions, TextIndicatorPresentationTransition, FloatSize margin = FloatSize(defaultHorizontalMargin, defaultVerticalMargin));
+    WEBCORE_EXPORT static RefPtr<TextIndicator> createWithRange(const Range&, TextIndicatorOptions, TextIndicatorPresentationTransition, FloatSize margin = FloatSize(defaultHorizontalMargin, defaultVerticalMargin));
 
     WEBCORE_EXPORT ~TextIndicator();
 
@@ -146,35 +146,3 @@ private:
 };
 
 } // namespace WebKit
-
-namespace WTF {
-
-template<> struct EnumTraits<WebCore::TextIndicatorOption> {
-    using values = EnumValues<
-        WebCore::TextIndicatorOption,
-        WebCore::TextIndicatorOption::RespectTextColor,
-        WebCore::TextIndicatorOption::PaintBackgrounds,
-        WebCore::TextIndicatorOption::PaintAllContent,
-        WebCore::TextIndicatorOption::IncludeSnapshotWithSelectionHighlight,
-        WebCore::TextIndicatorOption::TightlyFitContent,
-        WebCore::TextIndicatorOption::UseBoundingRectAndPaintAllContentForComplexRanges,
-        WebCore::TextIndicatorOption::IncludeMarginIfRangeMatchesSelection,
-        WebCore::TextIndicatorOption::ExpandClipBeyondVisibleRect,
-        WebCore::TextIndicatorOption::DoNotClipToVisibleRect,
-        WebCore::TextIndicatorOption::IncludeSnapshotOfAllVisibleContentWithoutSelection,
-        WebCore::TextIndicatorOption::UseSelectionRectForSizing,
-        WebCore::TextIndicatorOption::ComputeEstimatedBackgroundColor
-    >;
-};
-
-template<> struct EnumTraits<WebCore::TextIndicatorPresentationTransition> {
-    using values = EnumValues<
-        WebCore::TextIndicatorPresentationTransition,
-        WebCore::TextIndicatorPresentationTransition::None,
-        WebCore::TextIndicatorPresentationTransition::Bounce,
-        WebCore::TextIndicatorPresentationTransition::BounceAndCrossfade,
-        WebCore::TextIndicatorPresentationTransition::FadeIn
-    >;
-};
-
-} // namespace WTF

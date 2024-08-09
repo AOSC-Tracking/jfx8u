@@ -28,7 +28,6 @@
 
 #if ENABLE(LAYOUT_FORMATTING_CONTEXT)
 
-#include "TableFormattingContext.h"
 #include <wtf/IsoMallocInlines.h>
 
 namespace WebCore {
@@ -36,9 +35,8 @@ namespace Layout {
 
 WTF_MAKE_ISO_ALLOCATED_IMPL(TableFormattingState);
 
-TableFormattingState::TableFormattingState(Ref<FloatingState>&& floatingState, LayoutState& layoutState, const ContainerBox& tableBox)
+TableFormattingState::TableFormattingState(Ref<FloatingState>&& floatingState, LayoutState& layoutState)
     : FormattingState(WTFMove(floatingState), Type::Table, layoutState)
-    , m_tableGrid(TableFormattingContext::ensureTableGrid(tableBox))
 {
 }
 

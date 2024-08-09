@@ -136,15 +136,20 @@ void RenderReplaced::intrinsicSizeChanged()
 
 bool RenderReplaced::shouldDrawSelectionTint() const
 {
-    return selectionState() != HighlightState::None && !document().printing();
+    return selectionState() != SelectionNone && !document().printing();
 }
 
 inline static bool draggedContentContainsReplacedElement(const Vector<RenderedDocumentMarker*>& markers, const Element& element)
 {
+    if (markers.isEmpty())
+        return false;
+
     for (auto* marker : markers) {
-        if (WTF::get<RefPtr<Node>>(marker->data()) == &element)
+        auto& draggedContentData = WTF::get<DocumentMarker::DraggedContentData>(marker->data());
+        if (draggedContentData.targetNode == &element)
             return true;
     }
+
     return false;
 }
 
@@ -164,7 +169,9 @@ void RenderReplaced::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
         return;
     }
 
-    SetLayoutNeededForbiddenScope scope(*this);
+#ifndef NDEBUG
+    SetLayoutNeededForbiddenScope scope(this);
+#endif
 
     GraphicsContextStateSaver savedGraphicsContext(paintInfo.context(), false);
     if (element() && element()->parentOrShadowHostElement()) {
@@ -199,20 +206,23 @@ void RenderReplaced::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
 
     bool drawSelectionTint = shouldDrawSelectionTint();
     if (paintInfo.phase == PaintPhase::Selection) {
-        if (selectionState() == HighlightState::None)
+        if (selectionState() == SelectionNone)
             return;
         drawSelectionTint = false;
     }
 
     bool completelyClippedOut = false;
     if (style().hasBorderRadius()) {
-        completelyClippedOut = size().isEmpty();
-        if (!completelyClippedOut) {
+        LayoutRect borderRect = LayoutRect(adjustedPaintOffset, size());
+
+        if (borderRect.isEmpty())
+            completelyClippedOut = true;
+        else {
             // Push a clip if we have a border radius, since we want to round the foreground content that gets painted.
             paintInfo.context().save();
-            auto pixelSnappedRoundedRect = style().getRoundedInnerBorderFor(paintRect,
-                paddingTop() + borderTop(), paddingBottom() + borderBottom(), paddingLeft() + borderLeft(), paddingRight() + borderRight(), true, true).pixelSnappedRoundedRectForPainting(document().deviceScaleFactor());
-            clipRoundedInnerRect(paintInfo.context(), paintRect, pixelSnappedRoundedRect);
+            FloatRoundedRect roundedInnerRect = FloatRoundedRect(style().getRoundedInnerBorderFor(paintRect,
+                paddingTop() + borderTop(), paddingBottom() + borderBottom(), paddingLeft() + borderLeft(), paddingRight() + borderRight(), true, true));
+            clipRoundedInnerRect(paintInfo.context(), paintRect, roundedInnerRect);
         }
     }
 
@@ -423,13 +433,6 @@ LayoutRect RenderReplaced::replacedContentRect(const LayoutSize& intrinsicSize) 
     return finalRect;
 }
 
-RoundedRect RenderReplaced::roundedContentBoxRect() const
-{
-    return style().getRoundedInnerBorderFor(borderBoxRect(),
-        borderTop() + paddingTop(), borderBottom() + paddingBottom(),
-        borderLeft() + paddingLeft(), borderRight() + paddingRight());
-}
-
 void RenderReplaced::computeIntrinsicRatioInformation(FloatSize& intrinsicSize, double& intrinsicRatio) const
 {
     // If there's an embeddedContentBox() of a remote, referenced document available, this code-path should never be used.
@@ -587,14 +590,9 @@ void RenderReplaced::computePreferredLogicalWidths()
 
     // We cannot resolve any percent logical width here as the available logical
     // width may not be set on our containing block.
-    if (style().logicalWidth().isPercentOrCalculated()) {
-        double intrinsicRatio = 0;
-        FloatSize constrainedSize;
-        // For images with explicit width/height this updates the instrinsic size as a side effect.
-        computeAspectRatioInformationForRenderBox(embeddedContentBox(), constrainedSize, intrinsicRatio);
-
+    if (style().logicalWidth().isPercentOrCalculated())
         computeIntrinsicLogicalWidths(m_minPreferredLogicalWidth, m_maxPreferredLogicalWidth);
-    } else
+    else
         m_minPreferredLogicalWidth = m_maxPreferredLogicalWidth = computeReplacedLogicalWidth(ComputePreferred);
 
     const RenderStyle& styleToUse = style();
@@ -624,7 +622,7 @@ VisiblePosition RenderReplaced::positionForPoint(const LayoutPoint& point, const
     InlineBox* box = inlineBoxWrapper();
     const RootInlineBox* rootBox = box ? &box->root() : 0;
 
-    LayoutUnit top = rootBox ? rootBox->selectionTop(RootInlineBox::ForHitTesting::Yes) : logicalTop();
+    LayoutUnit top = rootBox ? rootBox->selectionTop() : logicalTop();
     LayoutUnit bottom = rootBox ? rootBox->selectionBottom() : logicalBottom();
 
     LayoutUnit blockDirectionPosition = isHorizontalWritingMode() ? point.y() + y() : point.x() + x();
@@ -674,7 +672,7 @@ LayoutRect RenderReplaced::localSelectionRect(bool checkWhetherSelected) const
     return LayoutRect(newLogicalTop, 0_lu, rootBox.selectionHeight(), height());
 }
 
-void RenderReplaced::setSelectionState(HighlightState state)
+void RenderReplaced::setSelectionState(SelectionState state)
 {
     // The selection state for our containing block hierarchy is updated by the base class call.
     RenderBox::setSelectionState(state);
@@ -685,21 +683,21 @@ void RenderReplaced::setSelectionState(HighlightState state)
 
 bool RenderReplaced::isSelected() const
 {
-    HighlightState state = selectionState();
-    if (state == HighlightState::None)
+    SelectionState state = selectionState();
+    if (state == SelectionNone)
         return false;
-    if (state == HighlightState::Inside)
+    if (state == SelectionInside)
         return true;
 
     auto selectionStart = view().selection().startOffset();
     auto selectionEnd = view().selection().endOffset();
-    if (state == HighlightState::Start)
+    if (state == SelectionStart)
         return !selectionStart;
 
     unsigned end = element()->hasChildNodes() ? element()->countChildNodes() : 1;
-    if (state == HighlightState::End)
+    if (state == SelectionEnd)
         return selectionEnd == end;
-    if (state == HighlightState::Both)
+    if (state == SelectionBoth)
         return !selectionStart && selectionEnd == end;
     ASSERT_NOT_REACHED();
     return false;

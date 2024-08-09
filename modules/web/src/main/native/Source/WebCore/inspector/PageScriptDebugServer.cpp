@@ -116,7 +116,7 @@ void PageScriptDebugServer::runEventLoopWhilePausedInternal()
     m_page.incrementNestedRunLoopCount();
 
     while (!m_doneProcessingDebuggerEvents) {
-        if (!platformShouldContinueRunningEventLoopWhilePaused())
+        if (RunLoop::cycle() == RunLoop::CycleResult::Stop)
             break;
     }
 
@@ -135,6 +135,8 @@ void PageScriptDebugServer::reportException(JSGlobalObject* state, JSC::Exceptio
 
 void PageScriptDebugServer::setJavaScriptPaused(const PageGroup& pageGroup, bool paused)
 {
+    setMainThreadCallbacksPaused(paused);
+
     for (auto& page : pageGroup.pages()) {
         for (Frame* frame = &page->mainFrame(); frame; frame = frame->tree().traverseNext())
             setJavaScriptPaused(*frame, paused);
@@ -173,12 +175,5 @@ void PageScriptDebugServer::setJavaScriptPaused(Frame& frame, bool paused)
         }
     }
 }
-
-#if !PLATFORM(MAC)
-bool PageScriptDebugServer::platformShouldContinueRunningEventLoopWhilePaused()
-{
-    return RunLoop::cycle() != RunLoop::CycleResult::Stop;
-}
-#endif // !PLATFORM(MAC)
 
 } // namespace WebCore

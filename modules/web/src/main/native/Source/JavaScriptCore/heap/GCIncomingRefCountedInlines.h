@@ -59,7 +59,7 @@ template<typename T>
 template<typename FilterFunctionType>
 bool GCIncomingRefCounted<T>::filterIncomingReferences(FilterFunctionType&& filterFunction)
 {
-    constexpr bool verbose = false;
+    const bool verbose = false;
 
     if (verbose)
         dataLog("Filtering incoming references.\n");

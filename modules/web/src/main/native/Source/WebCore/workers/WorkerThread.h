@@ -68,7 +68,6 @@ public:
     bool shouldBypassMainWorldContentSecurityPolicy;
     MonotonicTime timeOrigin;
     ReferrerPolicy referrerPolicy;
-    bool requestAnimationFrameEnabled;
 
     WorkerParameters isolatedCopy() const;
 };

@@ -29,6 +29,7 @@
 #include "ClonedArguments.h"
 #include "DebuggerPrimitives.h"
 #include "InlineCallFrame.h"
+#include "Interpreter.h"
 #include "JSCInlines.h"
 #include "RegisterAtOffsetList.h"
 #include "WasmCallee.h"
@@ -57,8 +58,8 @@ StackVisitor::StackVisitor(CallFrame* startFrame, VM& vm)
         }
 
     } else {
-        m_frame.m_entryFrame = nullptr;
-        topFrame = nullptr;
+        m_frame.m_entryFrame = 0;
+        topFrame = 0;
     }
     m_frame.m_callerIsEntryFrame = false;
     readFrame(topFrame);
@@ -183,7 +184,7 @@ void StackVisitor::readNonInlinedFrame(CallFrame* callFrame, CodeOrigin* codeOri
     }
 
 #if ENABLE(DFG_JIT)
-    m_frame.m_inlineCallFrame = nullptr;
+    m_frame.m_inlineCallFrame = 0;
 #endif
 }
 
@@ -428,9 +429,9 @@ void StackVisitor::Frame::retrieveExpressionInfo(int& divot, int& startOffset, i
 
 void StackVisitor::Frame::setToEnd()
 {
-    m_callFrame = nullptr;
+    m_callFrame = 0;
 #if ENABLE(DFG_JIT)
-    m_inlineCallFrame = nullptr;
+    m_inlineCallFrame = 0;
 #endif
     m_isWasmFrame = false;
 }

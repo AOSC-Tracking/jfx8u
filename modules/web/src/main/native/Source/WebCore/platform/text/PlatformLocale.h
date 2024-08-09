@@ -116,7 +116,11 @@ public:
     // display to the user. If an implementation doesn't support
     // localized dates the function should return an empty string.
     // FormatType can be used to specify if you want the short format.
-    virtual String formatDateTime(const DateComponents&, FormatType = FormatTypeUnspecified);
+#if !PLATFORM(IOS_FAMILY)
+    String formatDateTime(const DateComponents&, FormatType = FormatTypeUnspecified);
+#else
+    virtual String formatDateTime(const DateComponents&, FormatType = FormatTypeUnspecified) = 0;
+#endif // !PLATFORM(IOS_FAMILY)
 #endif
 
     virtual ~Locale();

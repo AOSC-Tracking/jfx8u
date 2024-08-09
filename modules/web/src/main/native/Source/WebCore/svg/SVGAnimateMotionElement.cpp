@@ -46,6 +46,7 @@ using namespace SVGNames;
 
 inline SVGAnimateMotionElement::SVGAnimateMotionElement(const QualifiedName& tagName, Document& document)
     : SVGAnimationElement(tagName, document)
+    , m_hasToPointAtEndOfDuration(false)
 {
     setCalcMode(CalcMode::Paced);
     ASSERT(hasTagName(animateMotionTag));
@@ -108,8 +109,8 @@ void SVGAnimateMotionElement::parseAttribute(const QualifiedName& name, const At
 
 SVGAnimateMotionElement::RotateMode SVGAnimateMotionElement::rotateMode() const
 {
-    static MainThreadNeverDestroyed<const AtomString> autoVal("auto", AtomString::ConstructFromLiteral);
-    static MainThreadNeverDestroyed<const AtomString> autoReverse("auto-reverse", AtomString::ConstructFromLiteral);
+    static NeverDestroyed<const AtomString> autoVal("auto", AtomString::ConstructFromLiteral);
+    static NeverDestroyed<const AtomString> autoReverse("auto-reverse", AtomString::ConstructFromLiteral);
     const AtomString& rotate = getAttribute(SVGNames::rotateAttr);
     if (rotate == autoVal)
         return RotateAuto;
@@ -160,25 +161,27 @@ void SVGAnimateMotionElement::stopAnimation(SVGElement* targetElement)
 
 bool SVGAnimateMotionElement::calculateToAtEndOfDurationValue(const String& toAtEndOfDurationString)
 {
-    m_toPointAtEndOfDuration = parsePoint(toAtEndOfDurationString).valueOr(FloatPoint { });
+    parsePoint(toAtEndOfDurationString, m_toPointAtEndOfDuration);
+    m_hasToPointAtEndOfDuration = true;
     return true;
 }
 
 bool SVGAnimateMotionElement::calculateFromAndToValues(const String& fromString, const String& toString)
 {
-    m_toPointAtEndOfDuration = WTF::nullopt;
-    m_fromPoint = parsePoint(fromString).valueOr(FloatPoint { });
-    m_toPoint = parsePoint(toString).valueOr(FloatPoint { });
+    m_hasToPointAtEndOfDuration = false;
+    parsePoint(fromString, m_fromPoint);
+    parsePoint(toString, m_toPoint);
     return true;
 }
 
 bool SVGAnimateMotionElement::calculateFromAndByValues(const String& fromString, const String& byString)
 {
-    m_toPointAtEndOfDuration = WTF::nullopt;
+    m_hasToPointAtEndOfDuration = false;
     if (animationMode() == AnimationMode::By && !isAdditive())
         return false;
-    m_fromPoint = parsePoint(fromString).valueOr(FloatPoint { });
-    auto byPoint = parsePoint(byString).valueOr(FloatPoint { });
+    parsePoint(fromString, m_fromPoint);
+    FloatPoint byPoint;
+    parsePoint(byString, byPoint);
     m_toPoint = FloatPoint(m_fromPoint.x() + byPoint.x(), m_fromPoint.y() + byPoint.y());
     return true;
 }
@@ -219,8 +222,8 @@ void SVGAnimateMotionElement::calculateAnimatedValue(float percentage, unsigned 
 
     if (animationMode() != AnimationMode::Path) {
         FloatPoint toPointAtEndOfDuration = m_toPoint;
-        if (isAccumulated() && repeatCount && m_toPointAtEndOfDuration)
-            toPointAtEndOfDuration = *m_toPointAtEndOfDuration;
+        if (isAccumulated() && repeatCount && m_hasToPointAtEndOfDuration)
+            toPointAtEndOfDuration = m_toPointAtEndOfDuration;
 
         float animatedX = 0;
         animateAdditiveNumber(percentage, repeatCount, m_fromPoint.x(), m_toPoint.x(), toPointAtEndOfDuration.x(), animatedX);
@@ -272,13 +275,13 @@ void SVGAnimateMotionElement::applyResultsToTarget()
 
 Optional<float> SVGAnimateMotionElement::calculateDistance(const String& fromString, const String& toString)
 {
-    auto from = parsePoint(fromString);
-    if (!from)
+    FloatPoint from;
+    FloatPoint to;
+    if (!parsePoint(fromString, from))
         return { };
-    auto to = parsePoint(toString);
-    if (!to)
+    if (!parsePoint(toString, to))
         return { };
-    auto diff = *to - *from;
+    FloatSize diff = to - from;
     return std::hypot(diff.width(), diff.height());
 }
 

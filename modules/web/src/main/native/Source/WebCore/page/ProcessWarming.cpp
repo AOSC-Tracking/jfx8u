@@ -43,11 +43,6 @@
 #include "XMLNSNames.h"
 #include "XMLNames.h"
 
-#if ENABLE(GPU_DRIVER_PREWARMING)
-#include "GPUDevice.h"
-#include "GPURequestAdapterOptions.h"
-#endif
-
 namespace WebCore {
 
 void ProcessWarming::initializeNames()
@@ -82,10 +77,6 @@ void ProcessWarming::prewarmGlobally()
 
 #if ENABLE(TELEPHONE_NUMBER_DETECTION)
     TelephoneNumberDetector::isSupported();
-#endif
-
-#if ENABLE(GPU_DRIVER_PREWARMING)
-    GPUDevice::tryCreate(WTF::nullopt);
 #endif
 }
 

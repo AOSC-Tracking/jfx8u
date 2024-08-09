@@ -1,6 +1,6 @@
 /*
  *  Copyright (C) 1999-2001 Harri Porten (porten@kde.org)
- *  Copyright (C) 2003-2020 Apple Inc. All rights reserved.
+ *  Copyright (C) 2003-2006, 2008-2009, 2013, 2016 Apple Inc. All rights reserved.
  *  Copyright (C) 2007 Samuel Weinig <sam@webkit.org>
  *  Copyright (C) 2009 Google, Inc. All rights reserved.
  *  Copyright (C) 2012 Ericsson AB. All rights reserved.
@@ -32,13 +32,15 @@ template<typename JSClass>
 class IDLOperationReturningPromise {
 public:
     using ClassParameter = JSClass*;
-    using Operation = JSC::EncodedJSValue(JSC::JSGlobalObject*, JSC::CallFrame*, ClassParameter, Ref<DeferredPromise>&&);
-    using StaticOperation = JSC::EncodedJSValue(JSC::JSGlobalObject*, JSC::CallFrame*, Ref<DeferredPromise>&&);
+    using Operation = JSC::EncodedJSValue(JSC::JSGlobalObject*, JSC::CallFrame*, ClassParameter, Ref<DeferredPromise>&&, JSC::ThrowScope&);
+    using StaticOperation = JSC::EncodedJSValue(JSC::JSGlobalObject*, JSC::CallFrame*, Ref<DeferredPromise>&&, JSC::ThrowScope&);
 
     template<Operation operation, CastedThisErrorBehavior shouldThrow = CastedThisErrorBehavior::RejectPromise>
     static JSC::EncodedJSValue call(JSC::JSGlobalObject& lexicalGlobalObject, JSC::CallFrame& callFrame, const char* operationName)
     {
         return JSC::JSValue::encode(callPromiseFunction(lexicalGlobalObject, callFrame, [&operationName] (JSC::JSGlobalObject& lexicalGlobalObject, JSC::CallFrame& callFrame, Ref<DeferredPromise>&& promise) {
+            auto throwScope = DECLARE_THROW_SCOPE(JSC::getVM(&lexicalGlobalObject));
+
             auto* thisObject = IDLOperation<JSClass>::cast(lexicalGlobalObject, callFrame);
             if (shouldThrow != CastedThisErrorBehavior::Assert && UNLIKELY(!thisObject))
                 return rejectPromiseWithThisTypeError(promise.get(), JSClass::info()->className, operationName);
@@ -47,7 +49,7 @@ public:
             ASSERT_GC_OBJECT_INHERITS(thisObject, JSClass::info());
 
             // FIXME: We should refactor the binding generated code to use references for lexicalGlobalObject and thisObject.
-            return operation(&lexicalGlobalObject, &callFrame, thisObject, WTFMove(promise));
+            return operation(&lexicalGlobalObject, &callFrame, thisObject, WTFMove(promise), throwScope);
         }));
     }
 
@@ -56,6 +58,8 @@ public:
     template<typename IDLOperation<JSClass>::Operation operation, CastedThisErrorBehavior shouldThrow = CastedThisErrorBehavior::RejectPromise>
     static JSC::EncodedJSValue callReturningOwnPromise(JSC::JSGlobalObject& lexicalGlobalObject, JSC::CallFrame& callFrame, const char* operationName)
     {
+        auto throwScope = DECLARE_THROW_SCOPE(JSC::getVM(&lexicalGlobalObject));
+
         auto* thisObject = IDLOperation<JSClass>::cast(lexicalGlobalObject, callFrame);
         if (shouldThrow != CastedThisErrorBehavior::Assert && UNLIKELY(!thisObject))
             return rejectPromiseWithThisTypeError(lexicalGlobalObject, JSClass::info()->className, operationName);
@@ -64,15 +68,17 @@ public:
         ASSERT_GC_OBJECT_INHERITS(thisObject, JSClass::info());
 
         // FIXME: We should refactor the binding generated code to use references for lexicalGlobalObject and thisObject.
-        return operation(&lexicalGlobalObject, &callFrame, thisObject);
+        return operation(&lexicalGlobalObject, &callFrame, thisObject, throwScope);
     }
 
     template<StaticOperation operation, CastedThisErrorBehavior shouldThrow = CastedThisErrorBehavior::RejectPromise>
     static JSC::EncodedJSValue callStatic(JSC::JSGlobalObject& lexicalGlobalObject, JSC::CallFrame& callFrame, const char*)
     {
         return JSC::JSValue::encode(callPromiseFunction(lexicalGlobalObject, callFrame, [] (JSC::JSGlobalObject& lexicalGlobalObject, JSC::CallFrame& callFrame, Ref<DeferredPromise>&& promise) {
+            auto throwScope = DECLARE_THROW_SCOPE(JSC::getVM(&lexicalGlobalObject));
+
             // FIXME: We should refactor the binding generated code to use references for lexicalGlobalObject.
-            return operation(&lexicalGlobalObject, &callFrame, WTFMove(promise));
+            return operation(&lexicalGlobalObject, &callFrame, WTFMove(promise), throwScope);
         }));
     }
 
@@ -81,8 +87,10 @@ public:
     template<typename IDLOperation<JSClass>::StaticOperation operation, CastedThisErrorBehavior shouldThrow = CastedThisErrorBehavior::RejectPromise>
     static JSC::EncodedJSValue callStaticReturningOwnPromise(JSC::JSGlobalObject& lexicalGlobalObject, JSC::CallFrame& callFrame, const char*)
     {
+        auto throwScope = DECLARE_THROW_SCOPE(JSC::getVM(&lexicalGlobalObject));
+
         // FIXME: We should refactor the binding generated code to use references for lexicalGlobalObject.
-        return operation(&lexicalGlobalObject, &callFrame);
+        return operation(&lexicalGlobalObject, &callFrame, throwScope);
     }
 };
 

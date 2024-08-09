@@ -31,7 +31,7 @@ class SVGVKernElement final : public SVGElement {
 public:
     static Ref<SVGVKernElement> create(const QualifiedName&, Document&);
 
-    Optional<SVGKerningPair> buildVerticalKerningPair() const;
+    bool buildVerticalKerningPair(SVGKerningPair& kerningPair) const;
 
 private:
     SVGVKernElement(const QualifiedName&, Document&);

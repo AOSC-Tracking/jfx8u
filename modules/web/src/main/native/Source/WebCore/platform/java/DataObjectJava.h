@@ -200,7 +200,7 @@ public:
 
         // |baseURL| can be NULL
         if (baseURL)
-            *baseURL = m_htmlBaseUrl.string();
+            *baseURL = m_htmlBaseUrl;
         return m_textHtml;
     }
 

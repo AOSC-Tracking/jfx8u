@@ -36,7 +36,6 @@
 #include "HTTPHeaderNames.h"
 #include "ServiceWorkerTypes.h"
 #include "StoredCredentialsPolicy.h"
-#include <wtf/EnumTraits.h>
 #include <wtf/HashSet.h>
 #include <wtf/Vector.h>
 #include <wtf/text/WTFString.h>
@@ -51,7 +50,7 @@ static constexpr unsigned bitWidthOfSendCallbackPolicy = 1;
 
 // FIXME: These options are named poorly. We only implement force disabling content sniffing, not enabling it,
 // and even that only on some platforms.
-enum class ContentSniffingPolicy : bool {
+enum class ContentSniffingPolicy : uint8_t {
     SniffContent,
     DoNotSniffContent
 };
@@ -93,7 +92,7 @@ enum class CachingPolicy : uint8_t {
 };
 static constexpr unsigned bitWidthOfCachingPolicy = 1;
 
-enum class ClientCredentialPolicy : bool {
+enum class ClientCredentialPolicy : uint8_t {
     CannotAskClientForCredentials,
     MayAskClientForCredentials
 };
@@ -126,9 +125,9 @@ static constexpr unsigned bitWidthOfApplicationCacheMode = 1;
 
 // FIXME: These options are named poorly. We only implement force disabling content encoding sniffing, not enabling it,
 // and even that only on some platforms.
-enum class ContentEncodingSniffingPolicy : bool {
+enum class ContentEncodingSniffingPolicy : uint8_t {
     Sniff,
-    DoNotSniff
+    DoNotSniff,
 };
 static constexpr unsigned bitWidthOfContentEncodingSniffingPolicy = 1;
 
@@ -225,15 +224,6 @@ struct ResourceLoaderOptions : public FetchOptions {
 } // namespace WebCore
 
 namespace WTF {
-
-template<> struct EnumTraits<WebCore::PreflightPolicy> {
-    using values = EnumValues<
-        WebCore::PreflightPolicy,
-        WebCore::PreflightPolicy::Consider,
-        WebCore::PreflightPolicy::Force,
-        WebCore::PreflightPolicy::Prevent
-    >;
-};
 
 template<> struct EnumTraits<WebCore::ServiceWorkersMode> {
     using values = EnumValues<

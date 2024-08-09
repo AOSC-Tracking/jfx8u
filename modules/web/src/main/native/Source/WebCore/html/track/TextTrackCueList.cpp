@@ -26,7 +26,7 @@
 
 #include "config.h"
 
-#if ENABLE(VIDEO)
+#if ENABLE(VIDEO_TRACK)
 
 #include "TextTrackCueList.h"
 
@@ -47,11 +47,6 @@ static inline bool cueSortsBefore(const RefPtr<TextTrackCue>& a, const RefPtr<Te
         return true;
 
     return a->startMediaTime() == b->startMediaTime() && a->endMediaTime() > b->endMediaTime();
-}
-
-Ref<TextTrackCueList> TextTrackCueList::create()
-{
-    return adoptRef(*new TextTrackCueList);
 }
 
 unsigned TextTrackCueList::cueIndex(const TextTrackCue& cue) const

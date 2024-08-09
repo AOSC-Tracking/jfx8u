@@ -24,7 +24,6 @@
 
 #pragma once
 
-#include "ExceptionOr.h"
 #include <memory>
 #include <wtf/Forward.h>
 #include <wtf/MessageQueue.h>
@@ -51,27 +50,29 @@ public:
     ~AsyncAudioDecoder();
 
     // Must be called on the main thread.
-    void decodeAsync(Ref<JSC::ArrayBuffer>&& audioData, float sampleRate, Function<void(ExceptionOr<Ref<AudioBuffer>>&&)>&&);
+    void decodeAsync(Ref<JSC::ArrayBuffer>&& audioData, float sampleRate, RefPtr<AudioBufferCallback>&& successCallback, RefPtr<AudioBufferCallback>&& errorCallback);
 
 private:
     class DecodingTask {
         WTF_MAKE_NONCOPYABLE(DecodingTask);
         WTF_MAKE_FAST_ALLOCATED;
     public:
-        DecodingTask(Ref<JSC::ArrayBuffer>&& audioData, float sampleRate, Function<void(ExceptionOr<Ref<AudioBuffer>>&&)>&& callback);
+        DecodingTask(Ref<JSC::ArrayBuffer>&& audioData, float sampleRate, RefPtr<AudioBufferCallback>&& successCallback, RefPtr<AudioBufferCallback>&& errorCallback);
         void decode();
 
     private:
         JSC::ArrayBuffer& audioData() { return m_audioData; }
         float sampleRate() const { return m_sampleRate; }
-        Function<void(ExceptionOr<Ref<AudioBuffer>>&&)>& callback() { return m_callback; }
+        AudioBufferCallback* successCallback() { return m_successCallback.get(); }
+        AudioBufferCallback* errorCallback() { return m_errorCallback.get(); }
         AudioBuffer* audioBuffer() { return m_audioBuffer.get(); }
 
         void notifyComplete();
 
         Ref<JSC::ArrayBuffer> m_audioData;
         float m_sampleRate;
-        Function<void(ExceptionOr<Ref<AudioBuffer>>&&)> m_callback;
+        RefPtr<AudioBufferCallback> m_successCallback;
+        RefPtr<AudioBufferCallback> m_errorCallback;
         RefPtr<AudioBuffer> m_audioBuffer;
     };
 

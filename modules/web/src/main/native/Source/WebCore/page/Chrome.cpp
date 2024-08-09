@@ -181,9 +181,9 @@ void Chrome::focusedFrameChanged(Frame* frame) const
     m_client.focusedFrameChanged(frame);
 }
 
-Page* Chrome::createWindow(Frame& frame, const WindowFeatures& features, const NavigationAction& action) const
+Page* Chrome::createWindow(Frame& frame, const FrameLoadRequest& request, const WindowFeatures& features, const NavigationAction& action) const
 {
-    Page* newPage = m_client.createWindow(frame, features, action);
+    Page* newPage = m_client.createWindow(frame, request, features, action);
     if (!newPage)
         return nullptr;
 
@@ -421,13 +421,10 @@ void Chrome::disableSuddenTermination()
 std::unique_ptr<ColorChooser> Chrome::createColorChooser(ColorChooserClient& client, const Color& initialColor)
 {
 #if PLATFORM(IOS_FAMILY)
-    UNUSED_PARAM(client);
-    UNUSED_PARAM(initialColor);
     return nullptr;
-#else
+#endif
     notifyPopupOpeningObservers();
     return m_client.createColorChooser(client, initialColor);
-#endif
 }
 
 #endif
@@ -497,27 +494,27 @@ void Chrome::setCursorHiddenUntilMouseMoves(bool hiddenUntilMouseMoves)
     m_client.setCursorHiddenUntilMouseMoves(hiddenUntilMouseMoves);
 }
 
-std::unique_ptr<ImageBuffer> Chrome::createImageBuffer(const FloatSize& size, ShouldAccelerate shouldAccelerate, ShouldUseDisplayList shouldUseDisplayList, RenderingPurpose purpose, float resolutionScale, ColorSpace colorSpace) const
-{
-    return m_client.createImageBuffer(size, shouldAccelerate, shouldUseDisplayList, purpose, resolutionScale, colorSpace);
-}
-
-std::unique_ptr<ImageBuffer> Chrome::createImageBuffer(const FloatSize& size, RenderingMode renderingMode, float resolutionScale, ColorSpace colorSpace) const
-{
-    return m_client.createImageBuffer(size, renderingMode, resolutionScale, colorSpace);
-}
-
 PlatformDisplayID Chrome::displayID() const
 {
-    return m_page.displayID();
+    return m_displayID;
 }
 
-void Chrome::windowScreenDidChange(PlatformDisplayID displayID, Optional<unsigned> nominalFrameInterval)
+void Chrome::windowScreenDidChange(PlatformDisplayID displayID)
 {
-    if (displayID == m_page.displayID() && nominalFrameInterval == m_page.displayNominalFramesPerSecond())
+    if (displayID == m_displayID)
         return;
 
-    m_page.windowScreenDidChange(displayID, nominalFrameInterval);
+    m_displayID = displayID;
+
+    for (Frame* frame = &m_page.mainFrame(); frame; frame = frame->tree().traverseNext()) {
+        if (frame->document())
+            frame->document()->windowScreenDidChange(displayID);
+    }
+
+#if USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)
+    m_page.renderingUpdateScheduler().windowScreenDidChange(displayID);
+#endif
+    m_page.setNeedsRecalcStyleInAllFrames();
 
 #if PLATFORM(MAC) && ENABLE(GRAPHICS_CONTEXT_GL)
     GraphicsContextGLOpenGLManager::sharedManager().screenDidChange(displayID, this);

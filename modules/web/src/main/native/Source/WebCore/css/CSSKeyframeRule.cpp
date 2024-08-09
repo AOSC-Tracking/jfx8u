@@ -40,21 +40,11 @@ StyleRuleKeyframe::StyleRuleKeyframe(Ref<StyleProperties>&& properties)
 {
 }
 
-StyleRuleKeyframe::StyleRuleKeyframe(Vector<double>&& keys, Ref<StyleProperties>&& properties)
+StyleRuleKeyframe::StyleRuleKeyframe(std::unique_ptr<Vector<double>> keys, Ref<StyleProperties>&& properties)
     : StyleRuleBase(StyleRuleType::Keyframe)
     , m_properties(WTFMove(properties))
-    , m_keys(WTFMove(keys))
+    , m_keys(*keys)
 {
-}
-
-Ref<StyleRuleKeyframe> StyleRuleKeyframe::create(Ref<StyleProperties>&& properties)
-{
-    return adoptRef(*new StyleRuleKeyframe(WTFMove(properties)));
-}
-
-Ref<StyleRuleKeyframe> StyleRuleKeyframe::create(Vector<double>&& keys, Ref<StyleProperties>&& properties)
-{
-    return adoptRef(*new StyleRuleKeyframe(WTFMove(keys), WTFMove(properties)));
 }
 
 StyleRuleKeyframe::~StyleRuleKeyframe() = default;
@@ -81,9 +71,9 @@ bool StyleRuleKeyframe::setKeyText(const String& keyText)
 {
     ASSERT(!keyText.isNull());
     auto keys = CSSParser::parseKeyframeKeyList(keyText);
-    if (keys.isEmpty())
+    if (!keys || keys->isEmpty())
         return false;
-    m_keys = WTFMove(keys);
+    m_keys = *keys;
     return true;
 }
 

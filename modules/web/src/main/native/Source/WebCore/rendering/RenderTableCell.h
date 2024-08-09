@@ -134,10 +134,11 @@ public:
     void invalidateHasEmptyCollapsedBorders();
     void setHasEmptyCollapsedBorder(CollapsedBorderSide, bool empty) const;
 
-private:
+protected:
     void styleDidChange(StyleDifference, const RenderStyle* oldStyle) override;
     void computePreferredLogicalWidths() override;
 
+private:
     static RenderPtr<RenderTableCell> createTableCellWithStyle(Document&, const RenderStyle&);
 
     const char* renderName() const override { return (isAnonymous() || isPseudoElement()) ? "RenderTableCell (anonymous)" : "RenderTableCell"; }

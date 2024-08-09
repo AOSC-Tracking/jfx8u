@@ -90,7 +90,6 @@ public:
     WEBCORE_EXPORT void disconnectAllFrontends();
 
     void inspect(Node*);
-    WEBCORE_EXPORT bool shouldShowOverlay() const;
     WEBCORE_EXPORT void drawHighlight(GraphicsContext&) const;
     WEBCORE_EXPORT void getHighlight(Highlight&, InspectorOverlay::CoordinateSystem) const;
     void hideHighlight();
@@ -118,7 +117,7 @@ public:
     Inspector::InspectorFunctionCallHandler functionCallHandler() const override;
     Inspector::InspectorEvaluateHandler evaluateHandler() const override;
     void frontendInitialized() override;
-    WTF::Stopwatch& executionStopwatch() const final;
+    Ref<WTF::Stopwatch> executionStopwatch() override;
     PageScriptDebugServer& scriptDebugServer() override;
     JSC::VM& vm() override;
 
@@ -143,8 +142,8 @@ private:
 
     // Lazy, but also on-demand agents.
     Inspector::InspectorAgent* m_inspectorAgent { nullptr };
-    InspectorDOMAgent* m_domAgent { nullptr };
-    InspectorPageAgent* m_pageAgent { nullptr };
+    InspectorDOMAgent* m_inspectorDOMAgent { nullptr };
+    InspectorPageAgent* m_inspectorPageAgent { nullptr };
 
     bool m_isUnderTest { false };
     bool m_isAutomaticInspection { false };

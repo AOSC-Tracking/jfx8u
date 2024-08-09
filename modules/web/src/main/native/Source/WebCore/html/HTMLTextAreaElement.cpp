@@ -111,7 +111,7 @@ void HTMLTextAreaElement::didAddUserAgentShadowRoot(ShadowRoot& root)
 
 const AtomString& HTMLTextAreaElement::formControlType() const
 {
-    static MainThreadNeverDestroyed<const AtomString> textarea("textarea", AtomString::ConstructFromLiteral);
+    static NeverDestroyed<const AtomString> textarea("textarea", AtomString::ConstructFromLiteral);
     return textarea;
 }
 
@@ -318,8 +318,7 @@ void HTMLTextAreaElement::handleBeforeTextInsertedEvent(BeforeTextInsertedEvent&
     // If the text field has no focus, we don't need to take account of the
     // selection length. The selection is the source of text drag-and-drop in
     // that case, and nothing in the text field will be removed.
-    auto selectionRange = focused() ? document().frame()->selection().selection().toNormalizedRange() : WTF::nullopt;
-    unsigned selectionLength = selectionRange ? computeLengthForSubmission(plainText(*selectionRange)) : 0;
+    unsigned selectionLength = focused() ? computeLengthForSubmission(plainText(document().frame()->selection().selection().toNormalizedRange().get())) : 0;
     ASSERT(currentLength >= selectionLength);
     unsigned baseLength = currentLength - selectionLength;
     unsigned appendableLength = unsignedMaxLength > baseLength ? unsignedMaxLength - baseLength : 0;
@@ -500,10 +499,9 @@ bool HTMLTextAreaElement::isValidValue(const String& candidate) const
     return !valueMissing(candidate) && !tooShort(candidate, IgnoreDirtyFlag) && !tooLong(candidate, IgnoreDirtyFlag);
 }
 
-bool HTMLTextAreaElement::accessKeyAction(bool)
+void HTMLTextAreaElement::accessKeyAction(bool)
 {
     focus();
-    return false;
 }
 
 void HTMLTextAreaElement::setCols(unsigned cols)

@@ -22,8 +22,7 @@
 #include "config.h"
 #include "JSWrapperObject.h"
 
-#include "JSCJSValueInlines.h"
-#include "JSInternalFieldObjectImplInlines.h"
+#include "JSCInlines.h"
 
 namespace JSC {
 
@@ -31,9 +30,10 @@ STATIC_ASSERT_IS_TRIVIALLY_DESTRUCTIBLE(JSWrapperObject);
 
 void JSWrapperObject::visitChildren(JSCell* cell, SlotVisitor& visitor)
 {
-    auto* thisObject = jsCast<JSWrapperObject*>(cell);
+    JSWrapperObject* thisObject = jsCast<JSWrapperObject*>(cell);
     ASSERT_GC_OBJECT_INHERITS(thisObject, info());
-    Base::visitChildren(thisObject, visitor);
+    JSObject::visitChildren(thisObject, visitor);
+    visitor.append(thisObject->m_internalValue);
 }
 
 } // namespace JSC

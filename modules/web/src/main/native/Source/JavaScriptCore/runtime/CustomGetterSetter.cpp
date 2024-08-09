@@ -26,7 +26,7 @@
 #include "config.h"
 #include "CustomGetterSetter.h"
 
-#include "JSCJSValueInlines.h"
+#include "JSCInlines.h"
 #include <wtf/Assertions.h>
 
 namespace JSC {

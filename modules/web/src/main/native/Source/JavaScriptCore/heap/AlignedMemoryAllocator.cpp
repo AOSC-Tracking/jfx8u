@@ -27,7 +27,7 @@
 #include "AlignedMemoryAllocator.h"
 
 #include "BlockDirectory.h"
-#include "HeapInlines.h"
+#include "Heap.h"
 #include "Subspace.h"
 
 namespace JSC {

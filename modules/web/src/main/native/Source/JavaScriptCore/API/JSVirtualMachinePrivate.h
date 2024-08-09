@@ -23,8 +23,8 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#import "JSExportMacros.h"
-#import <JavaScriptCore/JavaScript.h>
+#include "JSExportMacros.h"
+#include <JavaScriptCore/JavaScript.h>
 
 #if JSC_OBJC_API_ENABLED
 

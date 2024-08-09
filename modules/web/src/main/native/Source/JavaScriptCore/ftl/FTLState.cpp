@@ -28,10 +28,12 @@
 
 #if ENABLE(FTL_JIT)
 
+#include "CodeBlockWithJITType.h"
 #include "FTLForOSREntryJITCode.h"
 #include "FTLJITCode.h"
 #include "FTLJITFinalizer.h"
 #include "FTLPatchpointExceptionHandle.h"
+#include <stdio.h>
 
 namespace JSC { namespace FTL {
 

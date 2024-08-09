@@ -26,6 +26,8 @@
 #include "config.h"
 #include "JITCode.h"
 
+#include "JSCInlines.h"
+#include "ProtoCallFrame.h"
 #include <wtf/PrintStream.h>
 
 namespace JSC {
@@ -70,25 +72,25 @@ void JITCode::validateReferences(const TrackedReferences&)
 DFG::CommonData* JITCode::dfgCommon()
 {
     RELEASE_ASSERT_NOT_REACHED();
-    return nullptr;
+    return 0;
 }
 
 DFG::JITCode* JITCode::dfg()
 {
     RELEASE_ASSERT_NOT_REACHED();
-    return nullptr;
+    return 0;
 }
 
 FTL::JITCode* JITCode::ftl()
 {
     RELEASE_ASSERT_NOT_REACHED();
-    return nullptr;
+    return 0;
 }
 
 FTL::ForOSREntryJITCode* JITCode::ftlForOSREntry()
 {
     RELEASE_ASSERT_NOT_REACHED();
-    return nullptr;
+    return 0;
 }
 
 void JITCode::shrinkToFit(const ConcurrentJSLocker&)

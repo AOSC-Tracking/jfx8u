@@ -26,9 +26,11 @@
 #include "config.h"
 #include "ProfilerCompilation.h"
 
-#include "JSCInlines.h"
+#include "JSGlobalObject.h"
 #include "ObjectConstructor.h"
+#include "JSCInlines.h"
 #include "ProfilerDatabase.h"
+#include "Watchpoint.h"
 #include <wtf/StringPrintStream.h>
 
 namespace JSC { namespace Profiler {
@@ -119,7 +121,7 @@ JSValue Compilation::toJS(JSGlobalObject* globalObject) const
     result->putDirect(vm, vm.propertyNames->bytecodesID, jsNumber(m_bytecodes->id()));
     result->putDirect(vm, vm.propertyNames->compilationKind, jsString(vm, String::fromUTF8(toCString(m_kind))));
 
-    JSArray* profiledBytecodes = constructEmptyArray(globalObject, nullptr);
+    JSArray* profiledBytecodes = constructEmptyArray(globalObject, 0);
     RETURN_IF_EXCEPTION(scope, { });
     for (unsigned i = 0; i < m_profiledBytecodes.size(); ++i) {
         auto value = m_profiledBytecodes[i].toJS(globalObject);
@@ -129,7 +131,7 @@ JSValue Compilation::toJS(JSGlobalObject* globalObject) const
     }
     result->putDirect(vm, vm.propertyNames->profiledBytecodes, profiledBytecodes);
 
-    JSArray* descriptions = constructEmptyArray(globalObject, nullptr);
+    JSArray* descriptions = constructEmptyArray(globalObject, 0);
     RETURN_IF_EXCEPTION(scope, { });
     for (unsigned i = 0; i < m_descriptions.size(); ++i) {
         auto value = m_descriptions[i].toJS(globalObject);
@@ -139,7 +141,7 @@ JSValue Compilation::toJS(JSGlobalObject* globalObject) const
     }
     result->putDirect(vm, vm.propertyNames->descriptions, descriptions);
 
-    JSArray* counters = constructEmptyArray(globalObject, nullptr);
+    JSArray* counters = constructEmptyArray(globalObject, 0);
     RETURN_IF_EXCEPTION(scope, { });
     for (auto it = m_counters.begin(), end = m_counters.end(); it != end; ++it) {
         JSObject* counterEntry = constructEmptyObject(globalObject);
@@ -153,7 +155,7 @@ JSValue Compilation::toJS(JSGlobalObject* globalObject) const
     }
     result->putDirect(vm, vm.propertyNames->counters, counters);
 
-    JSArray* exitSites = constructEmptyArray(globalObject, nullptr);
+    JSArray* exitSites = constructEmptyArray(globalObject, 0);
     RETURN_IF_EXCEPTION(scope, { });
     for (unsigned i = 0; i < m_osrExitSites.size(); ++i) {
         auto value = m_osrExitSites[i].toJS(globalObject);
@@ -163,7 +165,7 @@ JSValue Compilation::toJS(JSGlobalObject* globalObject) const
     }
     result->putDirect(vm, vm.propertyNames->osrExitSites, exitSites);
 
-    JSArray* exits = constructEmptyArray(globalObject, nullptr);
+    JSArray* exits = constructEmptyArray(globalObject, 0);
     RETURN_IF_EXCEPTION(scope, { });
     for (unsigned i = 0; i < m_osrExits.size(); ++i) {
         exits->putDirectIndex(globalObject, i, m_osrExits[i].toJS(globalObject));

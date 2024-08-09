@@ -68,7 +68,7 @@ static const ExtensionMap extensionMap [] = {
     { "wmlc", "application/vnd.wap.wmlc" },
 };
 
-String MIMETypeRegistry::mimeTypeForExtension(const String& extension)
+String MIMETypeRegistry::getMIMETypeForExtension(const String& extension)
 {
     for (auto& entry : extensionMap) {
         if (equalIgnoringASCIICase(extension, entry.extension))
@@ -82,19 +82,13 @@ bool MIMETypeRegistry::isApplicationPluginMIMEType(const String&)
     return false;
 }
 
-String MIMETypeRegistry::preferredExtensionForMIMEType(const String& mimeType)
+String MIMETypeRegistry::getPreferredExtensionForMIMEType(const String& mimeType)
 {
     for (auto& entry : extensionMap) {
         if (equalIgnoringASCIICase(mimeType, entry.mimeType))
             return entry.extension;
     }
     return emptyString();
-}
-
-Vector<String> MIMETypeRegistry::extensionsForMIMEType(const String&)
-{
-    ASSERT_NOT_IMPLEMENTED_YET();
-    return { };
 }
 
 } // namespace WebCore

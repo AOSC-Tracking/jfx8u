@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2008-2020 Apple Inc. All Rights Reserved.
+ *  Copyright (C) 2008-2019 Apple Inc. All Rights Reserved.
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -39,7 +39,7 @@ ALWAYS_INLINE JSArray* tryCreateUninitializedRegExpMatchesArray(ObjectInitializa
     VM& vm = scope.vm();
     unsigned vectorLength = initialLength;
     if (vectorLength > MAX_STORAGE_VECTOR_LENGTH)
-        return nullptr;
+        return 0;
 
     const bool hasIndexingHeader = true;
     Butterfly* butterfly = Butterfly::tryCreateUninitialized(vm, nullptr, 0, structure->outOfLineCapacity(), hasIndexingHeader, vectorLength * sizeof(EncodedJSValue), deferralContext);
@@ -54,7 +54,8 @@ ALWAYS_INLINE JSArray* tryCreateUninitializedRegExpMatchesArray(ObjectInitializa
 
     JSArray* result = JSArray::createWithButterfly(vm, deferralContext, structure, butterfly);
 
-    scope.notifyAllocated(result);
+    const bool createUninitialized = true;
+    scope.notifyAllocated(result, createUninitialized);
     return result;
 }
 
@@ -62,11 +63,11 @@ ALWAYS_INLINE JSArray* createRegExpMatchesArray(
     VM& vm, JSGlobalObject* globalObject, JSString* input, const String& inputValue,
     RegExp* regExp, unsigned startOffset, MatchResult& result)
 {
-    if constexpr (validateDFGDoesGC)
-        vm.heap.verifyCanGC();
+    if (validateDFGDoesGC)
+        RELEASE_ASSERT(vm.heap.expectDoesGC());
 
     Vector<int, 32> subpatternResults;
-    int position = regExp->matchInline(globalObject, vm, inputValue, startOffset, subpatternResults);
+    int position = regExp->matchInline(vm, inputValue, startOffset, subpatternResults);
     if (position == -1) {
         result = MatchResult::failed();
         return nullptr;

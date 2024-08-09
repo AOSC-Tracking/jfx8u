@@ -25,11 +25,7 @@
 
 #pragma once
 
-#include <wtf/WeakPtr.h>
-
-namespace WTF {
-class TextStream;
-}
+#include <wtf/RefPtr.h>
 
 namespace WebCore {
 
@@ -44,35 +40,31 @@ public:
 
     void clear();
 
-    Element* wheelEventElement() const { return m_wheelEventElement.get(); }
-    void setWheelEventElement(Element*);
-
-    Frame* frame() const { return m_frame; }
+    Element* wheelEventElement() { return m_wheelEventElement.get(); }
+    void setWheelEventElement(RefPtr<Element>&&);
+    Frame* frame() { return m_frame; }
     void setFrame(Frame* frame) { m_frame = frame; }
 
     bool widgetIsLatched() const { return m_widgetIsLatched; }
     void setWidgetIsLatched(bool isOverWidget);
 
-    Element* previousWheelScrolledElement() const { return m_previousWheelScrolledElement.get(); }
-    void setPreviousWheelScrolledElement(Element*);
+    Element* previousWheelScrolledElement() { return m_previousWheelScrolledElement.get(); }
+    void setPreviousWheelScrolledElement(RefPtr<Element>&&);
 
-    ContainerNode* scrollableContainer() const { return m_scrollableContainer.get(); }
-    void setScrollableContainer(ContainerNode*);
-
+    ContainerNode* scrollableContainer() { return m_scrollableContainer.get(); }
+    void setScrollableContainer(RefPtr<ContainerNode>&&);
     bool startedGestureAtScrollLimit() const { return m_startedGestureAtScrollLimit; }
     void setStartedGestureAtScrollLimit(bool startedAtLimit) { m_startedGestureAtScrollLimit = startedAtLimit; }
 
 private:
-    WeakPtr<Element> m_wheelEventElement;
-    WeakPtr<Element> m_previousWheelScrolledElement;
-    WeakPtr<ContainerNode> m_scrollableContainer;
+    RefPtr<Element> m_wheelEventElement;
+    RefPtr<Element> m_previousWheelScrolledElement;
+    RefPtr<ContainerNode> m_scrollableContainer;
 
     Frame* m_frame { nullptr };
 
     bool m_widgetIsLatched { false };
     bool m_startedGestureAtScrollLimit { false };
 };
-
-WTF::TextStream& operator<<(WTF::TextStream&, const ScrollLatchingState&);
 
 } // namespace WebCore

@@ -130,10 +130,8 @@ class Opcode
         <<-EOF
 struct #{capitalized_name} : public Instruction {
     #{opcodeID}
-    #{lengthValue}
     #{temps}
     #{checkpointValues}
-
 
 #{emitter}
 #{dumper}
@@ -141,7 +139,6 @@ struct #{capitalized_name} : public Instruction {
 #{setters}#{metadata_struct_and_accessor}
 #{members}
 };
-#{checkpointSizeAssert}
 EOF
     end
 
@@ -149,20 +146,10 @@ EOF
         "static constexpr #{opcodeIDType} opcodeID = #{name};"
     end
 
-    def lengthValue
-        "static constexpr size_t length = #{length};"
-    end
-
     def checkpointValues
         return if @checkpoints.nil?
 
         ["enum Checkpoints : uint8_t {"].concat(checkpoints.map{ |checkpoint| "        #{checkpoint}," }).concat(["        numberOfCheckpoints,", "    };"]).join("\n")
-    end
-
-    def checkpointSizeAssert
-        return if @checkpoints.nil?
-
-        "static_assert(#{capitalized_name}::length > #{capitalized_name}::numberOfCheckpoints, \"FullBytecodeLivess relies on the length of #{capitalized_name} being greater than the number of checkpoints\");"
     end
 
     def temps

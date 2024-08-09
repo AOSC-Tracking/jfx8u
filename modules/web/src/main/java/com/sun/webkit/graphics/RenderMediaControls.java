@@ -29,8 +29,6 @@ import java.lang.annotation.Native;
 import java.util.HashMap;
 import java.util.Map;
 
-import com.sun.prism.paint.Color;
-
 final class RenderMediaControls {
     /**
      * Media control part constants (types for the paintControl method)
@@ -129,9 +127,9 @@ final class RenderMediaControls {
         }
     }
 
-    private static final Color TimeSliderTrackUnbufferedColor =
+    private static final int TimeSliderTrackUnbufferedColor =
             rgba(0xec, 0x87, 0x7d);
-    private static final Color TimeSliderTrackBufferedColor =
+    private static final int TimeSliderTrackBufferedColor =
             rgba(0xf9, 0x1a, 0x02);
     private static final int TimeSliderTrackThickness = 3;
 
@@ -199,7 +197,7 @@ final class RenderMediaControls {
         }
     }
 
-    private static final Color VolumeTrackColor = rgba(0xd0, 0xd0, 0xd0, 0x80);
+    private static final int VolumeTrackColor = rgba(0xd0, 0xd0, 0xd0, 0x80);
     private static final int VolumeTrackThickness = 1;
 
     static void paintVolumeTrack(WCGraphicsContext gc,
@@ -279,13 +277,10 @@ final class RenderMediaControls {
         }
     }
 
-    private static Color rgba(int r, int g, int b, int a) {
-        return new Color((r & 0xFF) / 255.0f,
-                         (g & 0xFF) / 255.0f,
-                         (b & 0xFF) / 255.0f,
-                         (a & 0xFF) / 255.0f);
+    private static int rgba(int r, int g, int b, int a) {
+        return ((a & 0xFF) << 24) |((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF);
     }
-    private static Color rgba(int r, int g, int b) {
+    private static int rgba(int r, int g, int b) {
         return rgba(r, g, b, 0xFF);
     }
 

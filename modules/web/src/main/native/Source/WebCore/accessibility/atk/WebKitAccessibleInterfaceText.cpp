@@ -43,7 +43,6 @@
 #include "HostWindow.h"
 #include "InlineTextBox.h"
 #include "NotImplemented.h"
-#include "Range.h"
 #include "RenderListItem.h"
 #include "RenderListMarker.h"
 #include "RenderText.h"
@@ -93,15 +92,13 @@ static AtkAttributeSet* getAttributeSetForAccessibilityObject(const Accessibilit
 
     Color bgColor = style->visitedDependentColor(CSSPropertyBackgroundColor);
     if (bgColor.isValid()) {
-        auto [r, g, b, a] = bgColor.toSRGBALossy<uint8_t>();
-        buffer.reset(g_strdup_printf("%i,%i,%i", r, g, b));
+        buffer.reset(g_strdup_printf("%i,%i,%i", bgColor.red(), bgColor.green(), bgColor.blue()));
         result = addToAtkAttributeSet(result, atk_text_attribute_get_name(ATK_TEXT_ATTR_BG_COLOR), buffer.get());
     }
 
     Color fgColor = style->visitedDependentColor(CSSPropertyColor);
     if (fgColor.isValid()) {
-        auto [r, g, b, a] = fgColor.toSRGBALossy<uint8_t>();
-        buffer.reset(g_strdup_printf("%i,%i,%i", r, g, b));
+        buffer.reset(g_strdup_printf("%i,%i,%i", fgColor.red(), fgColor.green(), fgColor.blue()));
         result = addToAtkAttributeSet(result, atk_text_attribute_get_name(ATK_TEXT_ATTR_FG_COLOR), buffer.get());
     }
 
@@ -409,13 +406,13 @@ static void getSelectionOffsetsForObject(AccessibilityObject* coreObject, Visibl
 
     // Calculate position of the selected range inside the object.
     Position parentFirstPosition = firstPositionInOrBeforeNode(node);
-    auto rangeInParent = *makeSimpleRange(parentFirstPosition, nodeRangeStart);
+    auto rangeInParent = Range::create(node->document(), parentFirstPosition, nodeRangeStart);
 
     // Set values for start offsets and calculate initial range length.
     // These values might be adjusted later to cover special cases.
-    startOffset = webCoreOffsetToAtkOffset(coreObject, characterCount(rangeInParent, TextIteratorEmitsCharactersBetweenAllVisiblePositions));
-    auto nodeRange = *makeSimpleRange(nodeRangeStart, nodeRangeEnd);
-    int rangeLength = characterCount(nodeRange, TextIteratorEmitsCharactersBetweenAllVisiblePositions);
+    startOffset = webCoreOffsetToAtkOffset(coreObject, TextIterator::rangeLength(rangeInParent.ptr(), true));
+    auto nodeRange = Range::create(node->document(), nodeRangeStart, nodeRangeEnd);
+    int rangeLength = TextIterator::rangeLength(nodeRange.ptr(), true);
 
     // Special cases that are only relevant when working with *_END boundaries.
     if (selection.affinity() == UPSTREAM) {
@@ -448,8 +445,9 @@ static gchar* webkitAccessibleTextGetText(AtkText* text, gint startOffset, gint 
 
 #if ENABLE(INPUT_TYPE_COLOR)
     if (coreObject->roleValue() == AccessibilityRole::ColorWell) {
-        auto color = convertToComponentFloats(coreObject->colorValue());
-        return g_strdup_printf("rgb %7.5f %7.5f %7.5f 1", color.red, color.green, color.blue);
+        int r, g, b;
+        coreObject->colorValue(r, g, b);
+        return g_strdup_printf("rgb %7.5f %7.5f %7.5f 1", r / 255., g / 255., b / 255.);
     }
 #endif
 

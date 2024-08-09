@@ -37,7 +37,6 @@
 #include "PlatformLayer.h"
 #include "PlatformMediaResourceLoader.h"
 #include "PlatformMediaSession.h"
-#include "PlatformScreen.h"
 #include "SecurityOriginHash.h"
 #include "Timer.h"
 #include <wtf/URL.h>
@@ -65,7 +64,6 @@ class CachedResourceLoader;
 class GraphicsContextGLOpenGL;
 class GraphicsContext;
 class InbandTextTrackPrivate;
-class LegacyCDM;
 class LegacyCDMSessionClient;
 class MediaPlaybackTarget;
 class MediaPlayer;
@@ -79,7 +77,6 @@ class TextTrackRepresentation;
 
 struct Cookie;
 struct GraphicsDeviceAdapter;
-struct SecurityOriginData;
 
 struct MediaEngineSupportParameters {
     ContentType type;
@@ -203,7 +200,7 @@ public:
 
 #if ENABLE(LEGACY_ENCRYPTED_MEDIA)
     virtual RefPtr<ArrayBuffer> mediaPlayerCachedKeyForKeyId(const String&) const { return nullptr; }
-    virtual void mediaPlayerKeyNeeded(Uint8Array*) { }
+    virtual bool mediaPlayerKeyNeeded(Uint8Array*) { return false; }
     virtual String mediaPlayerMediaKeysStorageDirectory() const { return emptyString(); }
 #endif
 
@@ -225,6 +222,8 @@ public:
     virtual bool mediaPlayerIsVideo() const { return false; }
     virtual LayoutRect mediaPlayerContentBoxRect() const { return LayoutRect(); }
     virtual float mediaPlayerContentsScale() const { return 1; }
+    virtual void mediaPlayerPause() { }
+    virtual void mediaPlayerPlay() { }
     virtual bool mediaPlayerPlatformVolumeConfigurationRequired() const { return false; }
     virtual bool mediaPlayerIsLooping() const { return false; }
     virtual CachedResourceLoader* mediaPlayerCachedResourceLoader() { return nullptr; }
@@ -233,6 +232,7 @@ public:
     virtual bool mediaPlayerShouldUsePersistentCache() const { return true; }
     virtual const String& mediaPlayerMediaCacheDirectory() const { return emptyString(); }
 
+#if ENABLE(VIDEO_TRACK)
     virtual void mediaPlayerDidAddAudioTrack(AudioTrackPrivate&) { }
     virtual void mediaPlayerDidAddTextTrack(InbandTextTrackPrivate&) { }
     virtual void mediaPlayerDidAddVideoTrack(VideoTrackPrivate&) { }
@@ -241,8 +241,9 @@ public:
     virtual void mediaPlayerDidRemoveVideoTrack(VideoTrackPrivate&) { }
 
     virtual void textTrackRepresentationBoundsChanged(const IntRect&) { }
+#endif
 
-#if ENABLE(AVF_CAPTIONS)
+#if ENABLE(VIDEO_TRACK) && ENABLE(AVF_CAPTIONS)
     virtual Vector<RefPtr<PlatformTextTrack>> outOfBandTrackSources() { return { }; }
 #endif
 
@@ -270,8 +271,6 @@ public:
 
     virtual void mediaPlayerBufferedTimeRangesChanged() { }
     virtual void mediaPlayerSeekableTimeRangesChanged() { }
-
-    virtual SecurityOriginData documentSecurityOrigin() const { return { }; }
 
 #if !RELEASE_LOG_DISABLED
     virtual const void* mediaPlayerLogIdentifier() { return nullptr; }
@@ -307,8 +306,7 @@ public:
     bool doesHaveAttribute(const AtomString&, AtomString* value = nullptr) const;
     PlatformLayer* platformLayer() const;
 
-#if ENABLE(VIDEO_PRESENTATION_MODE)
-    RetainPtr<PlatformLayer> createVideoFullscreenLayer();
+#if PLATFORM(IOS_FAMILY) || (PLATFORM(MAC) && ENABLE(VIDEO_PRESENTATION_MODE))
     void setVideoFullscreenLayer(PlatformLayer*, WTF::Function<void()>&& completionHandler = [] { });
     void setVideoFullscreenFrame(FloatRect);
     void updateVideoFullscreenInlineImage();
@@ -358,7 +356,6 @@ public:
     enum MediaKeyException { NoError, InvalidPlayerState, KeySystemNotSupported };
 
     std::unique_ptr<LegacyCDMSession> createSession(const String& keySystem, LegacyCDMSessionClient*);
-    void setCDM(LegacyCDM*);
     void setCDMSession(LegacyCDMSession*);
     void keyAdded();
 #endif
@@ -367,11 +364,6 @@ public:
     void cdmInstanceAttached(CDMInstance&);
     void cdmInstanceDetached(CDMInstance&);
     void attemptToDecryptWithInstance(CDMInstance&);
-#endif
-
-#if ENABLE(LEGACY_ENCRYPTED_MEDIA) && ENABLE(ENCRYPTED_MEDIA)
-    void setShouldContinueAfterKeyNeeded(bool);
-    bool shouldContinueAfterKeyNeeded() const { return m_shouldContinueAfterKeyNeeded; }
 #endif
 
     bool paused() const;
@@ -463,8 +455,13 @@ public:
     bool hasAvailableVideoFrame() const;
     void prepareForRendering();
 
-    using MediaPlayerEnums::WirelessPlaybackTargetType;
+#if USE(NATIVE_FULLSCREEN_VIDEO)
+    void enterFullscreen();
+    void exitFullscreen();
+#endif
+
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
+    enum WirelessPlaybackTargetType { TargetTypeNone, TargetTypeAirPlay, TargetTypeTVOut };
     WirelessPlaybackTargetType wirelessPlaybackTargetType() const;
 
     String wirelessPlaybackTargetName() const;
@@ -485,11 +482,16 @@ public:
     double minFastReverseRate() const;
     double maxFastForwardRate() const;
 
+#if USE(NATIVE_FULLSCREEN_VIDEO)
+    bool canEnterFullscreen() const;
+#endif
+
     // whether accelerated rendering is supported by the media engine for the current media.
     bool supportsAcceleratedRendering() const;
     // called when the rendering system flips the into or out of accelerated rendering mode.
     void acceleratedRenderingStateChanged();
 
+    bool shouldMaintainAspectRatio() const;
     void setShouldMaintainAspectRatio(bool);
 
 #if PLATFORM(WIN) && USE(AVFOUNDATION)
@@ -517,7 +519,7 @@ public:
 
 #if ENABLE(LEGACY_ENCRYPTED_MEDIA)
     RefPtr<ArrayBuffer> cachedKeyForKeyId(const String& keyId) const;
-    void keyNeeded(Uint8Array* initData);
+    bool keyNeeded(Uint8Array* initData);
     String mediaKeysStorageDirectory() const;
 #endif
 
@@ -536,6 +538,7 @@ public:
     CachedResourceLoader* cachedResourceLoader();
     RefPtr<PlatformMediaResourceLoader> createResourceLoader();
 
+#if ENABLE(VIDEO_TRACK)
     void addAudioTrack(AudioTrackPrivate&);
     void addTextTrack(InbandTextTrackPrivate&);
     void addVideoTrack(VideoTrackPrivate&);
@@ -547,8 +550,9 @@ public:
     void setTextTrackRepresentation(TextTrackRepresentation*);
     void syncTextTrackBounds();
     void tracksChanged();
+#endif
 
-#if ENABLE(AVF_CAPTIONS)
+#if ENABLE(VIDEO_TRACK) && ENABLE(AVF_CAPTIONS)
     void notifyTrackModeChanged();
     Vector<RefPtr<PlatformTextTrack>> outOfBandTrackSources();
 #endif
@@ -602,7 +606,7 @@ public:
     AVPlayer *objCAVFoundationAVPlayer() const;
 #endif
 
-    bool performTaskAtMediaTime(Function<void()>&&, const MediaTime&);
+    bool performTaskAtMediaTime(WTF::Function<void()>&&, MediaTime);
 
     bool shouldIgnoreIntrinsicSize();
 
@@ -620,16 +624,10 @@ public:
     bool isLooping() const { return client().mediaPlayerIsLooping(); }
 
     void remoteEngineFailedToLoad();
-    SecurityOriginData documentSecurityOrigin() const;
 
 #if USE(GSTREAMER)
     void requestInstallMissingPlugins(const String& details, const String& description, MediaPlayerRequestInstallMissingPluginsCallback& callback) { client().requestInstallMissingPlugins(details, description, callback); }
 #endif
-
-    const MediaPlayerPrivateInterface* playerPrivate() const { return m_private.get(); }
-
-    DynamicRangeMode preferredDynamicRangeMode() const { return m_preferredDynamicRangeMode; }
-    void setPreferredDynamicRangeMode(DynamicRangeMode);
 
 private:
     MediaPlayer(MediaPlayerClient&);
@@ -660,16 +658,12 @@ private:
     bool m_shouldPrepareToRender { false };
     bool m_contentMIMETypeWasInferredFromExtension { false };
     bool m_initializingMediaEngine { false };
-    DynamicRangeMode m_preferredDynamicRangeMode { DynamicRangeMode::Standard };
 
 #if ENABLE(MEDIA_SOURCE)
     RefPtr<MediaSourcePrivateClient> m_mediaSource;
 #endif
 #if ENABLE(MEDIA_STREAM)
     RefPtr<MediaStreamPrivate> m_mediaStream;
-#endif
-#if ENABLE(LEGACY_ENCRYPTED_MEDIA) && ENABLE(ENCRYPTED_MEDIA)
-    bool m_shouldContinueAfterKeyNeeded { false };
 #endif
 };
 

@@ -23,9 +23,9 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. 
  */
 
-interface WebKitAnimationEvent : Event {
-    constructor(DOMString type, optional WebKitAnimationEventInit eventInitDict);
-
+[
+    Constructor(DOMString type, optional WebKitAnimationEventInit eventInitDict),
+] interface WebKitAnimationEvent : Event {
     readonly attribute DOMString animationName;
     readonly attribute double elapsedTime;
     readonly attribute DOMString pseudoElement;

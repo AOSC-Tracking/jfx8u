@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2016 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -24,19 +24,19 @@
  */
 
 #include "config.h"
-#include "ByValInfo.h"
+#include "ECMAScriptSpecInternalFunctions.h"
 
-#include "CacheableIdentifierInlines.h"
+#include "CallFrame.h"
+#include "ConstructData.h"
+#include "JSCInlines.h"
+#include "RegExpObject.h"
 
 namespace JSC {
 
-#if ENABLE(JIT)
-
-void ByValInfo::visitAggregate(SlotVisitor& visitor)
+EncodedJSValue JSC_HOST_CALL esSpecIsConstructor(JSGlobalObject* globalObject, CallFrame* callFrame)
 {
-    cachedId.visitAggregate(visitor);
+    bool isConstructor = callFrame->uncheckedArgument(0).isConstructor(globalObject->vm());
+    return JSValue::encode(jsBoolean(isConstructor));
 }
-
-#endif // ENABLE(JIT)
 
 } // namespace JSC

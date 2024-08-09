@@ -43,12 +43,19 @@ enum Width : int8_t {
     Width64
 };
 
-constexpr Width pointerWidth()
+inline Width pointerWidth()
 {
     if (sizeof(void*) == 8)
         return Width64;
     return Width32;
 }
+
+// Don't use this unless the compiler forces you to.
+#if CPU(X86_64) || CPU(ARM64)
+#define POINTER_WIDTH Width64
+#else
+#define POINTER_WIDTH Width32
+#endif
 
 inline Width widthForType(Type type)
 {

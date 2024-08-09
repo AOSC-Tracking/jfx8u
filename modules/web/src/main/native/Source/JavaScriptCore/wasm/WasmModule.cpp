@@ -28,6 +28,7 @@
 
 #if ENABLE(WEBASSEMBLY)
 
+#include "WasmBBQPlan.h"
 #include "WasmLLIntPlan.h"
 #include "WasmModuleInformation.h"
 #include "WasmWorklist.h"

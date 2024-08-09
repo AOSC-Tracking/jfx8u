@@ -23,6 +23,8 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+// @conditional=ENABLE(STREAMS_API)
+
 function initializeReadableStreamDefaultController(stream, underlyingSource, size, highWaterMark)
 {
     "use strict";

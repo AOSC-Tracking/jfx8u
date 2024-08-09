@@ -58,6 +58,11 @@ void NetworkResourcesData::ResourceData::setContent(const String& content, bool 
     m_base64Encoded = base64Encoded;
 }
 
+static size_t contentSizeInBytes(const String& content)
+{
+    return content.isNull() ? 0 : content.impl()->sizeInBytes();
+}
+
 unsigned NetworkResourcesData::ResourceData::removeContent()
 {
     unsigned result = 0;
@@ -69,7 +74,7 @@ unsigned NetworkResourcesData::ResourceData::removeContent()
 
     if (hasContent()) {
         ASSERT(!hasData());
-        result = m_content.sizeInBytes();
+        result = contentSizeInBytes(m_content);
         m_content = String();
     }
     return result;
@@ -95,7 +100,7 @@ void NetworkResourcesData::ResourceData::appendData(const char* data, size_t dat
         m_dataBuffer->append(data, dataLength);
 }
 
-unsigned NetworkResourcesData::ResourceData::decodeDataToContent()
+size_t NetworkResourcesData::ResourceData::decodeDataToContent()
 {
     ASSERT(!hasContent());
 
@@ -111,7 +116,9 @@ unsigned NetworkResourcesData::ResourceData::decodeDataToContent()
 
     m_dataBuffer = nullptr;
 
-    return m_content.sizeInBytes() - dataLength;
+    size_t decodedLength = contentSizeInBytes(m_content);
+    ASSERT(decodedLength >= dataLength);
+    return decodedLength - dataLength;
 }
 
 NetworkResourcesData::NetworkResourcesData()
@@ -150,7 +157,7 @@ void NetworkResourcesData::responseReceived(const String& requestId, const Strin
         return;
 
     resourceData->setFrameId(frameId);
-    resourceData->setURL(response.url().string());
+    resourceData->setURL(response.url());
     resourceData->setHTTPStatusCode(response.httpStatusCode());
     resourceData->setType(type);
     resourceData->setForceBufferData(forceBufferData);
@@ -187,7 +194,7 @@ void NetworkResourcesData::setResourceContent(const String& requestId, const Str
     if (!resourceData)
         return;
 
-    size_t dataLength = content.sizeInBytes();
+    size_t dataLength = contentSizeInBytes(content);
     if (dataLength > m_maximumSingleResourceContentSize)
         return;
     if (resourceData->isContentEvicted())
@@ -251,7 +258,7 @@ void NetworkResourcesData::maybeDecodeDataToContent(const String& requestId)
         return;
 
     m_contentSize += resourceData->decodeDataToContent();
-    size_t dataLength = resourceData->content().sizeInBytes();
+    size_t dataLength = contentSizeInBytes(resourceData->content());
     if (dataLength > m_maximumSingleResourceContentSize)
         m_contentSize -= resourceData->evictContent();
 }

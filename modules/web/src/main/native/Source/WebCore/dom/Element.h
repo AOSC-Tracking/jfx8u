@@ -32,7 +32,6 @@
 #include "ShadowRootMode.h"
 #include "SimulatedClickOptions.h"
 #include "StyleChange.h"
-#include "WebAnimationTypes.h"
 #include <JavaScriptCore/Strong.h>
 
 namespace WebCore {
@@ -42,7 +41,6 @@ class DatasetDOMStringMap;
 class DOMRect;
 class DOMRectList;
 class DOMTokenList;
-class ElementAnimationRareData;
 class ElementRareData;
 class Frame;
 class HTMLDocument;
@@ -315,14 +313,12 @@ public:
     bool active() const { return isUserActionElement() && isUserActionElementActive(); }
     bool hovered() const { return isUserActionElement() && isUserActionElementHovered(); }
     bool focused() const { return isUserActionElement() && isUserActionElementFocused(); }
-    bool isBeingDragged() const { return isUserActionElement() && isUserActionElementDragged(); }
     bool hasFocusWithin() const { return getFlag(HasFocusWithin); };
 
-    virtual void setActive(bool = true, bool pause = false);
-    virtual void setHovered(bool = true);
-    virtual void setFocus(bool);
-    void setBeingDragged(bool);
-    void setHasFocusWithin(bool);
+    virtual void setActive(bool flag = true, bool pause = false);
+    virtual void setHovered(bool flag = true);
+    virtual void setFocus(bool flag);
+    void setHasFocusWithin(bool flag);
 
     Optional<int> tabIndexSetExplicitly() const;
     bool shouldBeIgnoredInSequentialFocusNavigation() const { return defaultTabIndex() < 0 && !supportsFocus(); }
@@ -347,12 +343,13 @@ public:
 
     bool needsStyleInvalidation() const;
 
-    bool hasValidStyle() const;
-    bool isVisibleWithoutResolvingFullStyle() const;
-
     // Methods for indicating the style is affected by dynamic updates (e.g., children changing, our position changing in our sibling list, etc.)
+    bool styleAffectedByActive() const { return hasStyleFlag(ElementStyleFlag::StyleAffectedByActive); }
     bool styleAffectedByEmpty() const { return hasStyleFlag(ElementStyleFlag::StyleAffectedByEmpty); }
+    bool styleAffectedByFocusWithin() const { return getFlag(StyleAffectedByFocusWithinFlag); }
     bool descendantsAffectedByPreviousSibling() const { return getFlag(DescendantsAffectedByPreviousSiblingFlag); }
+    bool childrenAffectedByHover() const { return getFlag(ChildrenAffectedByHoverRulesFlag); }
+    bool childrenAffectedByDrag() const { return hasStyleFlag(ElementStyleFlag::ChildrenAffectedByDrag); }
     bool childrenAffectedByFirstChildRules() const { return getFlag(ChildrenAffectedByFirstChildRulesFlag); }
     bool childrenAffectedByLastChildRules() const { return getFlag(ChildrenAffectedByLastChildRulesFlag); }
     bool childrenAffectedByForwardPositionalRules() const { return hasStyleFlag(ElementStyleFlag::ChildrenAffectedByForwardPositionalRules); }
@@ -366,7 +363,11 @@ public:
     bool hasFlagsSetDuringStylingOfChildren() const;
 
     void setStyleAffectedByEmpty() { setStyleFlag(ElementStyleFlag::StyleAffectedByEmpty); }
+    void setStyleAffectedByFocusWithin() { setFlag(StyleAffectedByFocusWithinFlag); }
     void setDescendantsAffectedByPreviousSibling() { setFlag(DescendantsAffectedByPreviousSiblingFlag); }
+    void setChildrenAffectedByHover() { setFlag(ChildrenAffectedByHoverRulesFlag); }
+    void setStyleAffectedByActive() { setStyleFlag(ElementStyleFlag::StyleAffectedByActive); }
+    void setChildrenAffectedByDrag() { setStyleFlag(ElementStyleFlag::ChildrenAffectedByDrag); }
     void setChildrenAffectedByFirstChildRules() { setFlag(ChildrenAffectedByFirstChildRulesFlag); }
     void setChildrenAffectedByLastChildRules() { setFlag(ChildrenAffectedByLastChildRulesFlag); }
     void setChildrenAffectedByForwardPositionalRules() { setStyleFlag(ElementStyleFlag::ChildrenAffectedByForwardPositionalRules); }
@@ -381,7 +382,7 @@ public:
     WEBCORE_EXPORT AtomString computeInheritedLanguage() const;
     Locale& locale() const;
 
-    virtual bool accessKeyAction(bool /*sendToAnyEvent*/) { return false; }
+    virtual void accessKeyAction(bool /*sendToAnyEvent*/) { }
 
     virtual bool isURLAttribute(const Attribute&) const { return false; }
     virtual bool attributeContainsURL(const Attribute& attribute) const { return isURLAttribute(attribute); }
@@ -396,7 +397,6 @@ public:
 
     static AXTextStateChangeIntent defaultFocusTextStateChangeIntent() { return AXTextStateChangeIntent(AXTextStateChangeTypeSelectionMove, AXTextSelection { AXTextSelectionDirectionDiscontiguous, AXTextSelectionGranularityUnknown, true }); }
     virtual void focus(bool restorePreviousSelection = true, FocusDirection = FocusDirectionNone);
-    void revealFocusedElement(SelectionRestorationMode);
     virtual RefPtr<Element> focusAppearanceUpdateTarget();
     virtual void updateFocusAppearance(SelectionRestorationMode, SelectionRevealMode = SelectionRevealMode::Reveal);
     virtual void blur();
@@ -424,13 +424,11 @@ public:
     virtual void ancestorWillEnterFullscreen() { }
     virtual void didBecomeFullscreenElement() { }
     virtual void willStopBeingFullscreenElement() { }
-    virtual void didStopBeingFullscreenElement() { }
 
     bool isFinishedParsingChildren() const { return isParsingChildrenFinished(); }
     void finishParsingChildren() override;
     void beginParsingChildren() final;
 
-    PseudoElement& ensurePseudoElement(PseudoId);
     WEBCORE_EXPORT PseudoElement* beforePseudoElement() const;
     WEBCORE_EXPORT PseudoElement* afterPseudoElement() const;
     bool childNeedsShadowWalker() const;
@@ -460,7 +458,6 @@ public:
     virtual bool isSpinButtonElement() const { return false; }
     virtual bool isTextFormControlElement() const { return false; }
     virtual bool isTextField() const { return false; }
-    virtual bool isTextPlaceholderElement() const { return false; }
     virtual bool isOptionalFormControl() const { return false; }
     virtual bool isRequiredFormControl() const { return false; }
     virtual bool isInRange() const { return false; }
@@ -490,23 +487,6 @@ public:
     bool hasKeyframeEffects() const;
     OptionSet<AnimationImpact> applyKeyframeEffects(RenderStyle&);
 
-    const AnimationCollection* webAnimations() const;
-    const AnimationCollection* cssAnimations() const;
-    const AnimationCollection* transitions() const;
-    bool hasCompletedTransitionsForProperty(CSSPropertyID) const;
-    bool hasRunningTransitionsForProperty(CSSPropertyID) const;
-    bool hasRunningTransitions() const;
-    AnimationCollection& ensureWebAnimations();
-    AnimationCollection& ensureCSSAnimations();
-    AnimationCollection& ensureTransitions();
-    PropertyToTransitionMap& ensureCompletedTransitionsByProperty();
-    PropertyToTransitionMap& ensureRunningTransitionsByProperty();
-    CSSAnimationCollection& animationsCreatedByMarkup();
-    void setAnimationsCreatedByMarkup(CSSAnimationCollection&&);
-
-    const RenderStyle* lastStyleChangeEventStyle() const;
-    void setLastStyleChangeEventStyle(std::unique_ptr<const RenderStyle>&&);
-
 #if ENABLE(FULLSCREEN_API)
     WEBCORE_EXPORT bool containsFullScreenElement() const;
     void setContainsFullScreenElement(bool);
@@ -514,9 +494,11 @@ public:
     WEBCORE_EXPORT virtual void webkitRequestFullscreen();
 #endif
 
+#if ENABLE(POINTER_EVENTS)
     ExceptionOr<void> setPointerCapture(int32_t);
     ExceptionOr<void> releasePointerCapture(int32_t);
     bool hasPointerCapture(int32_t);
+#endif
 
 #if ENABLE(POINTER_LOCK)
     WEBCORE_EXPORT void requestPointerLock();
@@ -535,7 +517,7 @@ public:
     bool dispatchMouseEvent(const PlatformMouseEvent&, const AtomString& eventType, int clickCount = 0, Element* relatedTarget = nullptr);
     bool dispatchWheelEvent(const PlatformWheelEvent&);
     bool dispatchKeyEvent(const PlatformKeyboardEvent&);
-    bool dispatchSimulatedClick(Event* underlyingEvent, SimulatedClickMouseEventOptions = SendNoEvents, SimulatedClickVisualOptions = ShowPressedLook);
+    void dispatchSimulatedClick(Event* underlyingEvent, SimulatedClickMouseEventOptions = SendNoEvents, SimulatedClickVisualOptions = ShowPressedLook);
     void dispatchFocusInEvent(const AtomString& eventType, RefPtr<Element>&& oldFocusedElement);
     void dispatchFocusOutEvent(const AtomString& eventType, RefPtr<Element>&& newFocusedElement);
     virtual void dispatchFocusEvent(RefPtr<Element>&& oldFocusedElement, FocusDirection);
@@ -558,6 +540,8 @@ public:
     const RenderStyle* existingComputedStyle() const;
     WEBCORE_EXPORT const RenderStyle* renderOrDisplayContentsStyle() const;
 
+    void setBeforePseudoElement(Ref<PseudoElement>&&);
+    void setAfterPseudoElement(Ref<PseudoElement>&&);
     void clearBeforePseudoElement();
     void clearAfterPseudoElement();
     void resetComputedStyle();
@@ -596,8 +580,6 @@ public:
     void invalidateStyleInternal();
     void invalidateStyleForSubtreeInternal();
 
-    void invalidateEventListenerRegions();
-
     bool hasDisplayContents() const;
     void storeDisplayContentsStyle(std::unique_ptr<RenderStyle>);
 
@@ -606,7 +588,7 @@ public:
 
 #if ENABLE(INTERSECTION_OBSERVER)
     IntersectionObserverData& ensureIntersectionObserverData();
-    IntersectionObserverData* intersectionObserverDataIfExists();
+    IntersectionObserverData* intersectionObserverData();
 #endif
 
 #if ENABLE(RESIZE_OBSERVER)
@@ -620,8 +602,6 @@ public:
     Vector<RefPtr<WebAnimation>> getAnimations(Optional<GetAnimationsOptions>);
 
     ElementIdentifier createElementIdentifier();
-
-    String debugDescription() const override;
 
 protected:
     Element(const QualifiedName&, Document&, ConstructionType);
@@ -656,7 +636,6 @@ private:
     bool isUserActionElementActive() const;
     bool isUserActionElementFocused() const;
     bool isUserActionElementHovered() const;
-    bool isUserActionElementDragged() const;
 
     virtual void didAddUserAgentShadowRoot(ShadowRoot&) { }
 
@@ -713,8 +692,7 @@ private:
 
     void removeShadowRoot();
 
-    enum class ResolveComputedStyleMode { Normal, RenderedOnly };
-    const RenderStyle* resolveComputedStyle(ResolveComputedStyleMode = ResolveComputedStyleMode::Normal);
+    const RenderStyle& resolveComputedStyle();
     const RenderStyle& resolvePseudoElementStyle(PseudoId);
 
     unsigned rareDataChildIndex() const;
@@ -723,9 +701,6 @@ private:
 
     ElementRareData* elementRareData() const;
     ElementRareData& ensureElementRareData();
-
-    ElementAnimationRareData* animationRareData() const;
-    ElementAnimationRareData& ensureAnimationRareData();
 
     virtual int defaultTabIndex() const;
 
@@ -866,6 +841,15 @@ inline UniqueElementData& Element::ensureUniqueElementData()
 inline bool shouldIgnoreAttributeCase(const Element& element)
 {
     return element.isHTMLElement() && element.document().isHTMLDocument();
+}
+
+inline void Element::setHasFocusWithin(bool flag)
+{
+    if (hasFocusWithin() == flag)
+        return;
+    setFlag(flag, HasFocusWithin);
+    if (styleAffectedByFocusWithin())
+        invalidateStyleForSubtree();
 }
 
 template<typename... QualifiedNames>

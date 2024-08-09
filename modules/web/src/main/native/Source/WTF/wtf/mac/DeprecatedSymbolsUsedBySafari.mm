@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 Igalia S.L. All rights reserved.
+ * Copyright (C) 2014 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -23,22 +23,38 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-[
-    EnabledAtRuntime=WebXR,
-    Conditional=WEBXR,
-] dictionary FakeXRInputSourceInit {
-    required XRHandedness handedness;
-    required XRTargetRayMode targetRayMode;
-    required FakeXRRigidTransformInit pointerOrigin;
-    required sequence<DOMString> profiles;
-    // was the primary action pressed when this was connected?
-    boolean selectionStarted = false;
-    // should this input source send a select immediately upon connection?
-    boolean selectionClicked = false;
-    // Initial button state for any buttons beyond the primary that are supported.
-    // If empty, only the primary button is supported.
-    // Note that if any FakeXRButtonType is repeated the behavior is undefined.
-    sequence<FakeXRButtonStateInit> supportedButtons;
-    // If not set the controller is assumed to not be tracked.
-    FakeXRRigidTransformInit gripOrigin;
+#include "config.h"
+
+#include <stdint.h>
+#include <wtf/HashMap.h>
+#include <wtf/HashSet.h>
+#include <wtf/Lock.h>
+#include <wtf/MainThread.h>
+#include <wtf/NeverDestroyed.h>
+#include <wtf/StdLibExtras.h>
+
+// This file contains deprecated symbols that the last released version of Safari uses.
+// Once Safari stops using them, we should remove them.
+
+namespace WTF {
+
+#if PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED < 101400
+struct LockBase {
+private:
+    WTF_EXPORT_PRIVATE void lockSlow();
+    WTF_EXPORT_PRIVATE void unlockSlow();
+    Atomic<uint8_t> m_byte;
 };
+
+void LockBase::lockSlow()
+{
+    DefaultLockAlgorithm::lockSlow(m_byte);
+}
+
+void LockBase::unlockSlow()
+{
+    DefaultLockAlgorithm::unlockSlow(m_byte, DefaultLockAlgorithm::Unfair);
+}
+#endif
+
+} // namespace WTF

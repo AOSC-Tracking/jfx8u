@@ -137,9 +137,7 @@ static void initializeOverrideInfo(const SourceCode& origCode, const String& new
     newProviderStr.append(origHeader);
     newProviderStr.append(newBody);
 
-    auto overridden = "<overridden>"_s;
-    URL url({ }, overridden);
-    Ref<SourceProvider> newProvider = StringSourceProvider::create(newProviderStr, SourceOrigin { url }, overridden);
+    Ref<SourceProvider> newProvider = StringSourceProvider::create(newProviderStr, SourceOrigin { "<overridden>" }, URL({ }, "<overridden>"));
 
     info.firstLine = 1;
     info.lineCount = 1; // Faking it. This doesn't really matter for now.

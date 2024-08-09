@@ -44,7 +44,6 @@
 #include <wtf/RefPtr.h>
 #include <wtf/UUID.h>
 #include <wtf/Vector.h>
-#include <wtf/WeakHashSet.h>
 
 namespace WebCore {
 
@@ -59,7 +58,7 @@ class MediaStreamPrivate final
 #endif
 {
 public:
-    class Observer : public CanMakeWeakPtr<Observer> {
+    class Observer {
     public:
         virtual ~Observer() = default;
 
@@ -70,27 +69,26 @@ public:
     };
 
     static Ref<MediaStreamPrivate> create(Ref<const Logger>&&, Ref<RealtimeMediaSource>&&);
-    static Ref<MediaStreamPrivate> create(Ref<const Logger>&&, RefPtr<RealtimeMediaSource>&& audioSource, RefPtr<RealtimeMediaSource>&& videoSource);
+    static Ref<MediaStreamPrivate> create(Ref<const Logger>&&, const Vector<Ref<RealtimeMediaSource>>& audioSources, const Vector<Ref<RealtimeMediaSource>>& videoSources);
     static Ref<MediaStreamPrivate> create(Ref<const Logger>&& logger, const MediaStreamTrackPrivateVector& tracks, String&& id = createCanonicalUUIDString()) { return adoptRef(*new MediaStreamPrivate(WTFMove(logger), tracks, WTFMove(id))); }
 
-    WEBCORE_EXPORT virtual ~MediaStreamPrivate();
+    virtual ~MediaStreamPrivate();
+
+    enum class NotifyClientOption { Notify, DontNotify };
 
     void addObserver(Observer&);
     void removeObserver(Observer&);
 
     String id() const { return m_id; }
 
-    MediaStreamTrackPrivateVector tracks() const;
-    bool hasTracks() const { return !m_trackSet.isEmpty(); }
-    void forEachTrack(const Function<void(const MediaStreamTrackPrivate&)>&) const;
-    void forEachTrack(const Function<void(MediaStreamTrackPrivate&)>&);
+    WEBCORE_EXPORT MediaStreamTrackPrivateVector tracks() const;
     MediaStreamTrackPrivate* activeVideoTrack() { return m_activeVideoTrack; }
 
     bool active() const { return m_isActive; }
-    void updateActiveState();
+    void updateActiveState(NotifyClientOption);
 
-    void addTrack(Ref<MediaStreamTrackPrivate>&&);
-    WEBCORE_EXPORT void removeTrack(MediaStreamTrackPrivate&);
+    void addTrack(RefPtr<MediaStreamTrackPrivate>&&, NotifyClientOption = NotifyClientOption::Notify);
+    void removeTrack(MediaStreamTrackPrivate&, NotifyClientOption = NotifyClientOption::Notify);
 
     void startProducingData();
     void stopProducingData();
@@ -122,15 +120,14 @@ private:
     void characteristicsChanged();
     void updateActiveVideoTrack();
 
-    bool computeActiveState();
-    void forEachObserver(const Function<void(Observer&)>&);
+    void forEachObserver(const WTF::Function<void(Observer&)>&) const;
 
 #if !RELEASE_LOG_DISABLED
     const char* logClassName() const final { return "MediaStreamPrivate"; }
     WTFLogChannel& logChannel() const final;
 #endif
 
-    WeakHashSet<Observer> m_observers;
+    HashSet<Observer*> m_observers;
     String m_id;
     MediaStreamTrackPrivate* m_activeVideoTrack { nullptr };
     HashMap<String, RefPtr<MediaStreamTrackPrivate>> m_trackSet;

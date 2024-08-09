@@ -50,9 +50,7 @@ public:
 
     const Display::InlineContent* displayInlineContent() const { return m_displayInlineContent.get(); }
     Display::InlineContent& ensureDisplayInlineContent();
-
     void clearDisplayInlineContent() { m_displayInlineContent = nullptr; }
-    void shrinkDisplayInlineContent();
 
 private:
     // Cacheable input to line layout.
@@ -66,14 +64,6 @@ inline Display::InlineContent& InlineFormattingState::ensureDisplayInlineContent
     if (!m_displayInlineContent)
         m_displayInlineContent = adoptRef(*new Display::InlineContent);
     return *m_displayInlineContent;
-}
-
-inline void InlineFormattingState::shrinkDisplayInlineContent()
-{
-    if (!m_displayInlineContent)
-        return;
-    m_displayInlineContent->runs.shrinkToFit();
-    m_displayInlineContent->lineBoxes.shrinkToFit();
 }
 
 }

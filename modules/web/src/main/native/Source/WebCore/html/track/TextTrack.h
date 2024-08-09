@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2011 Google Inc. All rights reserved.
- * Copyright (C) 2011-2020 Apple Inc.  All rights reserved.
+ * Copyright (C) 2011-2017 Apple Inc.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -26,7 +26,7 @@
 
 #pragma once
 
-#if ENABLE(VIDEO)
+#if ENABLE(VIDEO_TRACK)
 
 #include "ContextDestructionObserver.h"
 #include "TextTrackCue.h"
@@ -54,17 +54,28 @@ public:
 class TextTrack : public TrackBase, public EventTargetWithInlineData, public ContextDestructionObserver {
     WTF_MAKE_ISO_ALLOCATED(TextTrack);
 public:
-    static Ref<TextTrack> create(Document*, TextTrackClient*, const AtomString& kind, const AtomString& id, const AtomString& label, const AtomString& language);
+    static Ref<TextTrack> create(ScriptExecutionContext* context, TextTrackClient* client, const AtomString& kind, const AtomString& id, const AtomString& label, const AtomString& language)
+    {
+        return adoptRef(*new TextTrack(context, client, kind, id, label, language, AddTrack));
+    }
     virtual ~TextTrack();
 
-    static TextTrack& captionMenuOffItem();
-    static TextTrack& captionMenuAutomaticItem();
+    EventTargetInterface eventTargetInterface() const final { return TextTrackEventTargetInterfaceType; }
+    ScriptExecutionContext* scriptExecutionContext() const final { return ContextDestructionObserver::scriptExecutionContext(); }
+
+    static TextTrack* captionMenuOffItem();
+    static TextTrack* captionMenuAutomaticItem();
 
     static const AtomString& subtitlesKeyword();
     static bool isValidKindKeyword(const AtomString&);
 
+    static const AtomString& disabledKeyword();
+    static const AtomString& hiddenKeyword();
+    static const AtomString& showingKeyword();
+
     enum class Kind { Subtitles, Captions, Descriptions, Chapters, Metadata, Forced };
     Kind kind() const;
+    void setKind(Kind);
 
     Kind kindForBindings() const;
     void setKindForBindings(Kind);
@@ -85,19 +96,20 @@ public:
     TextTrackCueList* cues();
     TextTrackCueList* activeCues() const;
 
-    TextTrackCueList* cuesInternal() const { return m_cues.get(); }
-
     void clearClient() override { m_client = nullptr; }
+    TextTrackClient* client() { return m_client; }
 
     ExceptionOr<void> addCue(Ref<TextTrackCue>&&);
     virtual ExceptionOr<void> removeCue(TextTrackCue&);
 
-    VTTRegionList* regions();
-    void addRegion(Ref<VTTRegion>&&);
-    ExceptionOr<void> removeRegion(VTTRegion&);
+    bool hasCue(TextTrackCue*, TextTrackCue::CueMatchRules = TextTrackCue::MatchAllFields);
 
-    void cueWillChange(TextTrackCue&);
-    void cueDidChange(TextTrackCue&);
+    VTTRegionList* regions();
+    void addRegion(RefPtr<VTTRegion>&&);
+    ExceptionOr<void> removeRegion(VTTRegion*);
+
+    void cueWillChange(TextTrackCue*);
+    void cueDidChange(TextTrackCue*);
 
     enum TextTrackType { TrackElement, AddTrack, InBand };
     TextTrackType trackType() const { return m_trackType; }
@@ -118,6 +130,7 @@ public:
     void setHasBeenConfigured(bool flag) { m_hasBeenConfigured = flag; }
 
     virtual bool isDefault() const { return false; }
+    virtual void setIsDefault(bool) { }
 
     void removeAllCues();
 
@@ -129,35 +142,26 @@ public:
 
     virtual MediaTime startTimeVariance() const { return MediaTime::zeroTime(); }
 
-    using RefCounted::ref;
-    using RefCounted::deref;
+    using RefCounted<TrackBase>::ref;
+    using RefCounted<TrackBase>::deref;
 
     const Optional<Vector<String>>& styleSheets() const { return m_styleSheets; }
 
 protected:
     TextTrack(ScriptExecutionContext*, TextTrackClient*, const AtomString& kind, const AtomString& id, const AtomString& label, const AtomString& language, TextTrackType);
 
-    Document& document() const;
-    TextTrackClient* client() { return m_client; }
-
-    bool hasCue(TextTrackCue&, TextTrackCue::CueMatchRules = TextTrackCue::MatchAllFields);
-    void setKind(Kind);
+#if !RELEASE_LOG_DISABLED
+    const char* logClassName() const override { return "TextTrack"; }
+#endif
 
     RefPtr<TextTrackCueList> m_cues;
     Optional<Vector<String>> m_styleSheets;
 
 private:
-    EventTargetInterface eventTargetInterface() const final { return TextTrackEventTargetInterfaceType; }
-    ScriptExecutionContext* scriptExecutionContext() const final { return ContextDestructionObserver::scriptExecutionContext(); }
-
     bool enabled() const override;
 
     void refEventTarget() final { ref(); }
     void derefEventTarget() final { deref(); }
-
-#if !RELEASE_LOG_DISABLED
-    const char* logClassName() const override { return "TextTrack"; }
-#endif
 
     VTTRegionList& ensureVTTRegionList();
     RefPtr<VTTRegionList> m_regions;
@@ -207,33 +211,8 @@ inline void TextTrack::setKindForBindings(Kind kind)
 
 #endif
 
-String convertEnumerationToString(TextTrack::Mode); // Defined in JSTextTrack.cpp
-String convertEnumerationToString(TextTrack::Kind);
 
 } // namespace WebCore
-
-namespace WTF {
-
-template<typename Type>
-struct LogArgument;
-
-template <>
-struct LogArgument<WebCore::TextTrack::Kind> {
-    static String toString(const WebCore::TextTrack::Kind kind)
-    {
-        return convertEnumerationToString(kind);
-    }
-};
-
-template <>
-struct LogArgument<WebCore::TextTrack::Mode> {
-    static String toString(const WebCore::TextTrack::Mode mode)
-    {
-        return convertEnumerationToString(mode);
-    }
-};
-
-};
 
 SPECIALIZE_TYPE_TRAITS_BEGIN(WebCore::TextTrack)
     static bool isType(const WebCore::TrackBase& track) { return track.type() == WebCore::TrackBase::TextTrack; }

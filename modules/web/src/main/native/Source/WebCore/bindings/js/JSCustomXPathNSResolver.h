@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008 Apple Inc. All Rights Reserved.
+ * Copyright (C) 2007 Alexey Proskuryakov (ap@nypop.com)
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -25,22 +25,30 @@
 
 #pragma once
 
-#include <utility>
-#include <wtf/HashSet.h>
-#include <wtf/URL.h>
-#include <wtf/Vector.h>
+#include "ExceptionOr.h"
+#include "XPathNSResolver.h"
+#include <JavaScriptCore/JSCInlines.h>
+#include <JavaScriptCore/JSCJSValue.h>
+#include <JavaScriptCore/Strong.h>
+#include <JavaScriptCore/StrongInlines.h>
 
 namespace WebCore {
 
-using FallbackURLVector = Vector<std::pair<URL, URL>>;
+class JSDOMWindow;
 
-struct ApplicationCacheManifest {
-    Vector<URL> onlineAllowedURLs;
-    HashSet<String> explicitURLs;
-    FallbackURLVector fallbackURLs;
-    bool allowAllNetworkRequests { false }; // Wildcard found in NETWORK section.
+class JSCustomXPathNSResolver final : public XPathNSResolver {
+public:
+    static ExceptionOr<Ref<JSCustomXPathNSResolver>> create(JSC::JSGlobalObject&, JSC::JSValue);
+    virtual ~JSCustomXPathNSResolver();
+
+private:
+    JSCustomXPathNSResolver(JSC::VM&, JSC::JSObject*, JSDOMWindow*);
+
+    String lookupNamespaceURI(const String& prefix) final;
+
+    // JSCustomXPathNSResolvers are always temporary so using a Strong reference is safe here.
+    JSC::Strong<JSC::JSObject> m_customResolver;
+    JSC::Strong<JSDOMWindow> m_globalObject;
 };
-
-Optional<ApplicationCacheManifest> parseApplicationCacheManifest(const URL& manifestURL, const String& manifestMIMEType, const char* data, int length);
 
 } // namespace WebCore

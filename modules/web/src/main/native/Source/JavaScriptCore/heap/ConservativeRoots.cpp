@@ -28,11 +28,14 @@
 
 #include "CodeBlock.h"
 #include "CodeBlockSetInlines.h"
+#include "HeapInlines.h"
 #include "HeapUtil.h"
 #include "JITStubRoutineSet.h"
 #include "JSCast.h"
-#include "JSCellInlines.h"
+#include "JSObject.h"
+#include "JSCInlines.h"
 #include "MarkedBlockInlines.h"
+#include "Structure.h"
 #include <wtf/OSAllocator.h>
 
 namespace JSC {

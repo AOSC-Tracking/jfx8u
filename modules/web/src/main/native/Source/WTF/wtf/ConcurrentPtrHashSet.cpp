@@ -26,6 +26,8 @@
 #include "config.h"
 #include <wtf/ConcurrentPtrHashSet.h>
 
+#include <wtf/DataLog.h>
+
 namespace WTF {
 
 ConcurrentPtrHashSet::ConcurrentPtrHashSet()

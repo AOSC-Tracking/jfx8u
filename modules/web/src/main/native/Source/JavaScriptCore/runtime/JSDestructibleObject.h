@@ -33,14 +33,22 @@ struct ClassInfo;
 
 class JSDestructibleObject : public JSNonFinalObject {
 public:
-    using Base = JSNonFinalObject;
+    typedef JSNonFinalObject Base;
 
     static constexpr bool needsDestruction = true;
 
+    template<typename CellType, SubspaceAccess>
+    static CompleteSubspace* subspaceFor(VM& vm)
+    {
+        return &vm.destructibleObjectSpace;
+    }
+
     const ClassInfo* classInfo() const { return m_classInfo; }
 
+    static ptrdiff_t classInfoOffset() { return OBJECT_OFFSETOF(JSDestructibleObject, m_classInfo); }
+
 protected:
-    JSDestructibleObject(VM& vm, Structure* structure, Butterfly* butterfly = nullptr)
+    JSDestructibleObject(VM& vm, Structure* structure, Butterfly* butterfly = 0)
         : JSNonFinalObject(vm, structure, butterfly)
         , m_classInfo(structure->classInfo())
     {

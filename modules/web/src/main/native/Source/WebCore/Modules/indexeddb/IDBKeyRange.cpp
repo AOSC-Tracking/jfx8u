@@ -33,7 +33,6 @@
 #include "IDBKeyData.h"
 #include "ScriptExecutionContext.h"
 #include <JavaScriptCore/JSCJSValue.h>
-#include <JavaScriptCore/JSGlobalObject.h>
 #include <wtf/IsoMallocInlines.h>
 
 namespace WebCore {
@@ -72,20 +71,12 @@ ExceptionOr<Ref<IDBKeyRange>> IDBKeyRange::only(RefPtr<IDBKey>&& key)
 
 ExceptionOr<Ref<IDBKeyRange>> IDBKeyRange::only(JSGlobalObject& state, JSValue keyValue)
 {
-    VM& vm = state.vm();
-    auto scope = DECLARE_THROW_SCOPE(vm);
-    auto key = scriptValueToIDBKey(state, keyValue);
-    EXCEPTION_ASSERT_UNUSED(scope, !scope.exception() || !key->isValid());
-    return only(WTFMove(key));
+    return only(scriptValueToIDBKey(state, keyValue));
 }
 
 ExceptionOr<Ref<IDBKeyRange>> IDBKeyRange::lowerBound(JSGlobalObject& state, JSValue boundValue, bool open)
 {
-    VM& vm = state.vm();
-    auto scope = DECLARE_THROW_SCOPE(vm);
-
     auto bound = scriptValueToIDBKey(state, boundValue);
-    EXCEPTION_ASSERT_UNUSED(scope, !scope.exception() || !bound->isValid());
     if (!bound->isValid())
         return Exception { DataError };
 
@@ -94,11 +85,7 @@ ExceptionOr<Ref<IDBKeyRange>> IDBKeyRange::lowerBound(JSGlobalObject& state, JSV
 
 ExceptionOr<Ref<IDBKeyRange>> IDBKeyRange::upperBound(JSGlobalObject& state, JSValue boundValue, bool open)
 {
-    VM& vm = state.vm();
-    auto scope = DECLARE_THROW_SCOPE(vm);
-
     auto bound = scriptValueToIDBKey(state, boundValue);
-    EXCEPTION_ASSERT_UNUSED(scope, !scope.exception() || !bound->isValid());
     if (!bound->isValid())
         return Exception { DataError };
 
@@ -107,15 +94,10 @@ ExceptionOr<Ref<IDBKeyRange>> IDBKeyRange::upperBound(JSGlobalObject& state, JSV
 
 ExceptionOr<Ref<IDBKeyRange>> IDBKeyRange::bound(JSGlobalObject& state, JSValue lowerValue, JSValue upperValue, bool lowerOpen, bool upperOpen)
 {
-    VM& vm = state.vm();
-    auto scope = DECLARE_THROW_SCOPE(vm);
-
     auto lower = scriptValueToIDBKey(state, lowerValue);
-    EXCEPTION_ASSERT_UNUSED(scope, !scope.exception() || !lower->isValid());
     if (!lower->isValid())
         return Exception { DataError };
     auto upper = scriptValueToIDBKey(state, upperValue);
-    EXCEPTION_ASSERT_UNUSED(scope, !scope.exception() || !upper->isValid());
     if (!upper->isValid())
         return Exception { DataError };
     if (upper->isLessThan(lower.get()))
@@ -133,11 +115,7 @@ bool IDBKeyRange::isOnlyKey() const
 
 ExceptionOr<bool> IDBKeyRange::includes(JSC::JSGlobalObject& state, JSC::JSValue keyValue)
 {
-    VM& vm = state.vm();
-    auto scope = DECLARE_THROW_SCOPE(vm);
-
     auto key = scriptValueToIDBKey(state, keyValue);
-    EXCEPTION_ASSERT_UNUSED(scope, !scope.exception() || !key->isValid());
     if (!key->isValid())
         return Exception { DataError, "Failed to execute 'includes' on 'IDBKeyRange': The passed-in value is not a valid IndexedDB key." };
 

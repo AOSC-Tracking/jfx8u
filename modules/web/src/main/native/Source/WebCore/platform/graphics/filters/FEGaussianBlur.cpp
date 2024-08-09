@@ -30,7 +30,6 @@
 #endif
 #include "Filter.h"
 #include "GraphicsContext.h"
-#include "ImageData.h"
 #include <wtf/text/TextStream.h>
 
 #if USE(ACCELERATE)
@@ -81,7 +80,7 @@ inline void kernelPosition(int blurIteration, unsigned& radius, int& deltaLeft, 
 }
 
 FEGaussianBlur::FEGaussianBlur(Filter& filter, float x, float y, EdgeModeType edgeMode)
-    : FilterEffect(filter, Type::GaussianBlur)
+    : FilterEffect(filter)
     , m_stdX(x)
     , m_stdY(y)
     , m_edgeMode(edgeMode)
@@ -524,15 +523,15 @@ void FEGaussianBlur::platformApplySoftware()
 {
     FilterEffect* in = inputEffect(0);
 
-    auto* resultImage = createPremultipliedImageResult();
-    auto* dstPixelArray = resultImage ? resultImage->data() : nullptr;
-    if (!dstPixelArray)
+    Uint8ClampedArray* resultPixelArray = createPremultipliedImageResult();
+    if (!resultPixelArray)
         return;
 
     setIsAlphaImage(in->isAlphaImage());
 
     IntRect effectDrawingRect = requestedRegionOfInputImageData(in->absolutePaintRect());
-    in->copyPremultipliedResult(*dstPixelArray, effectDrawingRect, operatingColorSpace());
+    in->copyPremultipliedResult(*resultPixelArray, effectDrawingRect);
+
     if (!m_stdX && !m_stdY)
         return;
 
@@ -545,7 +544,7 @@ void FEGaussianBlur::platformApplySoftware()
     if (!tmpImageData)
         return;
 
-    platformApply(*dstPixelArray, *tmpImageData, kernelSize.width(), kernelSize.height(), paintSize);
+    platformApply(*resultPixelArray, *tmpImageData, kernelSize.width(), kernelSize.height(), paintSize);
 }
 
 IntOutsets FEGaussianBlur::outsets() const

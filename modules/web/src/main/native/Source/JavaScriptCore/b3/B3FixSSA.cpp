@@ -28,7 +28,9 @@
 
 #if ENABLE(B3_JIT)
 
+#include "B3BasicBlockInlines.h"
 #include "B3BreakCriticalEdges.h"
+#include "B3Dominators.h"
 #include "B3InsertionSetInlines.h"
 #include "B3PhaseScope.h"
 #include "B3ProcedureInlines.h"

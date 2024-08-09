@@ -42,7 +42,6 @@ public:
     static AffineTransform transformOnNonScalingStroke(RenderObject*, const AffineTransform& resourceTransform);
 
     void idChanged();
-    void markAllClientsForRepaint();
     void addClientRenderLayer(RenderLayer*);
     void removeClientRenderLayer(RenderLayer*);
 

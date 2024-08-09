@@ -25,7 +25,7 @@
 
 #pragma once
 
-#if ENABLE(VIDEO)
+#if ENABLE(VIDEO_TRACK)
 
 #include "AudioTrack.h"
 #include "Event.h"
@@ -68,4 +68,4 @@ private:
 
 } // namespace WebCore
 
-#endif // ENABLE(VIDEO)
+#endif // ENABLE(VIDEO_TRACK)

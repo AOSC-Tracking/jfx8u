@@ -101,28 +101,24 @@ class TracksSupport extends MediaControllerSupport
         if (sectionIndex == 0 && this._canPickAudioTracks())
             return this._audioTracks()[trackIndex].enabled;
 
-        const textTracks = this._textTracks();
-        const trackItem = textTracks[trackIndex];
+        const trackItem = this._textTracks()[trackIndex];
         const host = this.mediaController.host;
-        const trackIsShowing = track => track.mode === "showing";
-        const allTracksDisabled = !textTracks.some(trackIsShowing);
-        const usesAutomaticTrack = host ? (host.captionDisplayMode === "automatic" && allTracksDisabled) : false;
+        const usesAutomaticTrack = host ? host.captionDisplayMode === "automatic" : false;
 
-        if (allTracksDisabled && host && trackItem === host.captionMenuOffItem && (host.captionDisplayMode === "forced-only" || host.captionDisplayMode === "manual"))
+        if (host && trackItem === host.captionMenuOffItem && (host.captionDisplayMode === "forced-only" || host.captionDisplayMode === "manual"))
             return true;
         if (host && trackItem === host.captionMenuAutomaticItem && usesAutomaticTrack)
             return true;
-        return !usesAutomaticTrack && trackIsShowing(trackItem);
+        return !usesAutomaticTrack && trackItem.mode !== "disabled";
     }
 
     tracksPanelSelectionDidChange(trackIndex, sectionIndex)
     {
         if (sectionIndex == 0 && this._canPickAudioTracks())
             this._audioTracks().forEach((audioTrack, index) => audioTrack.enabled = index === trackIndex);
-        else if (this.mediaController.host) {
-            this._textTracks().forEach(textTrack => textTrack.mode = "disabled");
+        else if (this.mediaController.host)
             this.mediaController.host.setSelectedTextTrack(this._textTracks()[trackIndex]);
-        } else
+        else
             this._textTracks().forEach((textTrack, index) => textTrack.mode = index === trackIndex ? "showing" : "disabled");
 
         this.mediaController.controls.hideTracksPanel();

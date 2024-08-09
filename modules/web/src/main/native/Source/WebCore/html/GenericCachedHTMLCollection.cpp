@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2015 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -64,7 +64,12 @@ bool GenericCachedHTMLCollection<traversalType>::elementMatches(Element& element
     case SelectedOptions:
         return is<HTMLOptionElement>(element) && downcast<HTMLOptionElement>(element).selected();
     case DataListOptions:
-        return is<HTMLOptionElement>(element);
+        if (is<HTMLOptionElement>(element)) {
+            HTMLOptionElement& option = downcast<HTMLOptionElement>(element);
+            if (!option.isDisabledFormControl() && !option.value().isEmpty())
+                return true;
+        }
+        return false;
     case MapAreas:
         return element.hasTagName(areaTag);
     case DocApplets:

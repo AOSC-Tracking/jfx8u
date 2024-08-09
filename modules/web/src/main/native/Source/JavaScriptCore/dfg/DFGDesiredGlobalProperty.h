@@ -102,7 +102,9 @@ struct DesiredGlobalPropertyHash {
 namespace WTF {
 
 template<typename T> struct DefaultHash;
-template<> struct DefaultHash<JSC::DFG::DesiredGlobalProperty> : JSC::DFG::DesiredGlobalPropertyHash { };
+template<> struct DefaultHash<JSC::DFG::DesiredGlobalProperty> {
+    typedef JSC::DFG::DesiredGlobalPropertyHash Hash;
+};
 
 template<typename T> struct HashTraits;
 template<> struct HashTraits<JSC::DFG::DesiredGlobalProperty> : SimpleClassHashTraits<JSC::DFG::DesiredGlobalProperty> { };

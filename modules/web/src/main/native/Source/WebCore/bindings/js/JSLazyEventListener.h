@@ -39,13 +39,13 @@ public:
 
     virtual ~JSLazyEventListener();
 
-    URL sourceURL() const final { return m_sourceURL; }
+    String sourceURL() const final { return m_sourceURL; }
     TextPosition sourcePosition() const final { return m_sourcePosition; }
 
 private:
     struct CreationArguments;
     static RefPtr<JSLazyEventListener> create(CreationArguments&&);
-    JSLazyEventListener(CreationArguments&&, const URL& sourceURL, const TextPosition&);
+    JSLazyEventListener(CreationArguments&&, const String& sourceURL, const TextPosition&);
 
 #if ASSERT_ENABLED
     void checkValidityForEventTarget(EventTarget&) final;
@@ -57,7 +57,7 @@ private:
     String m_functionName;
     const String& m_eventParameterName;
     String m_code;
-    URL m_sourceURL;
+    String m_sourceURL;
     TextPosition m_sourcePosition;
     WeakPtr<ContainerNode> m_originalNode;
 };

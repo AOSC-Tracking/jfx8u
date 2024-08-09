@@ -26,6 +26,7 @@
 #include "config.h"
 #include "FilterOperations.h"
 
+#include "ColorUtilities.h"
 #include "FEGaussianBlur.h"
 #include "IntSize.h"
 #include "LengthFunctions.h"
@@ -110,14 +111,15 @@ bool FilterOperations::transformColor(Color& color) const
     if (color.isSemantic())
         return false;
 
-    auto sRGBAColor = color.toSRGBALossy<float>();
+    FloatComponents components;
+    color.getRGBA(components.components[0], components.components[1], components.components[2], components.components[3]);
 
     for (auto& operation : m_operations) {
-        if (!operation->transformColor(sRGBAColor))
+        if (!operation->transformColor(components))
             return false;
     }
 
-    color = convertToComponentBytes(sRGBAColor);
+    color = Color(components.components[0], components.components[1], components.components[2], components.components[3]);
     return true;
 }
 
@@ -129,14 +131,15 @@ bool FilterOperations::inverseTransformColor(Color& color) const
     if (color.isSemantic())
         return false;
 
-    auto sRGBAColor = color.toSRGBALossy<float>();
+    FloatComponents components;
+    color.getRGBA(components.components[0], components.components[1], components.components[2], components.components[3]);
 
     for (auto& operation : m_operations) {
-        if (!operation->inverseTransformColor(sRGBAColor))
+        if (!operation->inverseTransformColor(components))
             return false;
     }
 
-    color = convertToComponentBytes(sRGBAColor);
+    color = Color(components.components[0], components.components[1], components.components[2], components.components[3]);
     return true;
 }
 

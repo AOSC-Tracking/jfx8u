@@ -40,13 +40,13 @@ class GLContext;
 
 namespace Nicosia {
 
-class GCGLLayer : public ContentLayerTextureMapperImpl::Client {
+class GC3DLayer : public ContentLayerTextureMapperImpl::Client {
     WTF_MAKE_FAST_ALLOCATED;
 public:
-    explicit GCGLLayer(WebCore::GraphicsContextGLOpenGL&);
-    GCGLLayer(WebCore::GraphicsContextGLOpenGL&, WebCore::GraphicsContextGLOpenGL::Destination);
+    explicit GC3DLayer(WebCore::GraphicsContextGLOpenGL&);
+    GC3DLayer(WebCore::GraphicsContextGLOpenGL&, WebCore::GraphicsContextGLOpenGL::Destination);
 
-    virtual ~GCGLLayer();
+    virtual ~GC3DLayer();
 
     ContentLayer& contentLayer() const { return m_contentLayer; }
     virtual bool makeContextCurrent();

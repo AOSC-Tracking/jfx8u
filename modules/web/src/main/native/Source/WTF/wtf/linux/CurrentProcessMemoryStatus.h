@@ -38,7 +38,7 @@ struct ProcessMemoryStatus {
     size_t dt { 0 };
 };
 
-WTF_EXPORT_PRIVATE void currentProcessMemoryStatus(ProcessMemoryStatus&);
+void currentProcessMemoryStatus(ProcessMemoryStatus&);
 
 } // namespace WTF
 

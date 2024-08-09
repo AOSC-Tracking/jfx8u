@@ -110,14 +110,12 @@ public:
     template<class Encoder> void encode(Encoder&) const;
     template<class Decoder> static RefPtr<SerializedScriptValue> decode(Decoder&);
 
-    size_t memoryCost() const { return m_memoryCost; }
-
     WEBCORE_EXPORT ~SerializedScriptValue();
 
 private:
     WEBCORE_EXPORT SerializedScriptValue(Vector<unsigned char>&&);
     WEBCORE_EXPORT SerializedScriptValue(Vector<unsigned char>&&, std::unique_ptr<ArrayBufferContentsArray>);
-    SerializedScriptValue(Vector<unsigned char>&&, const Vector<String>& blobURLs, std::unique_ptr<ArrayBufferContentsArray>, std::unique_ptr<ArrayBufferContentsArray> sharedBuffers, Vector<std::pair<std::unique_ptr<ImageBuffer>, ImageBuffer::SerializationState>>&& imageBuffers
+    SerializedScriptValue(Vector<unsigned char>&&, const Vector<String>& blobURLs, std::unique_ptr<ArrayBufferContentsArray>, std::unique_ptr<ArrayBufferContentsArray> sharedBuffers, Vector<std::pair<std::unique_ptr<ImageBuffer>, bool>>&& imageBuffers
 #if ENABLE(OFFSCREEN_CANVAS)
         , Vector<std::unique_ptr<DetachedOffscreenCanvas>>&& = { }
 #endif
@@ -126,12 +124,10 @@ private:
 #endif
         );
 
-    size_t computeMemoryCost() const;
-
     Vector<unsigned char> m_data;
     std::unique_ptr<ArrayBufferContentsArray> m_arrayBufferContentsArray;
     std::unique_ptr<ArrayBufferContentsArray> m_sharedBufferContentsArray;
-    Vector<std::pair<std::unique_ptr<ImageBuffer>, ImageBuffer::SerializationState>> m_imageBuffers;
+    Vector<std::pair<std::unique_ptr<ImageBuffer>, bool>> m_imageBuffers;
 #if ENABLE(OFFSCREEN_CANVAS)
     Vector<std::unique_ptr<DetachedOffscreenCanvas>> m_detachedOffscreenCanvases;
 #endif
@@ -139,7 +135,6 @@ private:
     std::unique_ptr<WasmModuleArray> m_wasmModulesArray;
 #endif
     Vector<String> m_blobURLs;
-    size_t m_memoryCost { 0 };
 };
 
 template<class Encoder>
@@ -184,12 +179,8 @@ RefPtr<SerializedScriptValue> SerializedScriptValue::decode(Decoder& decoder)
         unsigned bufferSize;
         if (!decoder.decode(bufferSize))
             return nullptr;
-        if (!decoder.template bufferIsLargeEnoughToContain<uint8_t>(bufferSize))
-            return nullptr;
 
         auto buffer = Gigacage::tryMalloc(Gigacage::Primitive, bufferSize);
-        if (!buffer)
-            return nullptr;
         if (!decoder.decodeFixedLengthData(static_cast<uint8_t*>(buffer), bufferSize, 1)) {
             Gigacage::free(Gigacage::Primitive, buffer);
             return nullptr;

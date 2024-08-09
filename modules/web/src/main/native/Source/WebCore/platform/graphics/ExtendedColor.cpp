@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2016 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -23,30 +23,37 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#pragma once
+#include "config.h"
+#include "ExtendedColor.h"
 
-#include <wtf/FastMalloc.h>
-#include <wtf/Noncopyable.h>
+#include <wtf/MathExtras.h>
+#include <wtf/text/StringConcatenateNumbers.h>
 
 namespace WebCore {
-class SQLiteStatement;
 
-class SQLiteStatementAutoResetScope {
-    WTF_MAKE_NONCOPYABLE(SQLiteStatementAutoResetScope); WTF_MAKE_FAST_ALLOCATED;
-public:
-    WEBCORE_EXPORT explicit SQLiteStatementAutoResetScope(SQLiteStatement* = nullptr);
-    WEBCORE_EXPORT SQLiteStatementAutoResetScope(SQLiteStatementAutoResetScope&& other);
-    WEBCORE_EXPORT SQLiteStatementAutoResetScope& operator=(SQLiteStatementAutoResetScope&& other);
-    WEBCORE_EXPORT ~SQLiteStatementAutoResetScope();
+Ref<ExtendedColor> ExtendedColor::create(float red, float green, float blue, float alpha, ColorSpace colorSpace)
+{
+    return adoptRef(*new ExtendedColor(red, green, blue, alpha, colorSpace));
+}
 
-    explicit operator bool() const { return m_statement; }
-    bool operator!() const { return !m_statement; }
+String ExtendedColor::cssText() const
+{
+    const char* colorSpace;
+    switch (m_colorSpace) {
+    case ColorSpace::SRGB:
+        colorSpace = "srgb";
+        break;
+    case ColorSpace::DisplayP3:
+        colorSpace = "display-p3";
+        break;
+    default:
+        ASSERT_NOT_REACHED();
+        return WTF::emptyString();
+    }
 
-    SQLiteStatement* get() { return m_statement; }
-    SQLiteStatement* operator->() { return m_statement; }
+    if (WTF::areEssentiallyEqual(alpha(), 1.0f))
+        return makeString("color(", colorSpace, ' ', red(), ' ', green(), ' ', blue(), ')');
+    return makeString("color(", colorSpace, ' ', red(), ' ', green(), ' ', blue(), " / ", alpha(), ')');
+}
 
-private:
-    SQLiteStatement* m_statement;
-};
-
-} // namespace WebCore
+}

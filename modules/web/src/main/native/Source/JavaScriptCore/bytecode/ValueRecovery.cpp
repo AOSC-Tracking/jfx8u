@@ -26,7 +26,8 @@
 #include "config.h"
 #include "ValueRecovery.h"
 
-#include "JSCJSValueInlines.h"
+#include "CodeBlock.h"
+#include "JSCInlines.h"
 
 namespace JSC {
 
@@ -132,7 +133,7 @@ void ValueRecovery::dumpInContext(PrintStream& out, DumpContext* context) const
 
 void ValueRecovery::dump(PrintStream& out) const
 {
-    dumpInContext(out, nullptr);
+    dumpInContext(out, 0);
 }
 #endif // ENABLE(JIT)
 

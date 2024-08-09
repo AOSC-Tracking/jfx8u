@@ -26,6 +26,7 @@
 #pragma once
 
 #include "CompositeEditCommand.h"
+#include "Range.h"
 
 namespace WebCore {
 
@@ -33,20 +34,20 @@ class DocumentFragment;
 
 class ReplaceRangeWithTextCommand : public CompositeEditCommand {
 public:
-    static Ref<ReplaceRangeWithTextCommand> create(const SimpleRange& rangeToBeReplaced, const String& text)
+    static Ref<ReplaceRangeWithTextCommand> create(RefPtr<Range> rangeToBeReplaced, const String& text)
     {
         return adoptRef(*new ReplaceRangeWithTextCommand(rangeToBeReplaced, text));
     }
 
 private:
-    ReplaceRangeWithTextCommand(const SimpleRange& rangeToBeReplaced, const String& text);
+    ReplaceRangeWithTextCommand(RefPtr<Range> rangeToBeReplaced, const String& text);
     bool willApplyCommand() final;
     void doApply() override;
     String inputEventData() const final;
     RefPtr<DataTransfer> inputEventDataTransfer() const final;
     Vector<RefPtr<StaticRange>> targetRanges() const final;
 
-    SimpleRange m_rangeToBeReplaced;
+    RefPtr<Range> m_rangeToBeReplaced;
     RefPtr<DocumentFragment> m_textFragment;
     String m_text;
 };

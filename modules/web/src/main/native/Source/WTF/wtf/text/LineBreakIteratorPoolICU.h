@@ -30,8 +30,6 @@
 #include <wtf/NeverDestroyed.h>
 #include <wtf/ThreadSpecific.h>
 #include <wtf/text/AtomString.h>
-#include <wtf/text/TextBreakIterator.h>
-#include <wtf/unicode/icu/ICUHelpers.h>
 
 namespace WTF {
 
@@ -76,7 +74,7 @@ public:
         int32_t lengthNeeded = uloc_setKeywordValue("lb", keywordValue, scratchBuffer.data(), scratchBuffer.size(), &status);
         if (U_SUCCESS(status))
             return AtomString::fromUTF8(scratchBuffer.data(), lengthNeeded);
-        if (needsToGrowToProduceBuffer(status)) {
+        if (status == U_BUFFER_OVERFLOW_ERROR) {
             scratchBuffer.grow(lengthNeeded + 1);
             memset(scratchBuffer.data() + utf8Locale.length(), 0, scratchBuffer.size() - utf8Locale.length());
             status = U_ZERO_ERROR;

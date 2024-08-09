@@ -65,7 +65,7 @@ private:
     void fired() override = 0;
 
     // ActiveDOMObject API.
-    bool virtualHasPendingActivity() const final;
+    bool hasPendingActivity() const final;
     void stop() final;
     void suspend(ReasonForSuspension) final;
     void resume() final;

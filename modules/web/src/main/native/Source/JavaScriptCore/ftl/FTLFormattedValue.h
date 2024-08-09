@@ -40,7 +40,7 @@ class FormattedValue {
 public:
     FormattedValue()
         : m_format(DataFormatNone)
-        , m_value(nullptr)
+        , m_value(0)
     {
     }
 

@@ -88,12 +88,8 @@ private:
     // They should ensure their use of the VM is thread safe.
     JSC::VM* m_vm { nullptr };
 
-#if ENABLE(SAMPLING_PROFILER)
-#if OS(DARWIN)
+#if ENABLE(SAMPLING_PROFILER) && OS(DARWIN)
     mach_port_t m_samplingProfilerMachThread { MACH_PORT_NULL };
-#elif OS(LINUX)
-    pid_t m_samplingProfilerThreadID { 0 };
-#endif
 #endif
 
 };

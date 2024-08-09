@@ -28,15 +28,16 @@
 
 #if ENABLE(WEBASSEMBLY)
 
-#include "JSCellInlines.h"
+#include "JSCInlines.h"
 
 namespace JSC {
 
 JSWebAssemblyCompileError* JSWebAssemblyCompileError::create(JSGlobalObject* globalObject, VM& vm, Structure* structure, const String& message)
 {
     auto* instance = new (NotNull, allocateCell<JSWebAssemblyCompileError>(vm.heap)) JSWebAssemblyCompileError(vm, structure);
+    instance->m_sourceAppender = defaultSourceAppender;
     bool useCurrentFrame = true;
-    instance->finishCreation(vm, globalObject, message, defaultSourceAppender, TypeNothing, useCurrentFrame);
+    instance->finishCreation(globalObject, vm, message, useCurrentFrame);
     return instance;
 }
 

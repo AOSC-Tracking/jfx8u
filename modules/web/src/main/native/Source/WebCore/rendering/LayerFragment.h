@@ -33,12 +33,15 @@ class LayerFragment {
 public:
     LayerFragment() = default;
 
-    void setRects(const LayoutRect& bounds, const ClipRect& background, const ClipRect& foreground, const Optional<LayoutRect>& bbox)
+    void setRects(const LayoutRect& bounds, const ClipRect& background, const ClipRect& foreground, const LayoutRect* bbox)
     {
         layerBounds = bounds;
         backgroundRect = background;
         foregroundRect = foreground;
-        boundingBox = bbox;
+        if (bbox) {
+            boundingBox = *bbox;
+            hasBoundingBox = true;
+        }
     }
 
     void moveBy(const LayoutPoint& offset)
@@ -47,16 +50,14 @@ public:
         backgroundRect.moveBy(offset);
         foregroundRect.moveBy(offset);
         paginationClip.moveBy(offset);
-        if (boundingBox)
-            boundingBox->moveBy(offset);
+        boundingBox.moveBy(offset);
     }
 
     void intersect(const LayoutRect& rect)
     {
         backgroundRect.intersect(rect);
         foregroundRect.intersect(rect);
-        if (boundingBox)
-            boundingBox->intersect(rect);
+        boundingBox.intersect(rect);
     }
 
     void intersect(const ClipRect& clipRect)
@@ -66,11 +67,11 @@ public:
     }
 
     bool shouldPaintContent = false;
-    Optional<LayoutRect> boundingBox;
-
+    bool hasBoundingBox = false;
     LayoutRect layerBounds;
     ClipRect backgroundRect;
     ClipRect foregroundRect;
+    LayoutRect boundingBox;
 
     // Unique to paginated fragments. The physical translation to apply to shift the layer when painting/hit-testing.
     LayoutSize paginationOffset;

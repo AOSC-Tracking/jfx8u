@@ -31,11 +31,9 @@
 #include "ClassInfo.h"
 #include "CustomGetterSetter.h"
 #include "DOMAttributeGetterSetter.h"
-#include "DeletePropertySlot.h"
 #include "Heap.h"
 #include "IndexingHeaderInlines.h"
 #include "JSCast.h"
-#include "MathCommon.h"
 #include "ObjectInitializationScope.h"
 #include "PropertySlot.h"
 #include "PropertyStorage.h"
@@ -73,7 +71,6 @@ class ThrowScope;
 struct HashTable;
 struct HashTableValue;
 
-JS_EXPORT_PRIVATE bool isTerminatedExecutionException(VM&, Exception*);
 JS_EXPORT_PRIVATE Exception* throwTypeError(JSGlobalObject*, ThrowScope&, const String&);
 extern JS_EXPORT_PRIVATE const ASCIILiteral NonExtensibleObjectPropertyDefineError;
 extern JS_EXPORT_PRIVATE const ASCIILiteral ReadonlyPropertyWriteError;
@@ -92,12 +89,6 @@ COMPILE_ASSERT(PropertyAttribute::Accessor < FirstInternalAttribute, Accessor_is
 
 class JSFinalObject;
 
-#if ASSERT_ENABLED
-#define JS_EXPORT_PRIVATE_IF_ASSERT_ENABLED JS_EXPORT_PRIVATE
-#else
-#define JS_EXPORT_PRIVATE_IF_ASSERT_ENABLED
-#endif
-
 class JSObject : public JSCell {
     friend class BatchedTransitionOptimizer;
     friend class JIT;
@@ -113,6 +104,16 @@ class JSObject : public JSCell {
 
 public:
     using Base = JSCell;
+
+    // Don't call this directly. Call JSC::subspaceFor<Type>(vm) instead.
+    // FIXME: Refer to Subspace by reference.
+    // https://bugs.webkit.org/show_bug.cgi?id=166988
+    template<typename CellType, SubspaceAccess>
+    static CompleteSubspace* subspaceFor(VM&);
+
+    // This is a super dangerous method for JITs. Sometimes the JITs will want to create either a
+    // JSFinalObject or a JSArray. This is the method that will do that.
+    static JSObject* createRawObject(VM& vm, Structure* structure, Butterfly* = nullptr);
 
     JS_EXPORT_PRIVATE static size_t estimatedSize(JSCell*, VM&);
     JS_EXPORT_PRIVATE static void visitChildren(JSCell*, SlotVisitor&);
@@ -163,33 +164,22 @@ public:
 
     JSValue get(JSGlobalObject*, PropertyName) const;
     JSValue get(JSGlobalObject*, unsigned propertyName) const;
-    JSValue get(JSGlobalObject*, uint64_t propertyName) const;
 
     template<bool checkNullStructure = false>
     bool getPropertySlot(JSGlobalObject*, PropertyName, PropertySlot&);
     bool getPropertySlot(JSGlobalObject*, unsigned propertyName, PropertySlot&);
-    bool getPropertySlot(JSGlobalObject*, uint64_t propertyName, PropertySlot&);
     template<typename CallbackWhenNoException> typename std::result_of<CallbackWhenNoException(bool, PropertySlot&)>::type getPropertySlot(JSGlobalObject*, PropertyName, CallbackWhenNoException) const;
     template<typename CallbackWhenNoException> typename std::result_of<CallbackWhenNoException(bool, PropertySlot&)>::type getPropertySlot(JSGlobalObject*, PropertyName, PropertySlot&, CallbackWhenNoException) const;
 
-private:
-    static bool getOwnPropertySlotImpl(JSObject*, JSGlobalObject*, PropertyName, PropertySlot&);
-public:
-    JS_EXPORT_PRIVATE_IF_ASSERT_ENABLED static bool getOwnPropertySlot(JSObject*, JSGlobalObject*, PropertyName, PropertySlot&);
-
+    static bool getOwnPropertySlot(JSObject*, JSGlobalObject*, PropertyName, PropertySlot&);
     JS_EXPORT_PRIVATE static bool getOwnPropertySlotByIndex(JSObject*, JSGlobalObject*, unsigned propertyName, PropertySlot&);
     bool getOwnPropertySlotInline(JSGlobalObject*, PropertyName, PropertySlot&);
-    JS_EXPORT_PRIVATE_IF_ASSERT_ENABLED static void doPutPropertySecurityCheck(JSObject*, JSGlobalObject*, PropertyName, PutPropertySlot&);
+    static void doPutPropertySecurityCheck(JSObject*, JSGlobalObject*, PropertyName, PutPropertySlot&);
 
     // The key difference between this and getOwnPropertySlot is that getOwnPropertySlot
     // currently returns incorrect results for the DOM window (with non-own properties)
     // being returned. Once this is fixed we should migrate code & remove this method.
     JS_EXPORT_PRIVATE bool getOwnPropertyDescriptor(JSGlobalObject*, PropertyName, PropertyDescriptor&);
-
-    static bool getPrivateFieldSlot(JSObject*, JSGlobalObject*, PropertyName, PropertySlot&);
-    inline bool getPrivateField(JSGlobalObject*, PropertyName, PropertySlot&);
-    inline void putPrivateField(JSGlobalObject*, PropertyName, JSValue, PutPropertySlot&);
-    inline void definePrivateField(JSGlobalObject*, PropertyName, JSValue, PutPropertySlot&);
 
     unsigned getArrayLength() const
     {
@@ -220,16 +210,6 @@ public:
             return true;
         }
         return methodTable(vm)->putByIndex(this, globalObject, propertyName, value, shouldThrow);
-    }
-
-    ALWAYS_INLINE bool putByIndexInline(JSGlobalObject* globalObject, uint64_t propertyName, JSValue value, bool shouldThrow)
-    {
-        if (LIKELY(propertyName <= MAX_ARRAY_INDEX))
-            return putByIndexInline(globalObject, static_cast<uint32_t>(propertyName), value, shouldThrow);
-
-        ASSERT(propertyName <= maxSafeInteger());
-        PutPropertySlot slot(this, shouldThrow);
-        return putInlineForJSObject(this, globalObject, Identifier::from(getVM(globalObject), propertyName), value, slot);
     }
 
     // This is similar to the putDirect* methods:
@@ -269,13 +249,6 @@ public:
     bool putDirectIndex(JSGlobalObject* globalObject, unsigned propertyName, JSValue value)
     {
         return putDirectIndex(globalObject, propertyName, value, 0, PutDirectIndexLikePutDirect);
-    }
-
-    ALWAYS_INLINE bool putDirectIndex(JSGlobalObject* globalObject, uint64_t propertyName, JSValue value, unsigned attributes, PutDirectIndexMode mode)
-    {
-        if (LIKELY(propertyName <= MAX_ARRAY_INDEX))
-            return putDirectIndex(globalObject, static_cast<uint32_t>(propertyName), value, attributes, mode);
-        return putDirect(getVM(globalObject), Identifier::from(getVM(globalObject), propertyName), value, attributes);
     }
 
     // A generally non-throwing version of putDirect and putDirectIndex.
@@ -319,14 +292,6 @@ public:
             RELEASE_ASSERT_NOT_REACHED();
             return false;
         }
-    }
-
-    bool canGetIndexQuickly(uint64_t i) const
-    {
-        ASSERT(i <= maxSafeInteger());
-        if (LIKELY(i <= MAX_ARRAY_INDEX))
-            return canGetIndexQuickly(static_cast<uint32_t>(i));
-        return false;
     }
 
     JSValue getIndexQuickly(unsigned i) const
@@ -386,14 +351,6 @@ public:
             RELEASE_ASSERT_NOT_REACHED();
             break;
         }
-        return JSValue();
-    }
-
-    JSValue tryGetIndexQuickly(uint64_t i) const
-    {
-        ASSERT(i <= maxSafeInteger());
-        if (LIKELY(i <= MAX_ARRAY_INDEX))
-            return tryGetIndexQuickly(static_cast<uint32_t>(i));
         return JSValue();
     }
 
@@ -660,18 +617,14 @@ public:
 
     JS_EXPORT_PRIVATE bool hasProperty(JSGlobalObject*, PropertyName) const;
     JS_EXPORT_PRIVATE bool hasProperty(JSGlobalObject*, unsigned propertyName) const;
-    bool hasProperty(JSGlobalObject*, uint64_t propertyName) const;
     bool hasPropertyGeneric(JSGlobalObject*, PropertyName, PropertySlot::InternalMethodType) const;
     bool hasPropertyGeneric(JSGlobalObject*, unsigned propertyName, PropertySlot::InternalMethodType) const;
     bool hasOwnProperty(JSGlobalObject*, PropertyName, PropertySlot&) const;
     bool hasOwnProperty(JSGlobalObject*, PropertyName) const;
     bool hasOwnProperty(JSGlobalObject*, unsigned) const;
 
-    JS_EXPORT_PRIVATE static bool deleteProperty(JSCell*, JSGlobalObject*, PropertyName, DeletePropertySlot&);
+    JS_EXPORT_PRIVATE static bool deleteProperty(JSCell*, JSGlobalObject*, PropertyName);
     JS_EXPORT_PRIVATE static bool deletePropertyByIndex(JSCell*, JSGlobalObject*, unsigned propertyName);
-    bool deleteProperty(JSGlobalObject*, PropertyName);
-    bool deleteProperty(JSGlobalObject*, uint32_t propertyName);
-    bool deleteProperty(JSGlobalObject*, uint64_t propertyName);
 
     JS_EXPORT_PRIVATE static JSValue defaultValue(const JSObject*, JSGlobalObject*, PreferredPrimitiveType);
     JSValue ordinaryToPrimitive(JSGlobalObject*, PreferredPrimitiveType) const;
@@ -952,7 +905,7 @@ public:
         return &m_butterfly;
     }
 
-    JS_EXPORT_PRIVATE JSValue getMethod(JSGlobalObject*, CallData&, const Identifier&, const String& errorMessage);
+    JS_EXPORT_PRIVATE JSValue getMethod(JSGlobalObject*, CallData&, CallType&, const Identifier&, const String& errorMessage);
 
     bool canPerformFastPutInline(VM&, PropertyName);
     bool canPerformFastPutInlineExcludingProto(VM&);
@@ -1007,7 +960,7 @@ protected:
             return m_butterfly->arrayStorage();
 
         default:
-            return nullptr;
+            return 0;
         }
     }
 
@@ -1163,7 +1116,7 @@ public:
     }
 
 protected:
-    explicit JSNonFinalObject(VM& vm, Structure* structure, Butterfly* butterfly = nullptr)
+    explicit JSNonFinalObject(VM& vm, Structure* structure, Butterfly* butterfly = 0)
         : JSObject(vm, structure, butterfly)
     {
     }
@@ -1182,12 +1135,10 @@ class JSFinalObject;
 // storage to fully make use of the collector cell containing it.
 class JSFinalObject final : public JSObject {
     friend class JSObject;
-public:
-    using Base = JSObject;
-    static constexpr unsigned StructureFlags = Base::StructureFlags;
 
-    template<typename CellType, SubspaceAccess>
-    static CompleteSubspace* subspaceFor(VM&);
+public:
+    typedef JSObject Base;
+    static constexpr unsigned StructureFlags = Base::StructureFlags;
 
     static size_t allocationSize(Checked<size_t> inlineCapacity)
     {
@@ -1209,8 +1160,7 @@ public:
         return (maxSize - allocationSize(0)) / sizeof(WriteBarrier<Unknown>);
     }
 
-    static JSFinalObject* create(VM&, Structure*);
-    static JSFinalObject* createWithButterfly(VM&, Structure*, Butterfly*);
+    static JSFinalObject* create(VM&, Structure*, Butterfly* = nullptr);
     static Structure* createStructure(VM& vm, JSGlobalObject* globalObject, JSValue prototype, unsigned inlineCapacity)
     {
         return Structure::create(vm, globalObject, prototype, typeInfo(), info(), defaultIndexingType, inlineCapacity);
@@ -1220,28 +1170,42 @@ public:
 
     DECLARE_EXPORT_INFO;
 
-private:
-    friend class LLIntOffsetsExtractor;
-
+protected:
     void visitChildrenCommon(SlotVisitor&);
-
-    explicit JSFinalObject(VM& vm, Structure* structure, Butterfly* butterfly)
-        : JSObject(vm, structure, butterfly)
-    {
-        gcSafeZeroMemory(inlineStorageUnsafe(), structure->inlineCapacity() * sizeof(EncodedJSValue));
-    }
 
     void finishCreation(VM& vm)
     {
         Base::finishCreation(vm);
-        ASSERT(butterfly() || structure(vm)->totalStorageCapacity() == structure(vm)->inlineCapacity());
+        ASSERT(structure(vm)->totalStorageCapacity() == structure(vm)->inlineCapacity());
         ASSERT(classInfo(vm));
+    }
+
+private:
+    friend class LLIntOffsetsExtractor;
+
+    explicit JSFinalObject(VM& vm, Structure* structure, Butterfly* butterfly = nullptr)
+        : JSObject(vm, structure, butterfly)
+    {
+        gcSafeZeroMemory(inlineStorageUnsafe(), structure->inlineCapacity() * sizeof(EncodedJSValue));
     }
 };
 
 JS_EXPORT_PRIVATE EncodedJSValue JSC_HOST_CALL objectPrivateFuncInstanceOf(JSGlobalObject*, CallFrame*);
 
-inline JSFinalObject* JSFinalObject::createWithButterfly(VM& vm, Structure* structure, Butterfly* butterfly)
+inline JSObject* JSObject::createRawObject(VM& vm, Structure* structure, Butterfly* butterfly)
+{
+    JSObject* finalObject = new (
+        NotNull,
+        allocateCell<JSFinalObject>(
+            vm.heap,
+            JSFinalObject::allocationSize(structure->inlineCapacity())
+        )
+    ) JSObject(vm, structure, butterfly);
+    finalObject->finishCreation(vm);
+    return finalObject;
+}
+
+inline JSFinalObject* JSFinalObject::create(VM& vm, Structure* structure, Butterfly* butterfly)
 {
     JSFinalObject* finalObject = new (
         NotNull,
@@ -1252,11 +1216,6 @@ inline JSFinalObject* JSFinalObject::createWithButterfly(VM& vm, Structure* stru
     ) JSFinalObject(vm, structure, butterfly);
     finalObject->finishCreation(vm);
     return finalObject;
-}
-
-inline JSFinalObject* JSFinalObject::create(VM& vm, Structure* structure)
-{
-    return createWithButterfly(vm, structure, nullptr);
 }
 
 inline size_t JSObject::offsetOfInlineStorage()
@@ -1335,7 +1294,6 @@ inline void JSObject::nukeStructureAndSetButterfly(VM& vm, StructureID oldStruct
 
 inline JSObject* asObject(JSCell* cell)
 {
-    ASSERT(cell);
     ASSERT(cell->isObject());
     return jsCast<JSObject*>(cell);
 }
@@ -1358,9 +1316,11 @@ inline JSValue JSObject::getPrototypeDirect(VM& vm) const
 
 inline JSValue JSObject::getPrototype(VM& vm, JSGlobalObject* globalObject)
 {
-    if (LIKELY(!structure(vm)->typeInfo().overridesGetPrototype()))
+    auto getPrototypeMethod = methodTable(vm)->getPrototype;
+    MethodTable::GetPrototypeFunctionPtr defaultGetPrototype = JSObject::getPrototype;
+    if (LIKELY(getPrototypeMethod == defaultGetPrototype))
         return getPrototypeDirect(vm);
-    return methodTable(vm)->getPrototype(this, globalObject);
+    return getPrototypeMethod(this, globalObject);
 }
 
 // Normally, we never shrink the butterfly so if we know an offset is valid for some
@@ -1432,7 +1392,7 @@ ALWAYS_INLINE void JSObject::fillCustomGetterPropertySlot(VM& vm, PropertySlot& 
 // It may seem crazy to inline a function this large, especially a virtual function,
 // but it makes a big difference to property lookup that derived classes can inline their
 // base class call to this.
-ALWAYS_INLINE bool JSObject::getOwnPropertySlotImpl(JSObject* object, JSGlobalObject* globalObject, PropertyName propertyName, PropertySlot& slot)
+ALWAYS_INLINE bool JSObject::getOwnPropertySlot(JSObject* object, JSGlobalObject* globalObject, PropertyName propertyName, PropertySlot& slot)
 {
     VM& vm = getVM(globalObject);
     Structure* structure = object->structure(vm);
@@ -1443,16 +1403,9 @@ ALWAYS_INLINE bool JSObject::getOwnPropertySlotImpl(JSObject* object, JSGlobalOb
     return false;
 }
 
-#if !ASSERT_ENABLED
-ALWAYS_INLINE bool JSObject::getOwnPropertySlot(JSObject* object, JSGlobalObject* globalObject, PropertyName propertyName, PropertySlot& slot)
-{
-    return getOwnPropertySlotImpl(object, globalObject, propertyName, slot);
-}
-
 ALWAYS_INLINE void JSObject::doPutPropertySecurityCheck(JSObject*, JSGlobalObject*, PropertyName, PutPropertySlot&)
 {
 }
-#endif
 
 // It may seem crazy to inline a function this large but it makes a big difference
 // since this is function very hot in variable lookup
@@ -1501,10 +1454,7 @@ inline JSValue JSObject::get(JSGlobalObject* globalObject, PropertyName property
     auto scope = DECLARE_THROW_SCOPE(vm);
     PropertySlot slot(this, PropertySlot::InternalMethodType::Get);
     bool hasProperty = const_cast<JSObject*>(this)->getPropertySlot(globalObject, propertyName, slot);
-
-    EXCEPTION_ASSERT(!scope.exception() || isTerminatedExecutionException(vm, scope.exception()) || !hasProperty);
-    RETURN_IF_EXCEPTION(scope, jsUndefined());
-
+    EXCEPTION_ASSERT(!scope.exception() || !hasProperty);
     if (hasProperty)
         RELEASE_AND_RETURN(scope, slot.getValue(globalObject, propertyName));
 
@@ -1517,10 +1467,7 @@ inline JSValue JSObject::get(JSGlobalObject* globalObject, unsigned propertyName
     auto scope = DECLARE_THROW_SCOPE(vm);
     PropertySlot slot(this, PropertySlot::InternalMethodType::Get);
     bool hasProperty = const_cast<JSObject*>(this)->getPropertySlot(globalObject, propertyName, slot);
-
-    EXCEPTION_ASSERT(!scope.exception() || isTerminatedExecutionException(vm, scope.exception()) || !hasProperty);
-    RETURN_IF_EXCEPTION(scope, jsUndefined());
-
+    EXCEPTION_ASSERT(!scope.exception() || !hasProperty);
     if (hasProperty)
         RELEASE_AND_RETURN(scope, slot.getValue(globalObject, propertyName));
 
@@ -1641,10 +1588,10 @@ JS_EXPORT_PRIVATE NEVER_INLINE bool ordinarySetSlow(JSGlobalObject*, JSObject*, 
 // As above, but this assumes that the function you're defining doesn't have an
 // intrinsic.
 #define JSC_NATIVE_FUNCTION(jsName, cppName, attributes, length) \
-    JSC_NATIVE_INTRINSIC_FUNCTION(jsName, cppName, (attributes), (length), JSC::NoIntrinsic)
+    JSC_NATIVE_INTRINSIC_FUNCTION(jsName, cppName, (attributes), (length), NoIntrinsic)
 
 #define JSC_NATIVE_FUNCTION_WITHOUT_TRANSITION(jsName, cppName, attributes, length) \
-    JSC_NATIVE_INTRINSIC_FUNCTION_WITHOUT_TRANSITION(jsName, cppName, (attributes), (length), JSC::NoIntrinsic)
+    JSC_NATIVE_INTRINSIC_FUNCTION_WITHOUT_TRANSITION(jsName, cppName, (attributes), (length), NoIntrinsic)
 
 // Identical helpers but for builtins. Note that currently, we don't support builtins that are
 // also intrinsics, but we probably will do that eventually.
@@ -1656,26 +1603,22 @@ JS_EXPORT_PRIVATE NEVER_INLINE bool ordinarySetSlow(JSGlobalObject*, JSObject*, 
     putDirectBuiltinFunctionWithoutTransition(\
         vm, globalObject, makeIdentifier(vm, (jsName)), (generatorName)(vm), (attributes))
 
-#define JSC_TO_STRING_TAG_WITHOUT_TRANSITION() \
-    putDirectWithoutTransition(vm, vm.propertyNames->toStringTagSymbol, \
-        jsNontrivialString(vm, info()->className), JSC::PropertyAttribute::DontEnum | JSC::PropertyAttribute::ReadOnly)
-
 // Helper for defining native getters on properties.
 #define JSC_NATIVE_INTRINSIC_GETTER(jsName, cppName, attributes, intrinsic)  \
     putDirectNativeIntrinsicGetter(\
         vm, globalObject, makeIdentifier(vm, (jsName)), (cppName), \
-        (intrinsic), ((attributes) | JSC::PropertyAttribute::Accessor))
+        (intrinsic), ((attributes) | PropertyAttribute::Accessor))
 
 #define JSC_NATIVE_INTRINSIC_GETTER_WITHOUT_TRANSITION(jsName, cppName, attributes, intrinsic)  \
     putDirectNativeIntrinsicGetterWithoutTransition(\
         vm, globalObject, makeIdentifier(vm, (jsName)), (cppName), \
-        (intrinsic), ((attributes) | JSC::PropertyAttribute::Accessor))
+        (intrinsic), ((attributes) | PropertyAttribute::Accessor))
 
 #define JSC_NATIVE_GETTER(jsName, cppName, attributes) \
-    JSC_NATIVE_INTRINSIC_GETTER((jsName), (cppName), (attributes), JSC::NoIntrinsic)
+    JSC_NATIVE_INTRINSIC_GETTER((jsName), (cppName), (attributes), NoIntrinsic)
 
 #define JSC_NATIVE_GETTER_WITHOUT_TRANSITION(jsName, cppName, attributes) \
-    JSC_NATIVE_INTRINSIC_GETTER_WITHOUT_TRANSITION((jsName), (cppName), (attributes), JSC::NoIntrinsic)
+    JSC_NATIVE_INTRINSIC_GETTER_WITHOUT_TRANSITION((jsName), (cppName), (attributes), NoIntrinsic)
 
 
 #define STATIC_ASSERT_ISO_SUBSPACE_SHARABLE(DerivedClass, BaseClass) \

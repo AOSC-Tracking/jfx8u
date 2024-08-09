@@ -55,7 +55,7 @@ public:
     double tailTime() const override;
     double latencyTime() const override;
 
-private:
+protected:
     Biquad m_biquad;
     BiquadProcessor* biquadProcessor() { return static_cast<BiquadProcessor*>(processor()); }
 

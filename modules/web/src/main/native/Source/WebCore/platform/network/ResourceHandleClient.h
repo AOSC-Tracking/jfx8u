@@ -30,7 +30,7 @@
 #include <wtf/Ref.h>
 
 #if USE(CFURLCONNECTION)
-#include <pal/spi/win/CFNetworkSPIWin.h>
+#include <pal/spi/cf/CFNetworkSPI.h>
 #endif
 
 #if PLATFORM(IOS_FAMILY) || USE(CFURLCONNECTION)

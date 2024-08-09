@@ -200,7 +200,7 @@ void ElementRuleCollector::transferMatchedRules(DeclarationOrigin declarationOri
         addMatchedProperties({
             &matchedRule.ruleData->styleRule().properties(),
             static_cast<uint16_t>(matchedRule.ruleData->linkMatchType()),
-            static_cast<uint16_t>(matchedRule.ruleData->propertyAllowlistType()),
+            static_cast<uint16_t>(matchedRule.ruleData->propertyWhitelistType()),
             matchedRule.styleScopeOrdinal
         }, declarationOrigin);
     }
@@ -335,7 +335,7 @@ void ElementRuleCollector::collectMatchingShadowPseudoElementRules(const MatchRe
     ASSERT(element().containingShadowRoot()->mode() == ShadowRootMode::UserAgent);
 
     auto& rules = *matchRequest.ruleSet;
-#if ENABLE(VIDEO)
+#if ENABLE(VIDEO_TRACK)
     // FXIME: WebVTT should not be done by styling UA shadow trees like this.
     if (element().isWebVTTElement())
         collectMatchingRulesForList(rules.cuePseudoRules(), matchRequest);
@@ -495,9 +495,7 @@ inline bool ElementRuleCollector::ruleMatches(const RuleData& ruleData, unsigned
         }
         // Slow path.
         SelectorChecker selectorChecker(element().document());
-        selectorMatches = selectorChecker.match(*selector, element(), context);
-        if (selectorMatches)
-            specificity = selector->computeSpecificity();
+        selectorMatches = selectorChecker.match(*selector, element(), context, specificity);
     }
 
     if (ruleData.containsUncommonAttributeSelector()) {

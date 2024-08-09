@@ -25,7 +25,8 @@
 
 #pragma once
 
-#include "AnimationFrameRate.h"
+#if USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)
+
 #include "PlatformScreen.h"
 #include <wtf/HashSet.h>
 #include <wtf/Lock.h>
@@ -43,8 +44,6 @@ public:
     WEBCORE_EXPORT virtual ~DisplayRefreshMonitor();
 
     virtual void displayLinkFired() { }
-
-    virtual void setPreferredFramesPerSecond(FramesPerSecond) { }
 
     // Return true if callback request was scheduled, false if it couldn't be
     // (e.g., hardware refresh is not available)
@@ -101,3 +100,6 @@ private:
 };
 
 }
+
+#endif // USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)
+

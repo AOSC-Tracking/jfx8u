@@ -33,9 +33,6 @@
 namespace WTF {
 
 static RunLoop* s_mainRunLoop;
-#if USE(WEB_THREAD)
-static RunLoop* s_webRunLoop;
-#endif
 
 // Helper class for ThreadSpecificData.
 class RunLoop::Holder {
@@ -52,9 +49,11 @@ private:
     Ref<RunLoop> m_runLoop;
 };
 
-void RunLoop::initializeMain()
+void RunLoop::initializeMainRunLoop()
 {
-    RELEASE_ASSERT(!s_mainRunLoop);
+    if (s_mainRunLoop)
+        return;
+    initializeMainThread();
     s_mainRunLoop = &RunLoop::current();
 }
 
@@ -70,25 +69,6 @@ RunLoop& RunLoop::main()
     return *s_mainRunLoop;
 }
 
-#if USE(WEB_THREAD)
-void RunLoop::initializeWeb()
-{
-    RELEASE_ASSERT(!s_webRunLoop);
-    s_webRunLoop = &RunLoop::current();
-}
-
-RunLoop& RunLoop::web()
-{
-    ASSERT(s_webRunLoop);
-    return *s_webRunLoop;
-}
-
-RunLoop* RunLoop::webIfExists()
-{
-    return s_webRunLoop;
-}
-#endif
-
 bool RunLoop::isMain()
 {
     ASSERT(s_mainRunLoop);
@@ -97,94 +77,62 @@ bool RunLoop::isMain()
 
 void RunLoop::performWork()
 {
-    bool didSuspendFunctions = false;
+    // It is important to handle the functions in the queue one at a time because while inside one of these
+    // functions we might re-enter RunLoop::performWork() and we need to be able to pick up where we left off.
+    // See http://webkit.org/b/89590 for more discussion.
 
+    // One possible scenario when handling the function queue is as follows:
+    // - RunLoop::performWork() is invoked with 1 function on the queue
+    // - Handling that function results in 1 more function being enqueued
+    // - Handling that one results in yet another being enqueued
+    // - And so on
+    //
+    // In this situation one invocation of performWork() never returns so all other event sources are blocked.
+    // By only handling up to the number of functions that were in the queue when performWork() is called
+    // we guarantee to occasionally return from the run loop so other event sources will be allowed to spin.
+
+    size_t functionsToHandle = 0;
     {
-        auto locker = holdLock(m_nextIterationLock);
+        Function<void ()> function;
+        {
+            auto locker = holdLock(m_functionQueueLock);
+            functionsToHandle = m_functionQueue.size();
 
-        // If the RunLoop re-enters or re-schedules, we're expected to execute all functions in order.
-        while (!m_currentIteration.isEmpty())
-            m_nextIteration.prepend(m_currentIteration.takeLast());
+            if (m_functionQueue.isEmpty())
+                return;
 
-        m_currentIteration = std::exchange(m_nextIteration, { });
-    }
-
-    while (!m_currentIteration.isEmpty()) {
-        if (m_isFunctionDispatchSuspended) {
-            didSuspendFunctions = true;
-            break;
+            function = m_functionQueue.takeFirst();
         }
 
-        auto function = m_currentIteration.takeFirst();
         function();
     }
 
-    // Suspend only for a single cycle.
-    m_isFunctionDispatchSuspended = false;
-    m_hasSuspendedFunctions = didSuspendFunctions;
+    for (size_t functionsHandled = 1; functionsHandled < functionsToHandle; ++functionsHandled) {
+        Function<void ()> function;
+        {
+            auto locker = holdLock(m_functionQueueLock);
 
-#if PLATFORM(JAVA)
-    if (m_hasSuspendedFunctions) {
-        if (this == &RunLoop::main())
-            scheduleDispatchFunctionsOnMainThread();
-        else
-            wakeUp();
+            // Even if we start off with N functions to handle and we've only handled less than N functions, the queue
+            // still might be empty because those functions might have been handled in an inner RunLoop::performWork().
+            // In that case we should bail here.
+            if (m_functionQueue.isEmpty())
+                break;
+
+            function = m_functionQueue.takeFirst();
+        }
+
+        function();
     }
-#else
-    if (m_hasSuspendedFunctions)
-        wakeUp();
-#endif
 }
 
 void RunLoop::dispatch(Function<void ()>&& function)
 {
-    bool needsWakeup = false;
-
     {
-        auto locker = holdLock(m_nextIterationLock);
-        needsWakeup = m_nextIteration.isEmpty();
-        m_nextIteration.append(WTFMove(function));
+        auto locker = holdLock(m_functionQueueLock);
+        m_functionQueue.append(WTFMove(function));
     }
 
-#if PLATFORM(JAVA)
-    if (needsWakeup) {
-        if (this == &RunLoop::main())
-            scheduleDispatchFunctionsOnMainThread();
-        else
-            wakeUp();
-    }
-#else
-    if (needsWakeup)
-        wakeUp();
-#endif
-}
-
-void RunLoop::dispatchAfter(Seconds delay, Function<void()>&& function)
-{
-    auto timer = new DispatchTimer(*this);
-    timer->setFunction([timer, function = WTFMove(function)] {
-        function();
-        delete timer;
-    });
-    timer->startOneShot(delay);
-}
-
-void RunLoop::suspendFunctionDispatchForCurrentCycle()
-{
-    // Don't suspend if there are already suspended functions to avoid unexecuted function pile-up.
-    if (m_isFunctionDispatchSuspended || m_hasSuspendedFunctions)
-        return;
-
-    m_isFunctionDispatchSuspended = true;
-    // Wake up (even if there is nothing to do) to disable suspension.
     wakeUp();
 }
-
-#if PLATFORM(JAVA)
-void RunLoop::dispatchFunctionsFromMainThread()
-{
-    performWork();
-}
-#endif
 
 } // namespace WTF

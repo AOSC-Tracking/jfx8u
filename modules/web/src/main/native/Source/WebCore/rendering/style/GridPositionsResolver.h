@@ -54,12 +54,10 @@ public:
     bool contains(unsigned line) const;
 
 private:
-    bool hasExplicitNamedLines() const;
-    unsigned firstExplicitPosition() const;
+    size_t find(unsigned line) const;
 
     const Vector<unsigned>* m_namedLinesIndexes { nullptr };
     const Vector<unsigned>* m_autoRepeatNamedLinesIndexes { nullptr };
-    const Vector<unsigned>* m_implicitNamedLinesIndexes { nullptr };
 
     unsigned m_insertionPoint;
     unsigned m_lastLine;

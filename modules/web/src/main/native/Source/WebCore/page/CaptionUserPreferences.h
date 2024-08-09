@@ -25,7 +25,7 @@
 
 #pragma once
 
-#if ENABLE(VIDEO)
+#if ENABLE(VIDEO_TRACK)
 
 #include "AudioTrack.h"
 #include "TextTrack.h"

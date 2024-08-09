@@ -152,7 +152,7 @@ public:
     void createdMessagePort(MessagePort&);
     void destroyedMessagePort(MessagePort&);
 
-    virtual void didLoadResourceSynchronously(const URL&);
+    virtual void didLoadResourceSynchronously();
 
     void ref() { refScriptExecutionContext(); }
     void deref() { derefScriptExecutionContext(); }
@@ -245,6 +245,7 @@ public:
     void setDomainForCachePartition(String&& domain) { m_domainForCachePartition = WTFMove(domain); }
 
     bool allowsMediaDevices() const;
+    bool hasServiceWorkerScheme() const;
 #if ENABLE(SERVICE_WORKER)
     ServiceWorker* activeServiceWorker() const;
     void setActiveServiceWorker(RefPtr<ServiceWorker>&&);

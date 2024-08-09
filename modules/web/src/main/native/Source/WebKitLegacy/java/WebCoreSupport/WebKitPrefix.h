@@ -72,3 +72,8 @@
 #endif
 
 #include <wtf/DisallowCType.h>
+
+// WebKit.dll is expected to export the symbols in WebCore that have been marked
+// as WEBCORE_EXPORT
+#undef WEBCORE_EXPORT
+#define WEBCORE_EXPORT WTF_EXPORT_DECLARATION

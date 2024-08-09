@@ -28,7 +28,8 @@
 
 #if ENABLE(FTL_JIT)
 
-#include "JSCJSValueInlines.h"
+#include "FTLExitTimeObjectMaterialization.h"
+#include "JSCInlines.h"
 #include "TrackedReferences.h"
 
 namespace JSC { namespace FTL {
@@ -118,7 +119,7 @@ void ExitValue::dumpInContext(PrintStream& out, DumpContext* context) const
 
 void ExitValue::dump(PrintStream& out) const
 {
-    dumpInContext(out, nullptr);
+    dumpInContext(out, 0);
 }
 
 void ExitValue::validateReferences(const TrackedReferences& trackedReferences) const

@@ -18,8 +18,8 @@
  *
  */
 
-#import "config.h"
-#import <wtf/text/TextStream.h>
+#include "config.h"
+#include <wtf/text/TextStream.h>
 
 namespace WTF {
 

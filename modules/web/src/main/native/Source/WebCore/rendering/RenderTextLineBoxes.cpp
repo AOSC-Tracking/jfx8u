@@ -312,7 +312,7 @@ VisiblePosition RenderTextLineBoxes::positionForPoint(const RenderText& renderer
             box = box->nextTextBox();
 
         auto& rootBox = box->root();
-        LayoutUnit top = std::min(rootBox.selectionTop(RootInlineBox::ForHitTesting::Yes), rootBox.lineTop());
+        LayoutUnit top = std::min(rootBox.selectionTop(), rootBox.lineTop());
         if (pointBlockDirection > top || (!blocksAreFlipped && pointBlockDirection == top)) {
             LayoutUnit bottom = rootBox.selectionBottom();
             if (rootBox.nextRootBox())
@@ -342,22 +342,22 @@ VisiblePosition RenderTextLineBoxes::positionForPoint(const RenderText& renderer
     return renderer.createVisiblePosition(0, DOWNSTREAM);
 }
 
-void RenderTextLineBoxes::setSelectionState(RenderText& renderer, RenderObject::HighlightState state)
+void RenderTextLineBoxes::setSelectionState(RenderText& renderer, RenderObject::SelectionState state)
 {
-    if (state == RenderObject::HighlightState::Inside || state == RenderObject::HighlightState::None) {
+    if (state == RenderObject::SelectionInside || state == RenderObject::SelectionNone) {
         for (auto* box = m_first; box; box = box->nextTextBox())
-            box->root().setHasSelectedChildren(state == RenderObject::HighlightState::Inside);
+            box->root().setHasSelectedChildren(state == RenderObject::SelectionInside);
         return;
     }
 
     auto start = renderer.view().selection().startOffset();
     auto end = renderer.view().selection().endOffset();
-    if (state == RenderObject::HighlightState::Start) {
+    if (state == RenderObject::SelectionStart) {
         end = renderer.text().length();
         // to handle selection from end of text to end of line
         if (start && start == end)
             start = end - 1;
-    } else if (state == RenderObject::HighlightState::End)
+    } else if (state == RenderObject::SelectionEnd)
         start = 0;
 
     for (auto* box = m_first; box; box = box->nextTextBox()) {
@@ -549,10 +549,8 @@ bool RenderTextLineBoxes::dirtyRange(RenderText& renderer, unsigned start, unsig
         firstRootBox->markDirty();
         dirtiedLines = true;
     }
-
     for (auto* current = firstRootBox; current && current != lastRootBox; current = current->nextRootBox()) {
-        auto lineBreakPos = current->lineBreakPos();
-        if (current->lineBreakObj() == &renderer && (lineBreakPos > end || (start != end && lineBreakPos == end)))
+        if (current->lineBreakObj() == &renderer && current->lineBreakPos() > end)
             current->setLineBreakPos(current->lineBreakPos() + lengthDelta);
     }
 

@@ -28,8 +28,6 @@ package com.sun.webkit.perf;
 import java.nio.ByteBuffer;
 import java.util.logging.Logger;
 
-import com.sun.javafx.logging.PlatformLogger;
-import com.sun.prism.paint.Color;
 import com.sun.webkit.graphics.Ref;
 import com.sun.webkit.graphics.RenderTheme;
 import com.sun.webkit.graphics.ScrollBarTheme;
@@ -89,19 +87,19 @@ public final class WCGraphicsPerfLogger extends WCGraphicsContext {
     }
 
     @Override
-    public void fillRect(float x, float y, float w, float h, Color color) {
+    public void fillRect(float x, float y, float w, float h, Integer rgba) {
         logger.resumeCount("FILLRECT_FFFFI");
-        gc.fillRect(x, y, w, h, color);
+        gc.fillRect(x, y, w, h, rgba);
         logger.suspendCount("FILLRECT_FFFFI");
     }
 
     @Override public void fillRoundedRect(float x, float y, float w, float h,
             float topLeftW, float topLeftH, float topRightW, float topRightH,
             float bottomLeftW, float bottomLeftH, float bottomRightW, float bottomRightH,
-            Color color) {
+            int rgba) {
         logger.resumeCount("FILL_ROUNDED_RECT");
         gc.fillRoundedRect(x, y, w, h, topLeftW, topLeftH, topRightW, topRightH,
-                bottomLeftW, bottomLeftH, bottomRightW, bottomRightH, color);
+                bottomLeftW, bottomLeftH, bottomRightW, bottomRightH, rgba);
         logger.suspendCount("FILL_ROUNDED_RECT");
     }
 
@@ -113,9 +111,9 @@ public final class WCGraphicsPerfLogger extends WCGraphicsContext {
     }
 
     @Override
-    public void setFillColor(Color color) {
+    public void setFillColor(int rgba) {
         logger.resumeCount("SETFILLCOLOR");
-        gc.setFillColor(color);
+        gc.setFillColor(rgba);
         logger.suspendCount("SETFILLCOLOR");
     }
 
@@ -156,9 +154,9 @@ public final class WCGraphicsPerfLogger extends WCGraphicsContext {
     }
 
     @Override
-    public void setStrokeColor(Color color) {
+    public void setStrokeColor(int rgba) {
         logger.resumeCount("SETSTROKECOLOR");
-        gc.setStrokeColor(color);
+        gc.setStrokeColor(rgba);
         logger.suspendCount("SETSTROKECOLOR");
     }
 
@@ -205,7 +203,7 @@ public final class WCGraphicsPerfLogger extends WCGraphicsContext {
     }
 
     @Override
-    public void setShadow(float dx, float dy, float blur, Color color) {
+    public void setShadow(float dx, float dy, float blur, int color) {
         logger.resumeCount("SETSHADOW");
         gc.setShadow(dx, dy, blur, color);
         logger.suspendCount("SETSHADOW");
@@ -344,9 +342,9 @@ public final class WCGraphicsPerfLogger extends WCGraphicsContext {
     }
 
     @Override
-    public void drawFocusRing(int x, int y, int w, int h, Color color) {
+    public void drawFocusRing(int x, int y, int w, int h, int rgba) {
         logger.resumeCount("DRAWFOCUSRING");
-        gc.drawFocusRing(x, y, w, h, color);
+        gc.drawFocusRing(x, y, w, h, rgba);
         logger.suspendCount("DRAWFOCUSRING");
     }
 

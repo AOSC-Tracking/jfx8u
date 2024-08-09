@@ -26,7 +26,6 @@
 #include "config.h"
 #include "UndoItem.h"
 
-#include "Document.h"
 #include "UndoManager.h"
 #include <wtf/IsoMallocInlines.h>
 
@@ -42,15 +41,14 @@ UndoManager* UndoItem::undoManager() const
 void UndoItem::setUndoManager(UndoManager* undoManager)
 {
     m_undoManager = makeWeakPtr(undoManager);
-    m_document = makeWeakPtr(undoManager ? &undoManager->document() : nullptr);
 }
 
 void UndoItem::invalidate()
 {
-    if (m_undoManager)
-        m_undoManager->removeItem(*this);
-    m_undoManager.clear();
-    m_document.clear();
+    if (auto* undoManager = m_undoManager.get()) {
+        undoManager->removeItem(*this);
+        m_undoManager = nullptr;
+    }
 }
 
 bool UndoItem::isValid() const
@@ -60,7 +58,10 @@ bool UndoItem::isValid() const
 
 Document* UndoItem::document() const
 {
-    return m_document.get();
+    if (!isValid())
+        return nullptr;
+
+    return &m_undoManager->document();
 }
 
 } // namespace WebCore

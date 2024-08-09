@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2018-2019 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -85,18 +85,9 @@ FOR_EACH_ADDITIONAL_WTF_PTRTAG(WTF_DECLARE_PTRTAG)
 #endif
 
 struct PtrTagLookup {
-    using TagForPtrFunc = const char* (*)(const void*);
-    using PtrTagNameFunc = const char* (*)(PtrTag);
-
-    void initialize(TagForPtrFunc tagForPtr, PtrTagNameFunc ptrTagName)
-    {
-        this->tagForPtr = tagForPtr;
-        this->ptrTagName = ptrTagName;
-    }
-
-    TagForPtrFunc tagForPtr;
-    PtrTagNameFunc ptrTagName;
-    PtrTagLookup* next;
+    const char* (*tagForPtr)(const void*);
+    const char* (*ptrTagName)(PtrTag);
+    PtrTagLookup* next { nullptr };
 };
 
 #if CPU(ARM64E)
@@ -114,13 +105,8 @@ WTF_EXPORT_PRIVATE void reportBadTag(const void*, PtrTag expectedTag);
 
 #if ASSERT_ENABLED
 constexpr bool enablePtrTagDebugAssert = true;
-#define REPORT_BAD_TAG(success, ptr, expectedTag) do { \
-        if (UNLIKELY(!success)) \
-            reportBadTag(reinterpret_cast<const void*>(ptr), expectedTag); \
-    } while (false)
 #else
 constexpr bool enablePtrTagDebugAssert = false;
-#define REPORT_BAD_TAG(success, ptr, expectedTag)
 #endif
 
 #define WTF_PTRTAG_ASSERT(action, ptr, expectedTag, assertion) \
@@ -128,7 +114,9 @@ constexpr bool enablePtrTagDebugAssert = false;
         if (action == PtrTagAction::ReleaseAssert \
             || (WTF::enablePtrTagDebugAssert && action == PtrTagAction::DebugAssert)) { \
             bool passed = (assertion); \
-            REPORT_BAD_TAG(passed, ptr, expectedTag); \
+            if (UNLIKELY(!passed)) { \
+                reportBadTag(reinterpret_cast<const void*>(ptr), expectedTag); \
+            } \
             RELEASE_ASSERT(passed && #assertion); \
         } \
     } while (false)
@@ -332,20 +320,6 @@ inline PtrType tagCFunctionPtr(PtrType ptr, PtrTag tag)
 template<PtrTag tag, typename PtrType, typename = std::enable_if_t<std::is_pointer<PtrType>::value>>
 inline PtrType tagCFunctionPtr(PtrType ptr) { return tagCFunctionPtr(ptr, tag); }
 
-template<PtrTag newTag, typename FunctionType, class = typename std::enable_if<std::is_pointer<FunctionType>::value && std::is_function<typename std::remove_pointer<FunctionType>::type>::value>::type>
-inline FunctionType tagCFunction(FunctionType func)
-{
-    ASSERT(isTaggedWith(func, CFunctionPtrTag));
-    ASSERT(newTag != CFunctionPtrTag);
-    return ptrauth_auth_and_resign(func, ptrauth_key_function_pointer, 0, ptrauth_key_process_dependent_code, newTag);
-}
-
-template<typename ReturnType, PtrTag newTag, typename FunctionType, class = typename std::enable_if<std::is_pointer<FunctionType>::value && std::is_function<typename std::remove_pointer<FunctionType>::type>::value>::type>
-inline ReturnType tagCFunction(FunctionType func)
-{
-    return bitwise_cast<ReturnType>(tagCFunction<newTag>(func));
-}
-
 template<PtrTagAction tagAction, typename PtrType>
 inline PtrType untagCFunctionPtrImpl(PtrType ptr, PtrTag tag)
 {
@@ -547,15 +521,6 @@ inline PtrType tagCFunctionPtr(PtrType ptr, PtrTag) { return ptr; }
 template<PtrTag, typename PtrType, typename = std::enable_if_t<std::is_pointer<PtrType>::value>>
 inline PtrType tagCFunctionPtr(PtrType ptr) { return ptr; }
 
-template<PtrTag newTag, typename FunctionType, class = typename std::enable_if<std::is_pointer<FunctionType>::value && std::is_function<typename std::remove_pointer<FunctionType>::type>::value>::type>
-inline FunctionType tagCFunction(FunctionType func) { return func; }
-
-template<typename ReturnType, PtrTag newTag, typename FunctionType, class = typename std::enable_if<std::is_pointer<FunctionType>::value && std::is_function<typename std::remove_pointer<FunctionType>::type>::value>::type>
-inline ReturnType tagCFunction(FunctionType func)
-{
-    return bitwise_cast<ReturnType>(tagCFunction<newTag>(func));
-}
-
 template<typename T, typename PtrType, typename = std::enable_if_t<std::is_pointer<PtrType>::value && !std::is_same<T, PtrType>::value>>
 inline T untagCFunctionPtr(PtrType ptr, PtrTag) { return bitwise_cast<T>(ptr); }
 
@@ -613,7 +578,6 @@ using WTF::tagCodePtr;
 using WTF::untagCodePtr;
 using WTF::retagCodePtr;
 using WTF::removeCodePtrTag;
-using WTF::tagCFunction;
 using WTF::tagCFunctionPtr;
 using WTF::untagCFunctionPtr;
 using WTF::tagInt;

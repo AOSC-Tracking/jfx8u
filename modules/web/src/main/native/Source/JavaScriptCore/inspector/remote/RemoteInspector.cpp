@@ -38,9 +38,6 @@
 namespace Inspector {
 
 bool RemoteInspector::startEnabled = true;
-#if PLATFORM(COCOA)
-std::atomic<bool> RemoteInspector::needMachSandboxExtension = false;
-#endif
 
 void RemoteInspector::startDisabled()
 {

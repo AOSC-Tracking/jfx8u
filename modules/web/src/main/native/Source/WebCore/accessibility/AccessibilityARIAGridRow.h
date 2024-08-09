@@ -39,8 +39,8 @@ public:
     static Ref<AccessibilityARIAGridRow> create(RenderObject*);
     virtual ~AccessibilityARIAGridRow();
 
-    AccessibilityChildrenVector disclosedRows() override;
-    AXCoreObject* disclosedByRow() const override;
+    void disclosedRows(AccessibilityChildrenVector&);
+    AXCoreObject* disclosedByRow() const;
 
     AXCoreObject* headerObject() override;
 

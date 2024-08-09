@@ -29,7 +29,6 @@
 #include "config.h"
 #include "AccessibilityNodeObject.h"
 
-#include "AXLogger.h"
 #include "AXObjectCache.h"
 #include "AccessibilityImageMapLink.h"
 #include "AccessibilityList.h"
@@ -53,12 +52,10 @@
 #include "HTMLLabelElement.h"
 #include "HTMLLegendElement.h"
 #include "HTMLNames.h"
-#include "HTMLOptionElement.h"
 #include "HTMLParserIdioms.h"
 #include "HTMLSelectElement.h"
 #include "HTMLTextAreaElement.h"
 #include "HTMLTextFormControlElement.h"
-#include "KeyboardEvent.h"
 #include "LabelableElement.h"
 #include "LocalizedStrings.h"
 #include "MathMLElement.h"
@@ -283,7 +280,6 @@ Document* AccessibilityNodeObject::document() const
 
 AccessibilityRole AccessibilityNodeObject::determineAccessibilityRole()
 {
-    AXTRACE("AccessibilityNodeObject::determineAccessibilityRole");
     if (!node())
         return AccessibilityRole::Unknown;
 
@@ -522,6 +518,11 @@ bool AccessibilityNodeObject::isNativeImage() const
     }
 
     return false;
+}
+
+bool AccessibilityNodeObject::isImage() const
+{
+    return roleValue() == AccessibilityRole::Image;
 }
 
 bool AccessibilityNodeObject::isPasswordField() const
@@ -1043,7 +1044,7 @@ Element* AccessibilityNodeObject::mouseButtonListener(MouseButtonListenerResultF
 
     // check if our parent is a mouse button listener
     // FIXME: Do the continuation search like anchorElement does
-    for (auto& element : lineageOfType<Element>(is<Element>(*node) ? downcast<Element>(*node) : *node->parentElement())) {
+    for (auto& element : elementLineage(is<Element>(*node) ? downcast<Element>(node) : node->parentElement())) {
         // If we've reached the body and this is not a control element, do not expose press action for this element unless filter is IncludeBodyElement.
         // It can cause false positives, where every piece of text is labeled as accepting press actions.
         if (element.hasTagName(bodyTag) && isStaticText() && filter == ExcludeBodyElement)
@@ -1096,67 +1097,18 @@ void AccessibilityNodeObject::decrement()
     alterSliderValue(false);
 }
 
-static bool dispatchSimulatedKeyboardUpDownEvent(AccessibilityObject* object, const KeyboardEvent::Init& keyInit)
-{
-    // In case the keyboard event causes this element to be removed.
-    Ref<AccessibilityObject> protectedObject(*object);
-
-    bool handled = false;
-    if (auto* node = object->node()) {
-        auto event = KeyboardEvent::create(eventNames().keydownEvent, keyInit);
-        node->dispatchEvent(event);
-        handled |= event->defaultHandled();
-    }
-
-    // Ensure node is still valid and wasn't removed after the keydown.
-    if (auto* node = object->node()) {
-        auto event = KeyboardEvent::create(eventNames().keyupEvent, keyInit);
-        node->dispatchEvent(event);
-        handled |= event->defaultHandled();
-    }
-    return handled;
-}
-
-bool AccessibilityNodeObject::performDismissAction()
-{
-    auto keyInit = KeyboardEvent::Init();
-    keyInit.key = "Escape"_s;
-    keyInit.keyCode = 0x1b;
-
-    return dispatchSimulatedKeyboardUpDownEvent(this, keyInit);
-}
-
-// Fire a keyboard event if we were not able to set this value natively.
-bool AccessibilityNodeObject::postKeyboardKeysForValueChange(bool increase)
-{
-    auto keyInit = KeyboardEvent::Init();
-    bool vertical = orientation() == AccessibilityOrientation::Vertical;
-    bool isLTR = page()->userInterfaceLayoutDirection() == UserInterfaceLayoutDirection::LTR;
-
-    keyInit.key = increase ? vertical ? "ArrowUp"_s : isLTR ? "ArrowRight"_s : "ArrowLeft"_s : vertical ? "ArrowDown"_s : isLTR ? "ArrowLeft"_s : "ArrowRight"_s;
-    keyInit.keyIdentifier = increase ? vertical ? "up"_s : isLTR ? "right"_s : "left"_s : vertical ? "down"_s : isLTR ? "left"_s : "right"_s;
-
-    return dispatchSimulatedKeyboardUpDownEvent(this, keyInit);
-}
-
-void AccessibilityNodeObject::setNodeValue(bool increase, float value)
-{
-    bool didSet = setValue(String::number(value));
-
-    if (didSet) {
-        if (auto* cache = axObjectCache())
-            cache->postNotification(this, document(), AXObjectCache::AXValueChanged);
-    } else
-        postKeyboardKeysForValueChange(increase);
-}
-
 void AccessibilityNodeObject::changeValueByStep(bool increase)
 {
     float step = stepValueForRange();
     float value = valueForRange();
 
     value += increase ? step : -step;
-    setNodeValue(increase, value);
+
+    setValue(String::number(value));
+
+    auto objectCache = axObjectCache();
+    if (objectCache)
+        objectCache->postNotification(node(), AXObjectCache::AXValueChanged);
 }
 
 void AccessibilityNodeObject::changeValueByPercent(float percentChange)
@@ -1170,7 +1122,11 @@ void AccessibilityNodeObject::changeValueByPercent(float percentChange)
         step = std::abs(percentChange) * (1 / percentChange);
 
     value += step;
-    setNodeValue(percentChange > 0, value);
+    setValue(String::number(value));
+
+    auto objectCache = axObjectCache();
+    if (objectCache)
+        objectCache->postNotification(node(), AXObjectCache::AXValueChanged);
 }
 
 bool AccessibilityNodeObject::isGenericFocusableElement() const
@@ -1357,14 +1313,14 @@ void AccessibilityNodeObject::titleElementText(Vector<AccessibilityText>& textOr
             auto objectCache = axObjectCache();
             // Only use the <label> text if there's no ARIA override.
             if (objectCache && !innerText.isEmpty() && !ariaAccessibilityDescription())
-                textOrder.append(AccessibilityText(innerText, isMeter() ? AccessibilityTextSource::Alternative : AccessibilityTextSource::LabelByElement));
+                textOrder.append(AccessibilityText(innerText, isMeter() ? AccessibilityTextSource::Alternative : AccessibilityTextSource::LabelByElement, objectCache->getOrCreate(label)));
             return;
         }
     }
 
     AccessibilityObject* titleUIElement = this->titleUIElement();
     if (titleUIElement)
-        textOrder.append(AccessibilityText(String(), AccessibilityTextSource::LabelByElement));
+        textOrder.append(AccessibilityText(String(), AccessibilityTextSource::LabelByElement, titleUIElement));
 }
 
 void AccessibilityNodeObject::alternativeText(Vector<AccessibilityText>& textOrder) const
@@ -1561,7 +1517,7 @@ void AccessibilityNodeObject::ariaLabeledByText(Vector<AccessibilityText>& textO
         for (const auto& element : elements)
             axElements.append(objectCache->getOrCreate(element));
 
-        textOrder.append(AccessibilityText(ariaLabeledBy, AccessibilityTextSource::Alternative));
+        textOrder.append(AccessibilityText(ariaLabeledBy, AccessibilityTextSource::Alternative, axElements));
     }
 }
 
@@ -1783,7 +1739,7 @@ static bool shouldUseAccessibilityObjectInnerText(AccessibilityObject* obj, Acce
     if (is<AccessibilityList>(*obj))
         return false;
 
-    if (is<AccessibilityTable>(*obj) && downcast<AccessibilityTable>(*obj).isExposable())
+    if (is<AccessibilityTable>(*obj) && downcast<AccessibilityTable>(*obj).isExposableThroughAccessibility())
         return false;
 
     if (obj->isTree() || obj->isCanvas())
@@ -1993,18 +1949,23 @@ String AccessibilityNodeObject::stringValue() const
     return String();
 }
 
-SRGBA<uint8_t> AccessibilityNodeObject::colorValue() const
+void AccessibilityNodeObject::colorValue(int& r, int& g, int& b) const
 {
-#if !ENABLE(INPUT_TYPE_COLOR)
-    return Color::transparentBlack;
-#else
+    r = 0;
+    g = 0;
+    b = 0;
+
+#if ENABLE(INPUT_TYPE_COLOR)
     if (!isColorWell())
-        return Color::transparentBlack;
+        return;
 
     if (!is<HTMLInputElement>(node()))
-        return Color::transparentBlack;
+        return;
 
-    return downcast<HTMLInputElement>(*node()).valueAsColor().toSRGBALossy<uint8_t>();
+    auto color = downcast<HTMLInputElement>(*node()).valueAsColor();
+    r = color.red();
+    g = color.green();
+    b = color.blue();
 #endif
 }
 
@@ -2027,7 +1988,7 @@ static String accessibleNameForNode(Node* node, Node* labelledbyNode)
 
     // If the node can be turned into an AX object, we can use standard name computation rules.
     // If however, the node cannot (because there's no renderer e.g.) fallback to using the basic text underneath.
-    auto axObject = element.document().axObjectCache()->getOrCreate(&element);
+    AccessibilityObject* axObject = node->document().axObjectCache()->getOrCreate(node);
     if (axObject) {
         String valueDescription = axObject->valueDescription();
         if (!valueDescription.isEmpty())
@@ -2057,10 +2018,8 @@ static String accessibleNameForNode(Node* node, Node* labelledbyNode)
             return childText;
     }
 
-    if (is<HTMLInputElement>(element))
-        return downcast<HTMLInputElement>(element).value();
-    if (is<HTMLOptionElement>(element))
-        return downcast<HTMLOptionElement>(element).value();
+    if (is<HTMLInputElement>(*node))
+        return downcast<HTMLInputElement>(*node).value();
 
     String text;
     if (axObject) {

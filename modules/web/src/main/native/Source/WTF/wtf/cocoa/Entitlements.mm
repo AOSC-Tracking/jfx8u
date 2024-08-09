@@ -23,12 +23,12 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#import "config.h"
-#import <wtf/cocoa/Entitlements.h>
+#include "config.h"
+#include <wtf/cocoa/Entitlements.h>
 
-#import <wtf/OSObjectPtr.h>
-#import <wtf/RetainPtr.h>
-#import <wtf/spi/cocoa/SecuritySPI.h>
+#include <wtf/OSObjectPtr.h>
+#include <wtf/RetainPtr.h>
+#include <wtf/spi/cocoa/SecuritySPI.h>
 
 namespace WTF {
 

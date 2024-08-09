@@ -2,7 +2,7 @@
  * Copyright (C) 1999 Lars Knoll (knoll@kde.org)
  *           (C) 1999 Antti Koivisto (koivisto@kde.org)
  *           (C) 2001 Dirk Mueller (mueller@kde.org)
- * Copyright (C) 2004-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2004-2018 Apple Inc. All rights reserved.
  *           (C) 2006 Alexey Proskuryakov (ap@nypop.com)
  *
  * This library is free software; you can redistribute it and/or
@@ -33,12 +33,10 @@
 #include "EventNames.h"
 #include "Frame.h"
 #include "FrameView.h"
-#include "HTMLDataListElement.h"
 #include "HTMLFieldSetElement.h"
 #include "HTMLFormElement.h"
 #include "HTMLInputElement.h"
 #include "HTMLLegendElement.h"
-#include "HTMLParserIdioms.h"
 #include "HTMLTextAreaElement.h"
 #include "Quirks.h"
 #include "RenderBox.h"
@@ -77,7 +75,9 @@ HTMLFormControlElement::HTMLFormControlElement(const QualifiedName& tagName, Doc
 
 HTMLFormControlElement::~HTMLFormControlElement()
 {
-    clearForm();
+    // The calls willChangeForm() and didChangeForm() are virtual, we want the
+    // form to be reset while this object still exists.
+    setForm(nullptr);
 }
 
 String HTMLFormControlElement::formEnctype() const
@@ -115,8 +115,8 @@ String HTMLFormControlElement::formAction() const
 {
     const AtomString& value = attributeWithoutSynchronization(formactionAttr);
     if (value.isEmpty())
-        return document().url().string();
-    return document().completeURL(stripLeadingAndTrailingHTMLSpaces(value)).string();
+        return document().url();
+    return getURLAttribute(formactionAttr);
 }
 
 void HTMLFormControlElement::setFormAction(const AtomString& value)
@@ -412,12 +412,14 @@ bool HTMLFormControlElement::matchesInvalidPseudoClass() const
 bool HTMLFormControlElement::computeWillValidate() const
 {
     if (m_dataListAncestorState == Unknown) {
-#if ENABLE(DATALIST_ELEMENT)
-        m_dataListAncestorState = ancestorsOfType<HTMLDataListElement>(*this).first()
-            ? InsideDataList : NotInsideDataList;
-#else
-        m_dataListAncestorState = NotInsideDataList;
-#endif
+        for (ContainerNode* ancestor = parentNode(); ancestor; ancestor = ancestor->parentNode()) {
+            if (ancestor->hasTagName(datalistTag)) {
+                m_dataListAncestorState = InsideDataList;
+                break;
+            }
+        }
+        if (m_dataListAncestorState == Unknown)
+            m_dataListAncestorState = NotInsideDataList;
     }
     return m_dataListAncestorState == NotInsideDataList && !isDisabledOrReadOnly();
 }
@@ -634,7 +636,7 @@ bool HTMLFormControlElement::shouldAutocorrect() const
 AutocapitalizeType HTMLFormControlElement::autocapitalizeType() const
 {
     AutocapitalizeType type = HTMLElement::autocapitalizeType();
-    if (type == AutocapitalizeType::Default) {
+    if (type == AutocapitalizeTypeDefault) {
         if (RefPtr<HTMLFormElement> form = this->form())
             return form->autocapitalizeType();
     }
@@ -642,6 +644,15 @@ AutocapitalizeType HTMLFormControlElement::autocapitalizeType() const
 }
 
 #endif
+
+HTMLFormControlElement* HTMLFormControlElement::enclosingFormControlElement(Node* node)
+{
+    for (; node; node = node->parentNode()) {
+        if (is<HTMLFormControlElement>(*node))
+            return downcast<HTMLFormControlElement>(node);
+    }
+    return nullptr;
+}
 
 String HTMLFormControlElement::autocomplete() const
 {

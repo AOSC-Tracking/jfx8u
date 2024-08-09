@@ -31,6 +31,7 @@
 #include "JSCJSValueInlines.h"
 #include "JSWebAssemblyHelpers.h"
 #include "JSWebAssemblyRuntimeError.h"
+#include <wtf/CheckedArithmetic.h>
 #include <wtf/StdLibExtras.h>
 
 namespace JSC { namespace Wasm {

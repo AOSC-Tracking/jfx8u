@@ -26,15 +26,6 @@
 #include "bmalloc.h"
 
 #include "BExport.h"
-#include "GigacageConfig.h"
-
-namespace WebConfig {
-
-constexpr size_t ConfigSizeToProtect = 16 * bmalloc::Sizes::kB;
-
-alignas(ConfigSizeToProtect) BEXPORT Slot g_config[ConfigSizeToProtect / sizeof(Slot)];
-
-} // namespace WebConfig
 
 extern "C" {
 

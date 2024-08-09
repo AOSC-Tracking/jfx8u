@@ -30,8 +30,6 @@
 
 namespace WebCore {
 
-class Page;
-
 template<typename T> class EventSender {
     WTF_MAKE_NONCOPYABLE(EventSender); WTF_MAKE_FAST_ALLOCATED;
 public:
@@ -40,7 +38,7 @@ public:
     const AtomString& eventType() const { return m_eventType; }
     void dispatchEventSoon(T&);
     void cancelEvent(T&);
-    void dispatchPendingEvents(Page*);
+    void dispatchPendingEvents();
 
 #if ASSERT_ENABLED
     bool hasPendingEvents(T& sender) const
@@ -50,7 +48,7 @@ public:
 #endif
 
 private:
-    void timerFired() { dispatchPendingEvents(nullptr); }
+    void timerFired() { dispatchPendingEvents(); }
 
     AtomString m_eventType;
     Timer m_timer;
@@ -85,7 +83,7 @@ template<typename T> void EventSender<T>::cancelEvent(T& sender)
     }
 }
 
-template<typename T> void EventSender<T>::dispatchPendingEvents(Page* page)
+template<typename T> void EventSender<T>::dispatchPendingEvents()
 {
     // Need to avoid re-entering this function; if new dispatches are
     // scheduled before the parent finishes processing the list, they
@@ -101,10 +99,7 @@ template<typename T> void EventSender<T>::dispatchPendingEvents(Page* page)
     for (auto& event : m_dispatchingList) {
         if (T* sender = event) {
             event = nullptr;
-            if (!page || sender->document().page() == page)
-                sender->dispatchPendingEvent(this);
-            else
-                dispatchEventSoon(*sender);
+            sender->dispatchPendingEvent(this);
         }
     }
     m_dispatchingList.clear();

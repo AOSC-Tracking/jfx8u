@@ -30,6 +30,7 @@
 
 #include "AllowMacroScratchRegisterUsage.h"
 #include "FTLSlowPathCall.h"
+#include "FTLState.h"
 
 namespace JSC { namespace FTL {
 

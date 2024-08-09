@@ -26,8 +26,11 @@
 #include "config.h"
 #include "WeakMapConstructor.h"
 
+#include "Error.h"
 #include "IteratorOperations.h"
 #include "JSCInlines.h"
+#include "JSGlobalObject.h"
+#include "JSObjectInlines.h"
 #include "JSWeakMap.h"
 #include "WeakMapPrototype.h"
 
@@ -62,12 +65,8 @@ static EncodedJSValue JSC_HOST_CALL constructWeakMap(JSGlobalObject* globalObjec
     VM& vm = globalObject->vm();
     auto scope = DECLARE_THROW_SCOPE(vm);
 
-    JSObject* newTarget = asObject(callFrame->newTarget());
-    Structure* weakMapStructure = newTarget == callFrame->jsCallee()
-        ? globalObject->weakMapStructure()
-        : InternalFunction::createSubclassStructure(globalObject, newTarget, getFunctionRealm(vm, newTarget)->weakMapStructure());
-    RETURN_IF_EXCEPTION(scope, { });
-
+    Structure* weakMapStructure = InternalFunction::createSubclassStructure(globalObject, callFrame->jsCallee(), callFrame->newTarget(), globalObject->weakMapStructure());
+    RETURN_IF_EXCEPTION(scope, encodedJSValue());
     JSWeakMap* weakMap = JSWeakMap::create(vm, weakMapStructure);
     JSValue iterable = callFrame->argument(0);
     if (iterable.isUndefinedOrNull())
@@ -76,8 +75,9 @@ static EncodedJSValue JSC_HOST_CALL constructWeakMap(JSGlobalObject* globalObjec
     JSValue adderFunction = weakMap->JSObject::get(globalObject, vm.propertyNames->set);
     RETURN_IF_EXCEPTION(scope, encodedJSValue());
 
-    auto adderFunctionCallData = getCallData(vm, adderFunction);
-    if (adderFunctionCallData.type == CallData::Type::None)
+    CallData adderFunctionCallData;
+    CallType adderFunctionCallType = getCallData(vm, adderFunction, adderFunctionCallData);
+    if (adderFunctionCallType == CallType::None)
         return JSValue::encode(throwTypeError(globalObject, scope));
 
     scope.release();
@@ -99,7 +99,7 @@ static EncodedJSValue JSC_HOST_CALL constructWeakMap(JSGlobalObject* globalObjec
         arguments.append(value);
         ASSERT(!arguments.hasOverflowed());
         scope.release();
-        call(globalObject, adderFunction, adderFunctionCallData, weakMap, arguments);
+        call(globalObject, adderFunction, adderFunctionCallType, adderFunctionCallData, weakMap, arguments);
     });
 
     return JSValue::encode(weakMap);

@@ -26,7 +26,9 @@
 #include "config.h"
 #include <wtf/ParkingLot.h>
 
+#include <condition_variable>
 #include <mutex>
+#include <thread>
 #include <wtf/DataLog.h>
 #include <wtf/HashFunctions.h>
 #include <wtf/StringPrintStream.h>
@@ -40,7 +42,7 @@ namespace WTF {
 
 namespace {
 
-static constexpr bool verbose = false;
+const bool verbose = false;
 
 struct ThreadData : public ThreadSafeRefCounted<ThreadData> {
     WTF_MAKE_FAST_ALLOCATED;

@@ -54,6 +54,9 @@ void ScrollingTreeFrameScrollingNode::commitStateBeforeChildren(const ScrollingS
     if (state.hasChangedProperty(ScrollingStateFrameScrollingNode::FrameScaleFactor))
         m_frameScaleFactor = state.frameScaleFactor();
 
+    if (state.hasChangedProperty(ScrollingStateFrameScrollingNode::ReasonsForSynchronousScrolling))
+        m_synchronousScrollingReasons = state.synchronousScrollingReasons();
+
     if (state.hasChangedProperty(ScrollingStateFrameScrollingNode::HeaderHeight))
         m_headerHeight = state.headerHeight();
 
@@ -132,6 +135,17 @@ FloatSize ScrollingTreeFrameScrollingNode::viewToContentsOffset(const FloatPoint
     return toFloatSize(scrollPosition) - FloatSize(0, headerHeight() + topContentInset());
 }
 
+LayoutPoint ScrollingTreeFrameScrollingNode::parentToLocalPoint(LayoutPoint point) const
+{
+    return point - LayoutSize(0, headerHeight() + topContentInset());
+}
+
+LayoutPoint ScrollingTreeFrameScrollingNode::localToContentsPoint(LayoutPoint point) const
+{
+    auto scrolledPoint = point + LayoutPoint(currentScrollPosition());
+    return scrolledPoint.scaled(1 / frameScaleFactor());
+}
+
 void ScrollingTreeFrameScrollingNode::dumpProperties(TextStream& ts, ScrollingStateTreeAsTextBehavior behavior) const
 {
     ts << "frame scrolling node";
@@ -153,6 +167,8 @@ void ScrollingTreeFrameScrollingNode::dumpProperties(TextStream& ts, ScrollingSt
         ts.dumpProperty("header height", m_headerHeight);
     if (m_footerHeight)
         ts.dumpProperty("footer height", m_footerHeight);
+    if (m_synchronousScrollingReasons)
+        ts.dumpProperty("synchronous scrolling reasons", ScrollingCoordinator::synchronousScrollingReasonsAsText(m_synchronousScrollingReasons));
 
     ts.dumpProperty("behavior for fixed", m_behaviorForFixed);
     if (m_fixedElementsLayoutRelativeToFrame)

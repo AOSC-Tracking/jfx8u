@@ -18,7 +18,7 @@
  */
 
 #include "config.h"
-#include "TextureMapperGCGLPlatformLayer.h"
+#include "TextureMapperGC3DPlatformLayer.h"
 
 #if ENABLE(GRAPHICS_CONTEXT_GL) && USE(TEXTURE_MAPPER) && !USE(NICOSIA)
 
@@ -30,7 +30,7 @@
 
 namespace WebCore {
 
-TextureMapperGCGLPlatformLayer::TextureMapperGCGLPlatformLayer(GraphicsContextGLOpenGL& context, GraphicsContextGLOpenGL::Destination destination)
+TextureMapperGC3DPlatformLayer::TextureMapperGC3DPlatformLayer(GraphicsContextGLOpenGL& context, GraphicsContextGLOpenGL::Destination destination)
     : m_context(context)
 {
     switch (destination) {
@@ -47,7 +47,7 @@ TextureMapperGCGLPlatformLayer::TextureMapperGCGLPlatformLayer(GraphicsContextGL
 #endif
 }
 
-TextureMapperGCGLPlatformLayer::~TextureMapperGCGLPlatformLayer()
+TextureMapperGC3DPlatformLayer::~TextureMapperGC3DPlatformLayer()
 {
 #if !USE(COORDINATED_GRAPHICS)
     if (client())
@@ -55,25 +55,25 @@ TextureMapperGCGLPlatformLayer::~TextureMapperGCGLPlatformLayer()
 #endif
 }
 
-bool TextureMapperGCGLPlatformLayer::makeContextCurrent()
+bool TextureMapperGC3DPlatformLayer::makeContextCurrent()
 {
     ASSERT(m_glContext);
     return m_glContext->makeContextCurrent();
 }
 
-PlatformGraphicsContextGL TextureMapperGCGLPlatformLayer::platformContext() const
+PlatformGraphicsContextGL TextureMapperGC3DPlatformLayer::platformContext() const
 {
     ASSERT(m_glContext);
     return m_glContext->platformContext();
 }
 
 #if USE(COORDINATED_GRAPHICS)
-RefPtr<TextureMapperPlatformLayerProxy> TextureMapperGCGLPlatformLayer::proxy() const
+RefPtr<TextureMapperPlatformLayerProxy> TextureMapperGC3DPlatformLayer::proxy() const
 {
     return m_platformLayerProxy.copyRef();
 }
 
-void TextureMapperGCGLPlatformLayer::swapBuffersIfNeeded()
+void TextureMapperGC3DPlatformLayer::swapBuffersIfNeeded()
 {
     if (m_context.layerComposited())
         return;
@@ -90,7 +90,7 @@ void TextureMapperGCGLPlatformLayer::swapBuffersIfNeeded()
     m_context.markLayerComposited();
 }
 #else
-void TextureMapperGCGLPlatformLayer::paintToTextureMapper(TextureMapper& textureMapper, const FloatRect& targetRect, const TransformationMatrix& matrix, float opacity)
+void TextureMapperGC3DPlatformLayer::paintToTextureMapper(TextureMapper& textureMapper, const FloatRect& targetRect, const TransformationMatrix& matrix, float opacity)
 {
     ASSERT(m_glContext);
 
@@ -98,14 +98,13 @@ void TextureMapperGCGLPlatformLayer::paintToTextureMapper(TextureMapper& texture
 
 #if USE(TEXTURE_MAPPER_GL)
     auto attrs = m_context.contextAttributes();
-    ASSERT(m_context.m_state.boundReadFBO == m_context.m_state.boundDrawFBO);
-    if (attrs.antialias && m_context.m_state.boundDrawFBO == m_context.m_multisampleFBO) {
+    if (attrs.antialias && m_context.m_state.boundFBO == m_context.m_multisampleFBO) {
         GLContext* previousActiveContext = GLContext::current();
         if (previousActiveContext != m_glContext.get())
             m_context.makeContextCurrent();
 
         m_context.resolveMultisamplingIfNecessary();
-        ::glBindFramebuffer(GraphicsContextGLOpenGL::FRAMEBUFFER, m_context.m_state.boundDrawFBO);
+        ::glBindFramebuffer(GraphicsContextGLOpenGL::FRAMEBUFFER, m_context.m_state.boundFBO);
 
         if (previousActiveContext && previousActiveContext != m_glContext.get())
             previousActiveContext->makeContextCurrent();

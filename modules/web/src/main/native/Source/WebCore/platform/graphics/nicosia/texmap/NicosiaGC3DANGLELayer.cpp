@@ -27,7 +27,7 @@
  */
 
 #include "config.h"
-#include "NicosiaGCGLANGLELayer.h"
+#include "NicosiaGC3DANGLELayer.h"
 
 #if USE(NICOSIA) && USE(TEXTURE_MAPPER)
 
@@ -51,7 +51,7 @@ namespace Nicosia {
 
 using namespace WebCore;
 
-const char* GCGLANGLELayer::ANGLEContext::errorString(int statusCode)
+const char* GC3DANGLELayer::ANGLEContext::errorString(int statusCode)
 {
     static_assert(sizeof(int) >= sizeof(EGLint), "EGLint must not be wider than int");
     switch (statusCode) {
@@ -77,12 +77,12 @@ const char* GCGLANGLELayer::ANGLEContext::errorString(int statusCode)
     }
 }
 
-const char* GCGLANGLELayer::ANGLEContext::lastErrorString()
+const char* GC3DANGLELayer::ANGLEContext::lastErrorString()
 {
     return errorString(EGL_GetError());
 }
 
-std::unique_ptr<GCGLANGLELayer::ANGLEContext> GCGLANGLELayer::ANGLEContext::createContext()
+std::unique_ptr<GC3DANGLELayer::ANGLEContext> GC3DANGLELayer::ANGLEContext::createContext()
 {
     EGLDisplay display = EGL_GetDisplay(EGL_DEFAULT_DISPLAY);
     if (display == EGL_NO_DISPLAY)
@@ -146,14 +146,14 @@ std::unique_ptr<GCGLANGLELayer::ANGLEContext> GCGLANGLELayer::ANGLEContext::crea
     return std::unique_ptr<ANGLEContext>(new ANGLEContext(display, context, EGL_NO_SURFACE));
 }
 
-GCGLANGLELayer::ANGLEContext::ANGLEContext(EGLDisplay display, EGLContext context, EGLSurface surface)
+GC3DANGLELayer::ANGLEContext::ANGLEContext(EGLDisplay display, EGLContext context, EGLSurface surface)
     : m_display(display)
     , m_context(context)
     , m_surface(surface)
 {
 }
 
-GCGLANGLELayer::ANGLEContext::~ANGLEContext()
+GC3DANGLELayer::ANGLEContext::~ANGLEContext()
 {
     if (m_context) {
         gl::BindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -165,7 +165,7 @@ GCGLANGLELayer::ANGLEContext::~ANGLEContext()
         EGL_DestroySurface(m_display, m_surface);
 }
 
-bool GCGLANGLELayer::ANGLEContext::makeContextCurrent()
+bool GC3DANGLELayer::ANGLEContext::makeContextCurrent()
 {
     ASSERT(m_context);
 
@@ -174,13 +174,13 @@ bool GCGLANGLELayer::ANGLEContext::makeContextCurrent()
     return true;
 }
 
-PlatformGraphicsContextGL GCGLANGLELayer::ANGLEContext::platformContext() const
+PlatformGraphicsContextGL GC3DANGLELayer::ANGLEContext::platformContext() const
 {
     return m_context;
 }
 
-GCGLANGLELayer::GCGLANGLELayer(GraphicsContextGLOpenGL& context, GraphicsContextGLOpenGL::Destination destination)
-    : GCGLLayer(context)
+GC3DANGLELayer::GC3DANGLELayer(GraphicsContextGLOpenGL& context, GraphicsContextGLOpenGL::Destination destination)
+    : GC3DLayer(context)
 {
     switch (destination) {
     case GraphicsContextGLOpenGL::Destination::Offscreen:
@@ -192,18 +192,18 @@ GCGLANGLELayer::GCGLANGLELayer(GraphicsContextGLOpenGL& context, GraphicsContext
     }
 }
 
-GCGLANGLELayer::~GCGLANGLELayer()
+GC3DANGLELayer::~GC3DANGLELayer()
 {
 }
 
-bool GCGLANGLELayer::makeContextCurrent()
+bool GC3DANGLELayer::makeContextCurrent()
 {
     ASSERT(m_angleContext);
     return m_angleContext->makeContextCurrent();
 
 }
 
-PlatformGraphicsContextGL GCGLANGLELayer::platformContext() const
+PlatformGraphicsContextGL GC3DANGLELayer::platformContext() const
 {
     ASSERT(m_angleContext);
     return m_angleContext->platformContext();

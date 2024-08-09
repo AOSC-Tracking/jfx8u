@@ -175,9 +175,9 @@ void Worker::resume()
     }
 }
 
-bool Worker::virtualHasPendingActivity() const
+bool Worker::hasPendingActivity() const
 {
-    return m_contextProxy.hasPendingActivity();
+    return m_contextProxy.hasPendingActivity() || ActiveDOMObject::hasPendingActivity();
 }
 
 void Worker::notifyNetworkStateChange(bool isOnLine)

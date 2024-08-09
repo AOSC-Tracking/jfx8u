@@ -61,7 +61,6 @@ public:
 
     void initialize(const Constraints&);
     void append(const InlineItem&, InlineLayoutUnit logicalWidth);
-    void appendPartialTrailingTextItem(const InlineTextItem&, InlineLayoutUnit logicalWidth, bool needsHypen);
     void resetContent();
     bool isVisuallyEmpty() const { return m_lineBox.isConsideredEmpty(); }
     bool hasIntrusiveFloat() const { return m_hasIntrusiveFloat; }
@@ -85,8 +84,7 @@ public:
         const Box& layoutBox() const { return *m_layoutBox; }
         const RenderStyle& style() const { return m_layoutBox->style(); }
         const Display::InlineRect& logicalRect() const { return m_logicalRect; }
-        Display::Run::Expansion expansion() const { return m_expansion; }
-        const Optional<Display::Run::TextContent>& textContent() const { return m_textContent; }
+        const Optional<Display::Run::TextContext>& textContext() const { return m_textContext; }
 
         Run(Run&&) = default;
         Run& operator=(Run&& other) = default;
@@ -94,7 +92,7 @@ public:
     private:
         friend class LineBuilder;
 
-        Run(const InlineTextItem&, InlineLayoutUnit logicalLeft, InlineLayoutUnit logicalWidth, bool needsHypen);
+        Run(const InlineTextItem&, InlineLayoutUnit logicalLeft, InlineLayoutUnit logicalWidth);
         Run(const InlineSoftLineBreakItem&, InlineLayoutUnit logicalLeft);
         Run(const InlineItem&, InlineLayoutUnit logicalLeft, InlineLayoutUnit logicalWidth);
 
@@ -110,12 +108,10 @@ public:
         void setLogicalHeight(InlineLayoutUnit logicalHeight) { m_logicalRect.setHeight(logicalHeight); }
 
         bool hasExpansionOpportunity() const { return m_expansionOpportunityCount; }
-        ExpansionBehavior expansionBehavior() const;
+        Optional<ExpansionBehavior> expansionBehavior() const;
         unsigned expansionOpportunityCount() const { return m_expansionOpportunityCount; }
         void setComputedHorizontalExpansion(InlineLayoutUnit logicalExpansion);
-        void setExpansionBehavior(ExpansionBehavior);
-
-        void setNeedsHyphen() { m_textContent->setNeedsHyphen(); }
+        void adjustExpansionBehavior(ExpansionBehavior);
 
         enum class TrailingWhitespace {
             None,
@@ -140,8 +136,7 @@ public:
         Display::InlineRect m_logicalRect;
         TrailingWhitespace m_trailingWhitespaceType { TrailingWhitespace::None };
         InlineLayoutUnit m_trailingWhitespaceWidth { 0 };
-        Optional<Display::Run::TextContent> m_textContent;
-        Display::Run::Expansion m_expansion;
+        Optional<Display::Run::TextContext> m_textContext;
         unsigned m_expansionOpportunityCount { 0 };
     };
     using RunList = Vector<Run, 10>;
@@ -164,13 +159,8 @@ private:
     InlineLayoutUnit contentLogicalRight() const { return m_lineBox.logicalRight(); }
     InlineLayoutUnit baselineOffset() const { return m_lineBox.baselineOffset(); }
 
-    struct InlineRunDetails {
-        InlineLayoutUnit logicalWidth { 0 };
-        bool needsHyphen { false };
-    };
-    void appendWith(const InlineItem&, const InlineRunDetails&);
     void appendNonBreakableSpace(const InlineItem&, InlineLayoutUnit logicalLeft, InlineLayoutUnit logicalWidth);
-    void appendTextContent(const InlineTextItem&, InlineLayoutUnit logicalWidth, bool needsHyphen);
+    void appendTextContent(const InlineTextItem&, InlineLayoutUnit logicalWidth);
     void appendNonReplacedInlineBox(const InlineItem&, InlineLayoutUnit logicalWidth);
     void appendReplacedInlineBox(const InlineItem&, InlineLayoutUnit logicalWidth);
     void appendInlineContainerStart(const InlineItem&, InlineLayoutUnit logicalWidth);
@@ -183,9 +173,11 @@ private:
     void alignHorizontally(const HangingContent&, IsLastLineWithInlineContent);
     void alignContentVertically();
 
-    void adjustBaselineAndLineHeight(const Run&, const LineBoxBuilder::Baseline&);
+    void adjustBaselineAndLineHeight(const Run&);
     InlineLayoutUnit runContentHeight(const Run&) const;
 
+    bool isTextAlignJustify() const { return m_horizontalAlignment == TextAlignMode::Justify; };
+    bool isTextAlignRight() const { return m_horizontalAlignment == TextAlignMode::Right || m_horizontalAlignment == TextAlignMode::WebKitRight || m_horizontalAlignment == TextAlignMode::End; }
     void justifyRuns(InlineLayoutUnit availableWidth);
 
     bool isVisuallyNonEmpty(const Run&) const;

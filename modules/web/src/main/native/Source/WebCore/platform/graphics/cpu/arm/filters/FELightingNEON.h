@@ -111,11 +111,9 @@ inline void FELighting::platformApplyNeon(const LightingData& data, const LightS
     // Set light source arguments.
     floatArguments.constOne = 1;
 
-    auto color = m_lightingColor.toSRGBALossy<uint8_t>();
-
-    floatArguments.colorRed = color.red;
-    floatArguments.colorGreen = color.green;
-    floatArguments.colorBlue = color.blue;
+    floatArguments.colorRed = m_lightingColor.red();
+    floatArguments.colorGreen = m_lightingColor.green();
+    floatArguments.colorBlue = m_lightingColor.blue();
     floatArguments.padding4 = 0;
 
     if (m_lightSource->type() == LS_POINT) {

@@ -486,9 +486,11 @@ const char* FontFace::activeDOMObjectName() const
     return "FontFace";
 }
 
-bool FontFace::virtualHasPendingActivity() const
+bool FontFace::hasPendingActivity() const
 {
-    return m_mayLoadedPromiseBeScriptObservable && !m_loadedPromise->isFulfilled();
+    if (ActiveDOMObject::hasPendingActivity())
+        return true;
+    return !isContextStopped() && m_mayLoadedPromiseBeScriptObservable && !m_loadedPromise->isFulfilled();
 }
 
 }

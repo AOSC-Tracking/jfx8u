@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2020 Igalia S.L
+ * Copyright (C) 2010 Nokia Corporation and/or its subsidiary(-ies)
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Library General Public
@@ -17,19 +17,7 @@
  *  Boston, MA 02110-1301, USA.
  */
 
-#pragma once
+[
+    CallbackNeedsOperatorEqual
+] callback MediaQueryListListener = void (MediaQueryList list);
 
-#include <wtf/Platform.h>
-
-#if USE(MANETTE)
-
-#include <libmanette.h>
-#include <wtf/glib/GUniquePtr.h>
-
-namespace WTF {
-
-WTF_DEFINE_GPTR_DELETER(ManetteMonitorIter, manette_monitor_iter_free)
-
-} // namespace WTF
-
-#endif // USE(MANETTE)

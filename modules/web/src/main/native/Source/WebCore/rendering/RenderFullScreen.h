@@ -52,6 +52,7 @@ private:
     bool isRenderFullScreen() const override { return true; }
     bool isFlexibleBoxImpl() const override { return true; }
 
+protected:
     WeakPtr<RenderBlock> m_placeholder;
 };
 

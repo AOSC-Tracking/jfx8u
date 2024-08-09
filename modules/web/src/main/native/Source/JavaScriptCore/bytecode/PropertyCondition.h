@@ -361,7 +361,9 @@ namespace WTF {
 void printInternal(PrintStream&, JSC::PropertyCondition::Kind);
 
 template<typename T> struct DefaultHash;
-template<> struct DefaultHash<JSC::PropertyCondition> : JSC::PropertyConditionHash { };
+template<> struct DefaultHash<JSC::PropertyCondition> {
+    typedef JSC::PropertyConditionHash Hash;
+};
 
 template<typename T> struct HashTraits;
 template<> struct HashTraits<JSC::PropertyCondition> : SimpleClassHashTraits<JSC::PropertyCondition> { };

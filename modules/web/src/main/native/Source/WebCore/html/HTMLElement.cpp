@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 1999 Lars Knoll (knoll@kde.org)
  *           (C) 1999 Antti Koivisto (koivisto@kde.org)
- * Copyright (C) 2004-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2004-2018 Apple Inc. All rights reserved.
  * Copyright (C) 2009 Torch Mobile Inc. All rights reserved. (http://www.torchmobile.com/)
  * Copyright (C) 2011 Motorola Mobility. All rights reserved.
  *
@@ -36,7 +36,6 @@
 #include "ElementAncestorIterator.h"
 #include "EnterKeyHint.h"
 #include "Event.h"
-#include "EventHandler.h"
 #include "EventListener.h"
 #include "EventNames.h"
 #include "Frame.h"
@@ -45,6 +44,7 @@
 #include "HTMLBDIElement.h"
 #include "HTMLBRElement.h"
 #include "HTMLButtonElement.h"
+#include "HTMLCollection.h"
 #include "HTMLDocument.h"
 #include "HTMLElementFactory.h"
 #include "HTMLFieldSetElement.h"
@@ -60,10 +60,10 @@
 #include "NodeTraversal.h"
 #include "RenderElement.h"
 #include "ScriptController.h"
-#include "ScriptDisallowedScope.h"
 #include "ShadowRoot.h"
 #include "SimulatedClick.h"
 #include "StyleProperties.h"
+#include "SubframeLoader.h"
 #include "Text.h"
 #include "XMLNames.h"
 #include "markup.h"
@@ -71,7 +71,6 @@
 #include <wtf/NeverDestroyed.h>
 #include <wtf/StdLibExtras.h>
 #include <wtf/text/CString.h>
-#include <wtf/text/StringBuilder.h>
 
 namespace WebCore {
 
@@ -208,15 +207,10 @@ void HTMLElement::collectStyleForPresentationAttribute(const QualifiedName& name
         if (equalLettersIgnoringASCIICase(value, "auto"))
             addPropertyToPresentationAttributeStyle(style, CSSPropertyUnicodeBidi, unicodeBidiAttributeForDirAuto(*this));
         else {
-            auto unicodeBidiValue = CSSValueEmbed;
-
-            if (isLTROrRTLIgnoringCase(value)) {
+            if (isLTROrRTLIgnoringCase(value))
                 addPropertyToPresentationAttributeStyle(style, CSSPropertyDirection, value);
-                unicodeBidiValue = CSSValueIsolate;
-            }
-
             if (!hasTagName(bdiTag) && !hasTagName(bdoTag) && !hasTagName(outputTag))
-                addPropertyToPresentationAttributeStyle(style, CSSPropertyUnicodeBidi, unicodeBidiValue);
+                addPropertyToPresentationAttributeStyle(style, CSSPropertyUnicodeBidi, CSSValueEmbed);
         }
     } else if (name.matches(XMLNames::langAttr))
         mapLanguageAttributeToLocale(value, style);
@@ -512,9 +506,9 @@ static Ref<DocumentFragment> textToFragment(Document& document, const String& te
 // http://www.whatwg.org/specs/web-apps/current-work/multipage/common-dom-interfaces.html#limited-to-only-known-values
 static inline const AtomString& toValidDirValue(const AtomString& value)
 {
-    static MainThreadNeverDestroyed<const AtomString> ltrValue("ltr", AtomString::ConstructFromLiteral);
-    static MainThreadNeverDestroyed<const AtomString> rtlValue("rtl", AtomString::ConstructFromLiteral);
-    static MainThreadNeverDestroyed<const AtomString> autoValue("auto", AtomString::ConstructFromLiteral);
+    static NeverDestroyed<AtomString> ltrValue("ltr", AtomString::ConstructFromLiteral);
+    static NeverDestroyed<AtomString> rtlValue("rtl", AtomString::ConstructFromLiteral);
+    static NeverDestroyed<AtomString> autoValue("auto", AtomString::ConstructFromLiteral);
     if (equalLettersIgnoringASCIICase(value, "ltr"))
         return ltrValue;
     if (equalLettersIgnoringASCIICase(value, "rtl"))
@@ -667,32 +661,14 @@ String HTMLElement::contentEditable() const
     return "inherit"_s;
 }
 
-static const AtomString& trueName()
-{
-    static MainThreadNeverDestroyed<const AtomString> trueValue("true", AtomString::ConstructFromLiteral);
-    return trueValue.get();
-}
-
-static const AtomString& falseName()
-{
-    static MainThreadNeverDestroyed<const AtomString> falseValue("false", AtomString::ConstructFromLiteral);
-    return falseValue.get();
-}
-
-static const AtomString& plaintextOnlyName()
-{
-    static MainThreadNeverDestroyed<const AtomString> plaintextOnlyValue("plaintext-only", AtomString::ConstructFromLiteral);
-    return plaintextOnlyValue.get();
-}
-
 ExceptionOr<void> HTMLElement::setContentEditable(const String& enabled)
 {
     if (equalLettersIgnoringASCIICase(enabled, "true"))
-        setAttributeWithoutSynchronization(contenteditableAttr, trueName());
+        setAttributeWithoutSynchronization(contenteditableAttr, AtomString("true", AtomString::ConstructFromLiteral));
     else if (equalLettersIgnoringASCIICase(enabled, "false"))
-        setAttributeWithoutSynchronization(contenteditableAttr, falseName());
+        setAttributeWithoutSynchronization(contenteditableAttr, AtomString("false", AtomString::ConstructFromLiteral));
     else if (equalLettersIgnoringASCIICase(enabled, "plaintext-only"))
-        setAttributeWithoutSynchronization(contenteditableAttr, plaintextOnlyName());
+        setAttributeWithoutSynchronization(contenteditableAttr, AtomString("plaintext-only", AtomString::ConstructFromLiteral));
     else if (equalLettersIgnoringASCIICase(enabled, "inherit"))
         removeAttribute(contenteditableAttr);
     else
@@ -707,7 +683,9 @@ bool HTMLElement::draggable() const
 
 void HTMLElement::setDraggable(bool value)
 {
-    setAttributeWithoutSynchronization(draggableAttr, value ? trueName() : falseName());
+    setAttributeWithoutSynchronization(draggableAttr, value
+        ? AtomString("true", AtomString::ConstructFromLiteral)
+        : AtomString("false", AtomString::ConstructFromLiteral));
 }
 
 bool HTMLElement::spellcheck() const
@@ -717,7 +695,9 @@ bool HTMLElement::spellcheck() const
 
 void HTMLElement::setSpellcheck(bool enable)
 {
-    setAttributeWithoutSynchronization(spellcheckAttr, enable ? trueName() : falseName());
+    setAttributeWithoutSynchronization(spellcheckAttr, enable
+        ? AtomString("true", AtomString::ConstructFromLiteral)
+        : AtomString("false", AtomString::ConstructFromLiteral));
 }
 
 void HTMLElement::click()
@@ -725,33 +705,9 @@ void HTMLElement::click()
     simulateClick(*this, nullptr, SendNoEvents, DoNotShowPressedLook, SimulatedClickSource::Bindings);
 }
 
-bool HTMLElement::accessKeyAction(bool sendMouseEvents)
+void HTMLElement::accessKeyAction(bool sendMouseEvents)
 {
-    return dispatchSimulatedClick(nullptr, sendMouseEvents ? SendMouseUpDownEvents : SendNoEvents);
-}
-
-String HTMLElement::accessKeyLabel() const
-{
-    const auto& accessKey = attributeWithoutSynchronization(accesskeyAttr);
-    if (accessKey.isEmpty())
-        return String();
-
-    StringBuilder result;
-
-#if PLATFORM(COCOA)
-    auto modifiers = EventHandler::accessKeyModifiers();
-    if (modifiers.contains(PlatformEvent::Modifier::ControlKey))
-        result.append(upArrowhead);
-    if (modifiers.contains(PlatformEvent::Modifier::AltKey))
-        result.append(WTF::Unicode::optionKey);
-#else
-    // Currently accessKeyModifier in non-cocoa platforms is hardcoded to Alt, so no reason to do extra work here.
-    // If this ever becomes configurable, make this code use EventHandler::accessKeyModifiers().
-    result.append("Alt+");
-#endif
-
-    result.append(accessKey);
-    return result.toString();
+    dispatchSimulatedClick(nullptr, sendMouseEvents ? SendMouseUpDownEvents : SendNoEvents);
 }
 
 String HTMLElement::title() const
@@ -785,7 +741,7 @@ bool HTMLElement::rendererIsEverNeeded()
             return false;
     } else if (hasTagName(noembedTag)) {
         RefPtr<Frame> frame = document().frame();
-        if (frame && frame->loader().arePluginsEnabled())
+        if (frame && frame->loader().subframeLoader().allowPlugins())
             return false;
     }
     return StyledElement::rendererIsEverNeeded();
@@ -811,14 +767,12 @@ FormAssociatedElement* HTMLElement::asFormAssociatedElement()
     return nullptr;
 }
 
-static bool elementAffectsDirectionality(const HTMLElement& element)
+static inline bool elementAffectsDirectionality(const Node& node)
 {
+    if (!is<HTMLElement>(node))
+        return false;
+    const HTMLElement& element = downcast<HTMLElement>(node);
     return is<HTMLBDIElement>(element) || element.hasAttributeWithoutSynchronization(dirAttr);
-}
-
-static bool elementAffectsDirectionality(const Node& node)
-{
-    return is<HTMLElement>(node) && elementAffectsDirectionality(downcast<HTMLElement>(node));
 }
 
 static void setHasDirAutoFlagRecursively(Node* firstNode, bool flag, Node* lastNode = nullptr)
@@ -931,10 +885,10 @@ void HTMLElement::adjustDirectionalityIfNeededAfterChildAttributeChanged(Element
     setHasDirAutoFlagRecursively(child, false);
     if (!renderer() || renderer()->style().direction() == textDirection)
         return;
-    for (auto& element : lineageOfType<HTMLElement>(*this)) {
-        if (elementAffectsDirectionality(element)) {
-            element.invalidateStyleForSubtree();
-            break;
+    for (auto& elementToAdjust : elementLineage(this)) {
+        if (elementAffectsDirectionality(elementToAdjust)) {
+            elementToAdjust.invalidateStyleForSubtree();
+            return;
         }
     }
 }
@@ -1004,47 +958,28 @@ void HTMLElement::addHTMLLengthToStyle(MutableStyleProperties& style, CSSPropert
     addPropertyToPresentationAttributeStyle(style, propertyID, value);
 }
 
-// Color parsing that matches HTML's "rules for parsing a legacy color value"
-// https://html.spec.whatwg.org/#rules-for-parsing-a-legacy-colour-value
-static Optional<SRGBA<uint8_t>> parseLegacyColorValue(StringView string)
+static RGBA32 parseColorStringWithCrazyLegacyRules(const String& colorString)
 {
-    // An empty string doesn't apply a color.
-    if (string.isEmpty())
-        return WTF::nullopt;
-
-    string = string.stripLeadingAndTrailingMatchedCharacters(isHTMLSpace<UChar>);
-    if (string.isEmpty())
-        return Color::black;
-
-    // "transparent" doesn't apply a color either.
-    if (equalLettersIgnoringASCIICase(string, "transparent"))
-        return WTF::nullopt;
-
-    if (auto namedColor = CSSParser::parseNamedColor(string))
-        return namedColor;
-
-    if (string.length() == 4 && string[0] == '#' && isASCIIHexDigit(string[1]) && isASCIIHexDigit(string[2]) && isASCIIHexDigit(string[3]))
-        return { { static_cast<uint8_t>(toASCIIHexValue(string[1]) * 0x11), static_cast<uint8_t>(toASCIIHexValue(string[2]) * 0x11), static_cast<uint8_t>(toASCIIHexValue(string[3]) * 0x11) } };
-
     // Per spec, only look at the first 128 digits of the string.
-    constexpr unsigned maxColorLength = 128;
-
+    const size_t maxColorLength = 128;
     // We'll pad the buffer with two extra 0s later, so reserve two more than the max.
-    Vector<char, maxColorLength + 2> digitBuffer;
+    Vector<char, maxColorLength+2> digitBuffer;
+
+    size_t i = 0;
+    // Skip a leading #.
+    if (colorString[0] == '#')
+        i = 1;
 
     // Grab the first 128 characters, replacing non-hex characters with 0.
     // Non-BMP characters are replaced with "00" due to them appearing as two "characters" in the String.
-    unsigned i = 0;
-    if (string[0] == '#') // Skip a leading #.
-        i = 1;
-    for (; i < string.length() && digitBuffer.size() < maxColorLength; i++) {
-        if (!isASCIIHexDigit(string[i]))
+    for (; i < colorString.length() && digitBuffer.size() < maxColorLength; i++) {
+        if (!isASCIIHexDigit(colorString[i]))
             digitBuffer.append('0');
         else
-            digitBuffer.append(string[i]);
+            digitBuffer.append(colorString[i]);
     }
 
-    if (digitBuffer.isEmpty())
+    if (!digitBuffer.size())
         return Color::black;
 
     // Pad the buffer out to at least the next multiple of three in size.
@@ -1052,15 +987,15 @@ static Optional<SRGBA<uint8_t>> parseLegacyColorValue(StringView string)
     digitBuffer.append('0');
 
     if (digitBuffer.size() < 6)
-        return { { toASCIIHexValue(digitBuffer[0]), toASCIIHexValue(digitBuffer[1]), toASCIIHexValue(digitBuffer[2]) } };
+        return makeRGB(toASCIIHexValue(digitBuffer[0]), toASCIIHexValue(digitBuffer[1]), toASCIIHexValue(digitBuffer[2]));
 
     // Split the digits into three components, then search the last 8 digits of each component.
     ASSERT(digitBuffer.size() >= 6);
-    unsigned componentLength = digitBuffer.size() / 3;
-    unsigned componentSearchWindowLength = std::min(componentLength, 8U);
-    unsigned redIndex = componentLength - componentSearchWindowLength;
-    unsigned greenIndex = componentLength * 2 - componentSearchWindowLength;
-    unsigned blueIndex = componentLength * 3 - componentSearchWindowLength;
+    size_t componentLength = digitBuffer.size() / 3;
+    size_t componentSearchWindowLength = std::min<size_t>(componentLength, 8);
+    size_t redIndex = componentLength - componentSearchWindowLength;
+    size_t greenIndex = componentLength * 2 - componentSearchWindowLength;
+    size_t blueIndex = componentLength * 3 - componentSearchWindowLength;
     // Skip digits until one of them is non-zero, or we've only got two digits left in the component.
     while (digitBuffer[redIndex] == '0' && digitBuffer[greenIndex] == '0' && digitBuffer[blueIndex] == '0' && (componentLength - redIndex) > 2) {
         redIndex++;
@@ -1073,16 +1008,34 @@ static Optional<SRGBA<uint8_t>> parseLegacyColorValue(StringView string)
     ASSERT(blueIndex >= componentLength * 2);
     ASSERT_WITH_SECURITY_IMPLICATION(blueIndex + 1 < digitBuffer.size());
 
-    uint8_t redValue = toASCIIHexValue(digitBuffer[redIndex], digitBuffer[redIndex + 1]);
-    uint8_t greenValue = toASCIIHexValue(digitBuffer[greenIndex], digitBuffer[greenIndex + 1]);
-    uint8_t blueValue = toASCIIHexValue(digitBuffer[blueIndex], digitBuffer[blueIndex + 1]);
-    return { { redValue, greenValue, blueValue } };
+    int redValue = toASCIIHexValue(digitBuffer[redIndex], digitBuffer[redIndex + 1]);
+    int greenValue = toASCIIHexValue(digitBuffer[greenIndex], digitBuffer[greenIndex + 1]);
+    int blueValue = toASCIIHexValue(digitBuffer[blueIndex], digitBuffer[blueIndex + 1]);
+    return makeRGB(redValue, greenValue, blueValue);
 }
 
+// Color parsing that matches HTML's "rules for parsing a legacy color value"
 void HTMLElement::addHTMLColorToStyle(MutableStyleProperties& style, CSSPropertyID propertyID, const String& attributeValue)
 {
-    if (auto color = parseLegacyColorValue(attributeValue))
-        style.setProperty(propertyID, CSSValuePool::singleton().createColorValue(*color));
+    // An empty string doesn't apply a color. (One containing only whitespace does, which is why this check occurs before stripping.)
+    if (attributeValue.isEmpty())
+        return;
+
+    String colorString = attributeValue.stripWhiteSpace();
+
+    // "transparent" doesn't apply a color either.
+    if (equalLettersIgnoringASCIICase(colorString, "transparent"))
+        return;
+
+    Color color;
+    // We can't always use the default Color constructor because it accepts
+    // 4/8-digit hex, which conflict with some legacy HTML content using attributes.
+    if ((colorString.length() != 5 && colorString.length() != 9) || colorString[0] != '#')
+        color = Color(colorString);
+    if (!color.isValid())
+        color = Color(parseColorStringWithCrazyLegacyRules(colorString));
+
+    style.setProperty(propertyID, CSSValuePool::singleton().createColorValue(color.rgb()));
 }
 
 bool HTMLElement::willRespondToMouseMoveEvents()
@@ -1146,9 +1099,7 @@ bool HTMLElement::shouldAutocorrect() const
 
 void HTMLElement::setAutocorrect(bool autocorrect)
 {
-    static MainThreadNeverDestroyed<const AtomString> onName("on", AtomString::ConstructFromLiteral);
-    static MainThreadNeverDestroyed<const AtomString> offName("off", AtomString::ConstructFromLiteral);
-    setAttributeWithoutSynchronization(autocorrectAttr, autocorrect ? onName.get() : offName.get());
+    setAttributeWithoutSynchronization(autocorrectAttr, autocorrect ? AtomString("on", AtomString::ConstructFromLiteral) : AtomString("off", AtomString::ConstructFromLiteral));
 }
 
 #endif

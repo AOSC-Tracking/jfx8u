@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2010 Google Inc. All rights reserved.
- * Copyright (C) 2015-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2015-2017 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -39,7 +39,6 @@
 #include "CSSValueKeywords.h"
 #include "ContentSecurityPolicy.h"
 #include "DOMWindow.h"
-#include "ElementAncestorIterator.h"
 #include "FontCache.h"
 #include "Frame.h"
 #include "HTMLHeadElement.h"
@@ -60,7 +59,6 @@
 #include "StyleResolver.h"
 #include "StyleRule.h"
 #include "StyleScope.h"
-#include "StyleSheetContents.h"
 #include "StyleSheetList.h"
 #include <JavaScriptCore/InspectorProtocolObjects.h>
 #include <wtf/Optional.h>
@@ -329,12 +327,12 @@ void InspectorCSSAgent::reset()
 
 void InspectorCSSAgent::enable(ErrorString&)
 {
-    if (m_instrumentingAgents.enabledCSSAgent() == this)
+    if (m_instrumentingAgents.inspectorCSSAgent() == this)
         return;
 
-    m_instrumentingAgents.setEnabledCSSAgent(this);
+    m_instrumentingAgents.setInspectorCSSAgent(this);
 
-    if (auto* domAgent = m_instrumentingAgents.persistentDOMAgent()) {
+    if (auto* domAgent = m_instrumentingAgents.inspectorDOMAgent()) {
         for (auto* document : domAgent->documents())
             activeStyleSheetsUpdated(*document);
     }
@@ -342,7 +340,7 @@ void InspectorCSSAgent::enable(ErrorString&)
 
 void InspectorCSSAgent::disable(ErrorString&)
 {
-    m_instrumentingAgents.setEnabledCSSAgent(nullptr);
+    m_instrumentingAgents.setInspectorCSSAgent(nullptr);
 
     reset();
 }
@@ -406,7 +404,7 @@ bool InspectorCSSAgent::forcePseudoState(const Element& element, CSSSelector::Ps
     if (m_nodeIdToForcedPseudoState.isEmpty())
         return false;
 
-    auto* domAgent = m_instrumentingAgents.persistentDOMAgent();
+    auto* domAgent = m_instrumentingAgents.inspectorDOMAgent();
     if (!domAgent)
         return false;
 
@@ -511,18 +509,20 @@ void InspectorCSSAgent::getMatchedStylesForNode(ErrorString& errorString, int no
         // Inherited styles.
         if (!includeInherited || *includeInherited) {
             auto entries = JSON::ArrayOf<Inspector::Protocol::CSS::InheritedStyleEntry>::create();
-            for (auto& ancestor : ancestorsOfType<Element>(*element)) {
-                auto& parentStyleResolver = ancestor.styleResolver();
-                auto parentMatchedRules = parentStyleResolver.styleRulesForElement(&ancestor, Style::Resolver::AllCSSRules);
+            Element* parentElement = element->parentElement();
+            while (parentElement) {
+                auto& parentStyleResolver = parentElement->styleResolver();
+                auto parentMatchedRules = parentStyleResolver.styleRulesForElement(parentElement, Style::Resolver::AllCSSRules);
                 auto entry = Inspector::Protocol::CSS::InheritedStyleEntry::create()
-                    .setMatchedCSSRules(buildArrayForMatchedRuleList(parentMatchedRules, styleResolver, ancestor, PseudoId::None))
+                    .setMatchedCSSRules(buildArrayForMatchedRuleList(parentMatchedRules, styleResolver, *parentElement, PseudoId::None))
                     .release();
-                if (is<StyledElement>(ancestor) && downcast<StyledElement>(ancestor).cssomStyle().length()) {
-                    auto& styleSheet = asInspectorStyleSheet(downcast<StyledElement>(ancestor));
+                if (is<StyledElement>(*parentElement) && downcast<StyledElement>(*parentElement).cssomStyle().length()) {
+                    auto& styleSheet = asInspectorStyleSheet(downcast<StyledElement>(*parentElement));
                     entry->setInlineStyle(styleSheet.buildObjectForStyle(styleSheet.styleForId(InspectorCSSId(styleSheet.id(), 0))));
                 }
 
                 entries->addItem(WTFMove(entry));
+                parentElement = parentElement->parentElement();
             }
 
             inheritedEntries = WTFMove(entries);
@@ -569,7 +569,7 @@ void InspectorCSSAgent::getAllStyleSheets(ErrorString&, RefPtr<JSON::ArrayOf<Ins
 void InspectorCSSAgent::collectAllStyleSheets(Vector<InspectorStyleSheet*>& result)
 {
     Vector<CSSStyleSheet*> cssStyleSheets;
-    if (auto* domAgent = m_instrumentingAgents.persistentDOMAgent()) {
+    if (auto* domAgent = m_instrumentingAgents.inspectorDOMAgent()) {
         for (auto* document : domAgent->documents())
             collectAllDocumentStyleSheets(*document, cssStyleSheets);
     }
@@ -624,7 +624,7 @@ void InspectorCSSAgent::setStyleSheetText(ErrorString& errorString, const String
     if (!inspectorStyleSheet)
         return;
 
-    auto* domAgent = m_instrumentingAgents.persistentDOMAgent();
+    auto* domAgent = m_instrumentingAgents.inspectorDOMAgent();
     if (!domAgent) {
         errorString = "DOM domain must be enabled"_s;
         return;
@@ -644,7 +644,7 @@ void InspectorCSSAgent::setStyleText(ErrorString& errorString, const JSON::Objec
     if (!inspectorStyleSheet)
         return;
 
-    auto* domAgent = m_instrumentingAgents.persistentDOMAgent();
+    auto* domAgent = m_instrumentingAgents.inspectorDOMAgent();
     if (!domAgent) {
         errorString = "DOM domain must be enabled"_s;
         return;
@@ -668,7 +668,7 @@ void InspectorCSSAgent::setRuleSelector(ErrorString& errorString, const JSON::Ob
     if (!inspectorStyleSheet)
         return;
 
-    auto* domAgent = m_instrumentingAgents.persistentDOMAgent();
+    auto* domAgent = m_instrumentingAgents.inspectorDOMAgent();
     if (!domAgent) {
         errorString = "DOM domain must be enabled"_s;
         return;
@@ -680,12 +680,12 @@ void InspectorCSSAgent::setRuleSelector(ErrorString& errorString, const JSON::Ob
         return;
     }
 
-    result = inspectorStyleSheet->buildObjectForRule(inspectorStyleSheet->ruleForId(compoundId));
+    result = inspectorStyleSheet->buildObjectForRule(inspectorStyleSheet->ruleForId(compoundId), nullptr);
 }
 
 void InspectorCSSAgent::createStyleSheet(ErrorString& errorString, const String& frameId, String* styleSheetId)
 {
-    auto* pageAgent = m_instrumentingAgents.enabledPageAgent();
+    auto* pageAgent = m_instrumentingAgents.inspectorPageAgent();
     if (!pageAgent) {
         errorString = "Page domain must be enabled"_s;
         return;
@@ -757,7 +757,7 @@ void InspectorCSSAgent::addRule(ErrorString& errorString, const String& styleShe
     if (!inspectorStyleSheet)
         return;
 
-    auto* domAgent = m_instrumentingAgents.persistentDOMAgent();
+    auto* domAgent = m_instrumentingAgents.inspectorDOMAgent();
     if (!domAgent) {
         errorString = "DOM domain must be enabled"_s;
         return;
@@ -773,7 +773,7 @@ void InspectorCSSAgent::addRule(ErrorString& errorString, const String& styleShe
 
     InspectorCSSId ruleId = rawAction.newRuleId();
     CSSStyleRule* rule = inspectorStyleSheet->ruleForId(ruleId);
-    result = inspectorStyleSheet->buildObjectForRule(rule);
+    result = inspectorStyleSheet->buildObjectForRule(rule, nullptr);
 }
 
 void InspectorCSSAgent::getSupportedCSSProperties(ErrorString&, RefPtr<JSON::ArrayOf<Inspector::Protocol::CSS::CSSPropertyInfo>>& cssProperties)
@@ -781,7 +781,6 @@ void InspectorCSSAgent::getSupportedCSSProperties(ErrorString&, RefPtr<JSON::Arr
     auto properties = JSON::ArrayOf<Inspector::Protocol::CSS::CSSPropertyInfo>::create();
     for (int i = firstCSSProperty; i <= lastCSSProperty; ++i) {
         CSSPropertyID propertyID = convertToCSSPropertyID(i);
-        // FIXME: Should take account for flags in settings().
         if (isInternalCSSProperty(propertyID) || !isEnabledCSSProperty(propertyID))
             continue;
 
@@ -797,12 +796,13 @@ void InspectorCSSAgent::getSupportedCSSProperties(ErrorString&, RefPtr<JSON::Arr
             property->setAliases(WTFMove(aliasesArray));
         }
 
-        auto shorthand = shorthandForProperty(propertyID);
+        const StylePropertyShorthand& shorthand = shorthandForProperty(propertyID);
         if (shorthand.length()) {
             auto longhands = JSON::ArrayOf<String>::create();
-            for (auto longhand : shorthand) {
-                if (isEnabledCSSProperty(longhand))
-                    longhands->addItem(getPropertyNameString(longhand));
+            for (unsigned j = 0; j < shorthand.length(); ++j) {
+                CSSPropertyID longhandID = shorthand.properties()[j];
+                if (isEnabledCSSProperty(longhandID))
+                    longhands->addItem(getPropertyNameString(longhandID));
             }
             property->setLonghands(WTFMove(longhands));
         }
@@ -839,7 +839,7 @@ void InspectorCSSAgent::getSupportedSystemFontFamilyNames(ErrorString&, RefPtr<J
 
 void InspectorCSSAgent::forcePseudoState(ErrorString& errorString, int nodeId, const JSON::Array& forcedPseudoClasses)
 {
-    auto* domAgent = m_instrumentingAgents.persistentDOMAgent();
+    auto* domAgent = m_instrumentingAgents.inspectorDOMAgent();
     if (!domAgent) {
         errorString = "DOM domain must be enabled"_s;
         return;
@@ -871,7 +871,7 @@ InspectorStyleSheetForInlineStyle& InspectorCSSAgent::asInspectorStyleSheet(Styl
 {
     return m_nodeToInspectorStyleSheet.ensure(&element, [this, &element] {
         String newStyleSheetId = String::number(m_lastStyleSheetId++);
-        auto inspectorStyleSheet = InspectorStyleSheetForInlineStyle::create(m_instrumentingAgents.enabledPageAgent(), newStyleSheetId, element, Inspector::Protocol::CSS::StyleSheetOrigin::Author, this);
+        auto inspectorStyleSheet = InspectorStyleSheetForInlineStyle::create(m_instrumentingAgents.inspectorPageAgent(), newStyleSheetId, element, Inspector::Protocol::CSS::StyleSheetOrigin::Regular, this);
         m_idToInspectorStyleSheet.set(newStyleSheetId, inspectorStyleSheet.copyRef());
         return inspectorStyleSheet;
     }).iterator->value;
@@ -879,7 +879,7 @@ InspectorStyleSheetForInlineStyle& InspectorCSSAgent::asInspectorStyleSheet(Styl
 
 Element* InspectorCSSAgent::elementForId(ErrorString& errorString, int nodeId)
 {
-    auto* domAgent = m_instrumentingAgents.persistentDOMAgent();
+    auto* domAgent = m_instrumentingAgents.inspectorDOMAgent();
     if (!domAgent) {
         errorString = "DOM domain must be enabled"_s;
         return nullptr;
@@ -903,7 +903,7 @@ InspectorStyleSheet* InspectorCSSAgent::bindStyleSheet(CSSStyleSheet* styleSheet
     if (!inspectorStyleSheet) {
         String id = String::number(m_lastStyleSheetId++);
         Document* document = styleSheet->ownerDocument();
-        inspectorStyleSheet = InspectorStyleSheet::create(m_instrumentingAgents.enabledPageAgent(), id, styleSheet, detectOrigin(styleSheet, document), InspectorDOMAgent::documentURLString(document), this);
+        inspectorStyleSheet = InspectorStyleSheet::create(m_instrumentingAgents.inspectorPageAgent(), id, styleSheet, detectOrigin(styleSheet, document), InspectorDOMAgent::documentURLString(document), this);
         m_idToInspectorStyleSheet.set(id, inspectorStyleSheet);
         m_cssStyleSheetToInspectorStyleSheet.set(styleSheet, inspectorStyleSheet);
         if (m_creatingViaInspectorStyleSheet) {
@@ -932,7 +932,7 @@ Inspector::Protocol::CSS::StyleSheetOrigin InspectorCSSAgent::detectOrigin(CSSSt
     if (pageStyleSheet && !pageStyleSheet->ownerNode() && pageStyleSheet->href().isEmpty())
         return Inspector::Protocol::CSS::StyleSheetOrigin::UserAgent;
 
-    if (pageStyleSheet && pageStyleSheet->contents().isUserStyleSheet())
+    if (pageStyleSheet && pageStyleSheet->ownerNode() && pageStyleSheet->ownerNode()->nodeName() == "#document")
         return Inspector::Protocol::CSS::StyleSheetOrigin::User;
 
     auto iterator = m_documentToInspectorStyleSheet.find(ownerDocument);
@@ -943,7 +943,7 @@ Inspector::Protocol::CSS::StyleSheetOrigin InspectorCSSAgent::detectOrigin(CSSSt
         }
     }
 
-    return Inspector::Protocol::CSS::StyleSheetOrigin::Author;
+    return Inspector::Protocol::CSS::StyleSheetOrigin::Regular;
 }
 
 RefPtr<Inspector::Protocol::CSS::CSSRule> InspectorCSSAgent::buildObjectForRule(const StyleRule* styleRule, Style::Resolver& styleResolver, Element& element)
@@ -965,7 +965,7 @@ RefPtr<Inspector::Protocol::CSS::CSSRule> InspectorCSSAgent::buildObjectForRule(
         return nullptr;
 
     InspectorStyleSheet* inspectorStyleSheet = bindStyleSheet(cssomWrapper->parentStyleSheet());
-    return inspectorStyleSheet ? inspectorStyleSheet->buildObjectForRule(cssomWrapper) : nullptr;
+    return inspectorStyleSheet ? inspectorStyleSheet->buildObjectForRule(cssomWrapper, &element) : nullptr;
 }
 
 RefPtr<Inspector::Protocol::CSS::CSSRule> InspectorCSSAgent::buildObjectForRule(CSSStyleRule* rule)
@@ -975,7 +975,7 @@ RefPtr<Inspector::Protocol::CSS::CSSRule> InspectorCSSAgent::buildObjectForRule(
 
     ASSERT(rule->parentStyleSheet());
     InspectorStyleSheet* inspectorStyleSheet = bindStyleSheet(rule->parentStyleSheet());
-    return inspectorStyleSheet ? inspectorStyleSheet->buildObjectForRule(rule) : nullptr;
+    return inspectorStyleSheet ? inspectorStyleSheet->buildObjectForRule(rule, nullptr) : nullptr;
 }
 
 RefPtr<JSON::ArrayOf<Inspector::Protocol::CSS::RuleMatch>> InspectorCSSAgent::buildArrayForMatchedRuleList(const Vector<RefPtr<const StyleRule>>& matchedRules, Style::Resolver& styleResolver, Element& element, PseudoId pseudoId)
@@ -995,7 +995,8 @@ RefPtr<JSON::ArrayOf<Inspector::Protocol::CSS::RuleMatch>> InspectorCSSAgent::bu
         const CSSSelectorList& selectorList = matchedRule->selectorList();
         int index = 0;
         for (const CSSSelector* selector = selectorList.first(); selector; selector = CSSSelectorList::next(selector)) {
-            bool matched = selectorChecker.match(*selector, element, context);
+            unsigned ignoredSpecificity;
+            bool matched = selectorChecker.match(*selector, element, context, ignoredSpecificity);
             if (matched)
                 matchingSelectors->addItem(index);
             ++index;

@@ -30,6 +30,7 @@
 
 #include "JSCInlines.h"
 #include "JSWebAssemblyInstance.h"
+#include <wtf/CheckedArithmetic.h>
 
 namespace JSC {
 

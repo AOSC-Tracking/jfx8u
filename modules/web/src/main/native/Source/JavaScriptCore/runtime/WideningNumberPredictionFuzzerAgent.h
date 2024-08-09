@@ -37,7 +37,7 @@ class WideningNumberPredictionFuzzerAgent final : public NumberPredictionFuzzerA
 public:
     WideningNumberPredictionFuzzerAgent(VM&);
 
-    SpeculatedType getPrediction(CodeBlock*, const CodeOrigin&, SpeculatedType) final;
+    SpeculatedType getPrediction(CodeBlock*, const CodeOrigin&, SpeculatedType) override;
 };
 
 } // namespace JSC

@@ -128,14 +128,10 @@ public:
 
     size_t memoryCost() const;
 
-    using EventTarget::dispatchEvent;
-    void dispatchEvent(Event&) override;
+    WEBCORE_EXPORT void setMaximumIntervalForUserGestureForwarding(double);
 
 private:
     explicit XMLHttpRequest(ScriptExecutionContext&);
-
-    // EventTarget.
-    void eventListenersDidChange() final;
 
     TextEncoding finalResponseCharset() const;
 
@@ -145,7 +141,6 @@ private:
     void resume() override;
     void stop() override;
     const char* activeDOMObjectName() const override;
-    bool virtualHasPendingActivity() const final;
 
     void refEventTarget() override { ref(); }
     void derefEventTarget() override { deref(); }
@@ -190,7 +185,12 @@ private:
 
     void dispatchErrorEvents(const AtomString&);
 
+    using EventTarget::dispatchEvent;
+    void dispatchEvent(Event&) override;
+
     Ref<TextResourceDecoder> createDecoder() const;
+
+    void networkErrorTimerFired();
 
     unsigned m_async : 1;
     unsigned m_includeCredentials : 1;
@@ -214,11 +214,7 @@ private:
     RefPtr<FormData> m_requestEntityBody;
     String m_mimeTypeOverride;
 
-    struct LoadingActivity {
-        Ref<XMLHttpRequest> protectedThis; // Keep object alive while loading even if there is no longer a JS wrapper.
-        Ref<ThreadableLoader> loader;
-    };
-    Optional<LoadingActivity> m_loadingActivity;
+    RefPtr<ThreadableLoader> m_loader;
 
     String m_responseEncoding;
 
@@ -239,13 +235,14 @@ private:
 
     mutable String m_allResponseHeaders;
 
+    Timer m_networkErrorTimer;
     Timer m_timeoutTimer;
 
     MonotonicTime m_sendingTime;
 
     Optional<ExceptionCode> m_exceptionCode;
     RefPtr<UserGestureToken> m_userGestureToken;
-    bool m_hasRelevantEventListener { false };
+    Seconds m_maximumIntervalForUserGestureForwarding;
 };
 
 inline auto XMLHttpRequest::responseType() const -> ResponseType

@@ -28,6 +28,7 @@
 #include "HTMLInputElement.h"
 #include "HTMLNames.h"
 #include "HTMLParserIdioms.h"
+#include "MediaControlElements.h"
 #include "MouseEvent.h"
 #include "Node.h"
 #include "RenderLayer.h"

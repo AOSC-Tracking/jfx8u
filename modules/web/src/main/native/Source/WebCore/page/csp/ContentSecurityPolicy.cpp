@@ -34,6 +34,7 @@
 #include "ContentSecurityPolicyHash.h"
 #include "ContentSecurityPolicySource.h"
 #include "ContentSecurityPolicySourceList.h"
+#include "CustomHeaderFields.h"
 #include "DOMStringList.h"
 #include "Document.h"
 #include "DocumentLoader.h"
@@ -58,7 +59,6 @@
 #include <wtf/JSONValues.h>
 #include <wtf/SetForScope.h>
 #include <wtf/text/StringBuilder.h>
-#include <wtf/text/StringParsingBuffer.h>
 #include <wtf/text/TextPosition.h>
 
 
@@ -213,23 +213,22 @@ void ContentSecurityPolicy::didReceiveHeader(const String& header, ContentSecuri
     // RFC2616, section 4.2 specifies that headers appearing multiple times can
     // be combined with a comma. Walk the header string, and parse each comma
     // separated chunk as a separate header.
-    readCharactersForParsing(header, [&](auto buffer) {
-        auto begin = buffer.position();
+    auto characters = StringView(header).upconvertedCharacters();
+    const UChar* begin = characters;
+    const UChar* position = begin;
+    const UChar* end = begin + header.length();
+    while (position < end) {
+        skipUntil<UChar>(position, end, ',');
 
-        while (buffer.hasCharactersRemaining()) {
-            skipUntil(buffer, ',');
+        // header1,header2 OR header1
+        //        ^                  ^
+        m_policies.append(ContentSecurityPolicyDirectiveList::create(*this, String(begin, position - begin), type, policyFrom));
 
-            // header1,header2 OR header1
-            //        ^                  ^
-            m_policies.append(ContentSecurityPolicyDirectiveList::create(*this, String(begin, buffer.position() - begin), type, policyFrom));
-
-            // Skip the comma, and begin the next header from the current position.
-            ASSERT(buffer.atEnd() || *buffer == ',');
-            skipExactly(buffer, ',');
-            begin = buffer.position();
-        }
-    });
-
+        // Skip the comma, and begin the next header from the current position.
+        ASSERT(position == end || *position == ',');
+        skipExactly<UChar>(position, end, ',');
+        begin = position;
+    }
 
     if (m_scriptExecutionContext)
         applyPolicyToScriptExecutionContext();
@@ -686,7 +685,7 @@ void ContentSecurityPolicy::reportViolation(const String& effectiveViolatedDirec
 
     // FIXME: Support sending reports from worker.
     CSPInfo info;
-    info.documentURI = blockedURL.string();
+    info.documentURI = blockedURL;
     if (m_client)
         m_client->willSendCSPViolationReport(info);
     else {

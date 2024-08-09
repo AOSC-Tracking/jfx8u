@@ -21,6 +21,11 @@
 #include "config.h"
 #include "NativeErrorPrototype.h"
 
+#include "JSGlobalObject.h"
+#include "JSString.h"
+#include "NativeErrorConstructor.h"
+#include "JSCInlines.h"
+
 namespace JSC {
 
 NativeErrorPrototype::NativeErrorPrototype(VM& vm, Structure* structure)

@@ -26,6 +26,7 @@
 #include "config.h"
 #include "ClonedArguments.h"
 
+#include "GetterSetter.h"
 #include "InlineCallFrame.h"
 #include "JSCInlines.h"
 
@@ -45,7 +46,7 @@ ClonedArguments* ClonedArguments::createEmpty(
 {
     unsigned vectorLength = length;
     if (vectorLength > MAX_STORAGE_VECTOR_LENGTH)
-        return nullptr;
+        return 0;
 
     Butterfly* butterfly;
     if (UNLIKELY(structure->mayInterceptIndexedAccesses() || structure->storedPrototypeObject()->needsSlowPutIndexing(vm))) {
@@ -55,9 +56,9 @@ ClonedArguments* ClonedArguments::createEmpty(
         IndexingHeader indexingHeader;
         indexingHeader.setVectorLength(vectorLength);
         indexingHeader.setPublicLength(length);
-        butterfly = Butterfly::tryCreate(vm, nullptr, 0, structure->outOfLineCapacity(), true, indexingHeader, vectorLength * sizeof(EncodedJSValue));
+        butterfly = Butterfly::tryCreate(vm, 0, 0, structure->outOfLineCapacity(), true, indexingHeader, vectorLength * sizeof(EncodedJSValue));
         if (!butterfly)
-            return nullptr;
+            return 0;
 
         for (unsigned i = length; i < vectorLength; ++i)
             butterfly->contiguous().atUnsafe(i).clear();
@@ -177,7 +178,7 @@ bool ClonedArguments::getOwnPropertySlot(JSObject* object, JSGlobalObject* globa
 
     if (!thisObject->specialsMaterialized()) {
         FunctionExecutable* executable = jsCast<FunctionExecutable*>(thisObject->m_callee->executable());
-        bool isStrictMode = executable->isInStrictContext();
+        bool isStrictMode = executable->isStrictMode();
 
         if (ident == vm.propertyNames->callee) {
             if (isStrictMode) {
@@ -219,7 +220,7 @@ bool ClonedArguments::put(JSCell* cell, JSGlobalObject* globalObject, PropertyNa
     return Base::put(thisObject, globalObject, ident, value, slot);
 }
 
-bool ClonedArguments::deleteProperty(JSCell* cell, JSGlobalObject* globalObject, PropertyName ident, DeletePropertySlot& slot)
+bool ClonedArguments::deleteProperty(JSCell* cell, JSGlobalObject* globalObject, PropertyName ident)
 {
     ClonedArguments* thisObject = jsCast<ClonedArguments*>(cell);
     VM& vm = globalObject->vm();
@@ -228,7 +229,7 @@ bool ClonedArguments::deleteProperty(JSCell* cell, JSGlobalObject* globalObject,
         || ident == vm.propertyNames->iteratorSymbol)
         thisObject->materializeSpecialsIfNecessary(globalObject);
 
-    return Base::deleteProperty(thisObject, globalObject, ident, slot);
+    return Base::deleteProperty(thisObject, globalObject, ident);
 }
 
 bool ClonedArguments::defineOwnProperty(JSObject* object, JSGlobalObject* globalObject, PropertyName ident, const PropertyDescriptor& descriptor, bool shouldThrow)
@@ -249,7 +250,7 @@ void ClonedArguments::materializeSpecials(JSGlobalObject* globalObject)
     VM& vm = globalObject->vm();
 
     FunctionExecutable* executable = jsCast<FunctionExecutable*>(m_callee->executable());
-    bool isStrictMode = executable->isInStrictContext();
+    bool isStrictMode = executable->isStrictMode();
 
     if (isStrictMode)
         putDirectAccessor(globalObject, vm.propertyNames->callee, this->globalObject(vm)->throwTypeErrorArgumentsCalleeAndCallerGetterSetter(), PropertyAttribute::DontDelete | PropertyAttribute::DontEnum | PropertyAttribute::Accessor);

@@ -34,7 +34,8 @@
 #include "DFGGraph.h"
 #include "DFGNaturalLoops.h"
 #include "DFGPhase.h"
-#include "JSCJSValueInlines.h"
+#include "JSCInlines.h"
+#include <wtf/HashMap.h>
 
 namespace JSC { namespace DFG {
 

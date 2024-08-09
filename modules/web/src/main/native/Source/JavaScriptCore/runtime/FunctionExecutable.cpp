@@ -25,17 +25,25 @@
 
 #include "config.h"
 
+#include "BatchedTransitionOptimizer.h"
 #include "CodeBlock.h"
+#include "Debugger.h"
 #include "FunctionCodeBlock.h"
 #include "FunctionOverrides.h"
-#include "JSCJSValueInlines.h"
+#include "JIT.h"
+#include "JSCInlines.h"
+#include "LLIntEntrypoint.h"
+#include "Parser.h"
+#include "TypeProfiler.h"
+#include "VMInlines.h"
+#include <wtf/CommaPrinter.h>
 
 namespace JSC {
 
 const ClassInfo FunctionExecutable::s_info = { "FunctionExecutable", &ScriptExecutable::s_info, nullptr, nullptr, CREATE_METHOD_TABLE(FunctionExecutable) };
 
-FunctionExecutable::FunctionExecutable(VM& vm, const SourceCode& source, UnlinkedFunctionExecutable* unlinkedExecutable, Intrinsic intrinsic, bool isInsideOrdinaryFunction)
-    : ScriptExecutable(vm.functionExecutableStructure.get(), vm, source, unlinkedExecutable->isInStrictContext(), unlinkedExecutable->derivedContextType(), false, isInsideOrdinaryFunction || !unlinkedExecutable->isArrowFunction(), EvalContextType::None, intrinsic)
+FunctionExecutable::FunctionExecutable(VM& vm, const SourceCode& source, UnlinkedFunctionExecutable* unlinkedExecutable, Intrinsic intrinsic)
+    : ScriptExecutable(vm.functionExecutableStructure.get(), vm, source, unlinkedExecutable->isInStrictContext(), unlinkedExecutable->derivedContextType(), false, EvalContextType::None, intrinsic)
     , m_unlinkedExecutable(vm, this, unlinkedExecutable)
 {
     RELEASE_ASSERT(!source.isNull());
@@ -63,7 +71,7 @@ FunctionCodeBlock* FunctionExecutable::baselineCodeBlockFor(CodeSpecializationKi
         edge = m_codeBlockForConstruct.get();
     }
     if (!edge)
-        return nullptr;
+        return 0;
     return static_cast<FunctionCodeBlock*>(edge->codeBlock()->baselineAlternative());
 }
 

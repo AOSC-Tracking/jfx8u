@@ -33,7 +33,6 @@ my $preprocessor;
 my $idlFilesList;
 my $testGlobalContextName;
 my $supplementalDependencyFile;
-my $isoSubspacesHeaderFile;
 my $windowConstructorsFile;
 my $workerGlobalScopeConstructorsFile;
 my $dedicatedWorkerGlobalScopeConstructorsFile;
@@ -48,7 +47,6 @@ GetOptions('defines=s' => \$defines,
            'idlFilesList=s' => \$idlFilesList,
            'testGlobalContextName=s' => \$testGlobalContextName,
            'supplementalDependencyFile=s' => \$supplementalDependencyFile,
-           'isoSubspacesHeaderFile=s' => \$isoSubspacesHeaderFile,
            'windowConstructorsFile=s' => \$windowConstructorsFile,
            'workerGlobalScopeConstructorsFile=s' => \$workerGlobalScopeConstructorsFile,
            'dedicatedWorkerGlobalScopeConstructorsFile=s' => \$dedicatedWorkerGlobalScopeConstructorsFile,
@@ -70,7 +68,6 @@ die('Must specify an output file using --testGlobalScopeConstructorsFile.') unle
 die('Must specify the file listing all IDLs using --idlFilesList.') unless defined($idlFilesList);
 
 $supplementalDependencyFile = CygwinPathIfNeeded($supplementalDependencyFile);
-$isoSubspacesHeaderFile = CygwinPathIfNeeded($isoSubspacesHeaderFile);
 $windowConstructorsFile = CygwinPathIfNeeded($windowConstructorsFile);
 $workerGlobalScopeConstructorsFile = CygwinPathIfNeeded($workerGlobalScopeConstructorsFile);
 $dedicatedWorkerGlobalScopeConstructorsFile = CygwinPathIfNeeded($dedicatedWorkerGlobalScopeConstructorsFile);
@@ -95,21 +92,6 @@ my $serviceWorkerGlobalScopeConstructorsCode = "";
 my $workletGlobalScopeConstructorsCode = "";
 my $paintWorkletGlobalScopeConstructorsCode = "";
 my $testGlobalScopeConstructorsCode = "";
-
-my $isoSubspacesHeaderCode = <<END;
-#include <wtf/FastMalloc.h>
-#include <wtf/Noncopyable.h>
-
-#pragma once
-
-namespace WebCore {
-
-class DOMIsoSubspaces {
-    WTF_MAKE_NONCOPYABLE(DOMIsoSubspaces);
-    WTF_MAKE_FAST_ALLOCATED(DOMIsoSubspaces);
-public:
-    DOMIsoSubspaces() = default;
-END
 
 # Get rid of duplicates in idlFiles array.
 my %idlFileHash = map { $_, 1 } @idlFiles;
@@ -151,13 +133,6 @@ foreach my $idlFile (sort keys %idlFileHash) {
             push(@{$supplementalDependencies{$implementedIdlFile}}, $interfaceName);
         } else {
             $supplementalDependencies{$implementedIdlFile} = [$interfaceName];
-        }
-    }
-
-    if (!isCallbackInterfaceFromIDL($idlFileContents)) {
-        $isoSubspacesHeaderCode .= "    std::unique_ptr<JSC::IsoSubspace> m_subspaceFor${interfaceName};\n";
-        if (interfaceIsIterable($idlFileContents)) {
-            $isoSubspacesHeaderCode .= "    std::unique_ptr<JSC::IsoSubspace> m_subspaceFor${interfaceName}Iterator;\n";
         }
     }
 
@@ -214,12 +189,6 @@ foreach my $idlFile (sort keys %supplementalDependencies) {
         push(@{$supplementals{$targetIdlFile}}, $idlFile);
     }
     delete $supplementals{$idlFile};
-}
-
-if ($isoSubspacesHeaderFile) {
-    $isoSubspacesHeaderCode .= "};\n";
-    $isoSubspacesHeaderCode .= "} // namespace WebCore\n";
-    WriteFileIfChanged($isoSubspacesHeaderFile, $isoSubspacesHeaderCode);
 }
 
 # Outputs the dependency.
@@ -345,9 +314,9 @@ sub getFileContents
 {
     my $idlFile = shift;
 
-    open my $file, "<", $idlFile or die "Could not open $idlFile for reading: $!";
-    my @lines = <$file>;
-    close $file;
+    open FILE, "<", $idlFile;
+    my @lines = <FILE>;
+    close FILE;
 
     # Filter out preprocessor lines.
     @lines = grep(!/^\s*#/, @lines);
@@ -384,12 +353,6 @@ sub isCallbackInterfaceFromIDL
 {
     my $fileContents = shift;
     return ($fileContents =~ /callback\s+interface\s+\w+/gs);
-}
-
-sub interfaceIsIterable
-{
-    my $fileContents = shift;
-    return ($fileContents =~ /iterable\s*<\s*\w+\s*/gs);
 }
 
 sub containsInterfaceOrExceptionFromIDL

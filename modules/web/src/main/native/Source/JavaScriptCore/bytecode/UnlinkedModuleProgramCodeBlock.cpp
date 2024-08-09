@@ -26,6 +26,7 @@
 #include "config.h"
 #include "UnlinkedModuleProgramCodeBlock.h"
 
+#include "HeapInlines.h"
 #include "JSCellInlines.h"
 
 namespace JSC {

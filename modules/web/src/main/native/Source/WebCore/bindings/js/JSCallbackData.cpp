@@ -38,7 +38,6 @@
 namespace WebCore {
 using namespace JSC;
 
-// https://heycam.github.io/webidl/#call-a-user-objects-operation
 JSValue JSCallbackData::invokeCallback(JSDOMGlobalObject& globalObject, JSObject* callback, JSValue thisValue, MarkedArgumentBuffer& args, CallbackType method, PropertyName functionName, NakedPtr<JSC::Exception>& returnedException)
 {
     ASSERT(callback);
@@ -49,12 +48,13 @@ JSValue JSCallbackData::invokeCallback(JSDOMGlobalObject& globalObject, JSObject
 
     JSValue function;
     CallData callData;
+    CallType callType = CallType::None;
 
     if (method != CallbackType::Object) {
         function = callback;
-        callData = getCallData(vm, callback);
+        callType = callback->methodTable(vm)->getCallData(callback, callData);
     }
-    if (callData.type == CallData::Type::None) {
+    if (callType == CallType::None) {
         if (method == CallbackType::Function) {
             returnedException = JSC::Exception::create(vm, createTypeError(lexicalGlobalObject));
             return JSValue();
@@ -68,27 +68,25 @@ JSValue JSCallbackData::invokeCallback(JSDOMGlobalObject& globalObject, JSObject
             return JSValue();
         }
 
-        callData = getCallData(vm, function);
-        if (callData.type == CallData::Type::None) {
-            returnedException = JSC::Exception::create(vm, createTypeError(lexicalGlobalObject, makeString("'", String(functionName.uid()), "' property of callback interface should be callable")));
+        callType = getCallData(vm, function, callData);
+        if (callType == CallType::None) {
+            returnedException = JSC::Exception::create(vm, createTypeError(lexicalGlobalObject));
             return JSValue();
         }
-
-        thisValue = callback;
     }
 
     ASSERT(!function.isEmpty());
-    ASSERT(callData.type != CallData::Type::None);
+    ASSERT(callType != CallType::None);
 
     ScriptExecutionContext* context = globalObject.scriptExecutionContext();
     // We will fail to get the context if the frame has been detached.
     if (!context)
         return JSValue();
 
-    JSExecState::instrumentFunction(context, callData);
+    JSExecState::instrumentFunctionCall(context, callType, callData);
 
     returnedException = nullptr;
-    JSValue result = JSExecState::profiledCall(lexicalGlobalObject, JSC::ProfilingReason::Other, function, callData, thisValue, args, returnedException);
+    JSValue result = JSExecState::profiledCall(lexicalGlobalObject, JSC::ProfilingReason::Other, function, callType, callData, thisValue, args, returnedException);
 
     InspectorInstrumentation::didCallFunction(context);
 

@@ -27,6 +27,7 @@
 #include "JSImmutableButterfly.h"
 
 #include "ButterflyInlines.h"
+#include "CodeBlock.h"
 
 namespace JSC {
 

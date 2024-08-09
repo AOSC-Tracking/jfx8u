@@ -297,7 +297,9 @@ struct CodeOriginApproximateHash {
 namespace WTF {
 
 template<typename T> struct DefaultHash;
-template<> struct DefaultHash<JSC::CodeOrigin> : JSC::CodeOriginHash { };
+template<> struct DefaultHash<JSC::CodeOrigin> {
+    typedef JSC::CodeOriginHash Hash;
+};
 
 template<typename T> struct HashTraits;
 template<> struct HashTraits<JSC::CodeOrigin> : SimpleClassHashTraits<JSC::CodeOrigin> {

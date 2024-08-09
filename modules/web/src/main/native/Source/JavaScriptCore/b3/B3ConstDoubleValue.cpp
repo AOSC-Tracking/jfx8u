@@ -141,52 +141,52 @@ Value* ConstDoubleValue::modConstant(Procedure& proc, const Value* other) const
 TriState ConstDoubleValue::equalConstant(const Value* other) const
 {
     if (!other->hasDouble())
-        return TriState::Indeterminate;
+        return MixedTriState;
     return triState(m_value == other->asDouble());
 }
 
 TriState ConstDoubleValue::notEqualConstant(const Value* other) const
 {
     if (!other->hasDouble())
-        return TriState::Indeterminate;
+        return MixedTriState;
     return triState(m_value != other->asDouble());
 }
 
 TriState ConstDoubleValue::lessThanConstant(const Value* other) const
 {
     if (!other->hasDouble())
-        return TriState::Indeterminate;
+        return MixedTriState;
     return triState(m_value < other->asDouble());
 }
 
 TriState ConstDoubleValue::greaterThanConstant(const Value* other) const
 {
     if (!other->hasDouble())
-        return TriState::Indeterminate;
+        return MixedTriState;
     return triState(m_value > other->asDouble());
 }
 
 TriState ConstDoubleValue::lessEqualConstant(const Value* other) const
 {
     if (!other->hasDouble())
-        return TriState::Indeterminate;
+        return MixedTriState;
     return triState(m_value <= other->asDouble());
 }
 
 TriState ConstDoubleValue::greaterEqualConstant(const Value* other) const
 {
     if (!other->hasDouble())
-        return TriState::Indeterminate;
+        return MixedTriState;
     return triState(m_value >= other->asDouble());
 }
 
 TriState ConstDoubleValue::equalOrUnorderedConstant(const Value* other) const
 {
     if (std::isnan(m_value))
-        return TriState::True;
+        return TrueTriState;
 
     if (!other->hasDouble())
-        return TriState::Indeterminate;
+        return MixedTriState;
     double otherValue = other->asDouble();
     return triState(std::isunordered(m_value, otherValue) || m_value == otherValue);
 }

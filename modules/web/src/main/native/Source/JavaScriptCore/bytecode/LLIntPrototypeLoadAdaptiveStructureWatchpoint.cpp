@@ -28,7 +28,7 @@
 
 #include "CodeBlock.h"
 #include "Instruction.h"
-#include "JSCellInlines.h"
+#include "JSCInlines.h"
 
 namespace JSC {
 
@@ -60,31 +60,14 @@ void LLIntPrototypeLoadAdaptiveStructureWatchpoint::fireInternal(VM& vm, const F
     }
 
     auto& instruction = m_owner->instructions().at(m_bytecodeOffset.get());
-    switch (instruction->opcodeID()) {
-    case op_get_by_id:
-        clearLLIntGetByIdCache(instruction->as<OpGetById>().metadata(m_owner.get()).m_modeMetadata);
-        break;
-
-    case op_iterator_open:
-        clearLLIntGetByIdCache(instruction->as<OpIteratorOpen>().metadata(m_owner.get()).m_modeMetadata);
-        break;
-
-    case op_iterator_next: {
-        auto& metadata = instruction->as<OpIteratorNext>().metadata(m_owner.get());
-        clearLLIntGetByIdCache(metadata.m_doneModeMetadata);
-        clearLLIntGetByIdCache(metadata.m_valueModeMetadata);
-        break;
-    }
-
-    default:
-        RELEASE_ASSERT_NOT_REACHED();
-        break;
-    }
+    clearLLIntGetByIdCache(instruction->as<OpGetById>().metadata(m_owner.get()));
 }
 
-void LLIntPrototypeLoadAdaptiveStructureWatchpoint::clearLLIntGetByIdCache(GetByIdModeMetadata& metadata)
+void LLIntPrototypeLoadAdaptiveStructureWatchpoint::clearLLIntGetByIdCache(OpGetById::Metadata& metadata)
 {
-    metadata.clearToDefaultModeWithoutCache();
+    // Keep hitCountForLLIntCaching value.
+    metadata.m_modeMetadata.clearToDefaultModeWithoutCache();
 }
+
 
 } // namespace JSC

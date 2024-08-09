@@ -36,7 +36,7 @@
 
 namespace JSC { namespace DFG {
 
-class ArrayifySlowPathGenerator final : public JumpingSlowPathGenerator<MacroAssembler::JumpList> {
+class ArrayifySlowPathGenerator : public JumpingSlowPathGenerator<MacroAssembler::JumpList> {
 public:
     ArrayifySlowPathGenerator(
         const MacroAssembler::JumpList& from, SpeculativeJIT* jit, Node* node, GPRReg baseGPR,
@@ -59,17 +59,17 @@ public:
             case Array::Int32:
             case Array::Double:
             case Array::Contiguous:
-                m_badPropertyJump = jit->speculationCheck(Uncountable, JSValueRegs(), nullptr);
+                m_badPropertyJump = jit->speculationCheck(Uncountable, JSValueRegs(), 0);
                 break;
             default:
                 break;
             }
         }
-        m_badIndexingTypeJump = jit->speculationCheck(BadIndexingType, JSValueSource::unboxedCell(m_baseGPR), nullptr);
+        m_badIndexingTypeJump = jit->speculationCheck(BadIndexingType, JSValueSource::unboxedCell(m_baseGPR), 0);
     }
 
-private:
-    void generateInternal(SpeculativeJIT* jit) final
+protected:
+    void generateInternal(SpeculativeJIT* jit) override
     {
         linkFrom(jit);
 
@@ -133,6 +133,7 @@ private:
         jumpTo(jit);
     }
 
+private:
     NodeType m_op;
     RegisteredStructure m_structure;
     ArrayMode m_arrayMode;

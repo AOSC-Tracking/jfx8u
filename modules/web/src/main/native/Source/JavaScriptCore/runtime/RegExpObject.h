@@ -30,7 +30,7 @@ namespace JSC {
 class RegExpObject final : public JSNonFinalObject {
 public:
     using Base = JSNonFinalObject;
-    static constexpr unsigned StructureFlags = Base::StructureFlags | OverridesGetOwnPropertySlot | OverridesGetPropertyNames | OverridesAnyFormOfGetPropertyNames;
+    static constexpr unsigned StructureFlags = Base::StructureFlags | OverridesGetOwnPropertySlot | OverridesGetPropertyNames;
 
     template<typename CellType, SubspaceAccess mode>
     static IsoSubspace* subspaceFor(VM& vm)
@@ -104,7 +104,6 @@ public:
 
     static bool getOwnPropertySlot(JSObject*, JSGlobalObject*, PropertyName, PropertySlot&);
     static bool put(JSCell*, JSGlobalObject*, PropertyName, JSValue, PutPropertySlot&);
-    static String toStringName(const JSObject*, JSGlobalObject*);
 
     DECLARE_EXPORT_INFO;
 
@@ -129,7 +128,7 @@ public:
         return sizeof(RegExpObject);
     }
 
-private:
+protected:
     JS_EXPORT_PRIVATE RegExpObject(VM&, Structure*, RegExp*);
     JS_EXPORT_PRIVATE void finishCreation(VM&);
 
@@ -145,12 +144,13 @@ private:
         m_regExpAndLastIndexIsNotWritableFlag = (m_regExpAndLastIndexIsNotWritableFlag | lastIndexIsNotWritableFlag);
     }
 
-    JS_EXPORT_PRIVATE static bool deleteProperty(JSCell*, JSGlobalObject*, PropertyName, DeletePropertySlot&);
+    JS_EXPORT_PRIVATE static bool deleteProperty(JSCell*, JSGlobalObject*, PropertyName);
     JS_EXPORT_PRIVATE static void getOwnNonIndexPropertyNames(JSObject*, JSGlobalObject*, PropertyNameArray&, EnumerationMode);
     JS_EXPORT_PRIVATE static void getPropertyNames(JSObject*, JSGlobalObject*, PropertyNameArray&, EnumerationMode);
     JS_EXPORT_PRIVATE static void getGenericPropertyNames(JSObject*, JSGlobalObject*, PropertyNameArray&, EnumerationMode);
     JS_EXPORT_PRIVATE static bool defineOwnProperty(JSObject*, JSGlobalObject*, PropertyName, const PropertyDescriptor&, bool shouldThrow);
 
+private:
     MatchResult matchInline(JSGlobalObject*, JSString*);
 
     uintptr_t m_regExpAndLastIndexIsNotWritableFlag { 0 };

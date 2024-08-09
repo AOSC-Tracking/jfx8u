@@ -77,6 +77,4 @@ enum class ClientDataType : bool {
     Get
 };
 
-const char LocalAuthenticatiorAccessGroup[] = "com.apple.webkit.webauthn";
-
 } // namespace WebCore

@@ -28,6 +28,7 @@
 
 #include "CachedTypes.h"
 #include "UnlinkedFunctionExecutable.h"
+#include <wtf/Function.h>
 
 namespace JSC {
 

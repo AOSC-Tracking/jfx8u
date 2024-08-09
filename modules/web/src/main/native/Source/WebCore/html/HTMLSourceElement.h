@@ -62,7 +62,6 @@ private:
 
     Timer m_errorEventTimer;
     bool m_shouldRescheduleErrorEventOnResume { false };
-    bool m_shouldCallSourcesChanged { false };
     mutable Optional<RefPtr<const MediaQuerySet>> m_cachedParsedMediaAttribute;
 };
 

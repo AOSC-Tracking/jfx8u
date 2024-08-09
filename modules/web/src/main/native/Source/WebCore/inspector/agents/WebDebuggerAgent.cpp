@@ -46,19 +46,19 @@ WebDebuggerAgent::~WebDebuggerAgent() = default;
 
 bool WebDebuggerAgent::enabled() const
 {
-    return m_instrumentingAgents.enabledWebDebuggerAgent() == this && InspectorDebuggerAgent::enabled();
+    return m_instrumentingAgents.webDebuggerAgent() == this && InspectorDebuggerAgent::enabled();
 }
 
 void WebDebuggerAgent::enable()
 {
-    m_instrumentingAgents.setEnabledWebDebuggerAgent(this);
+    m_instrumentingAgents.setWebDebuggerAgent(this);
 
     InspectorDebuggerAgent::enable();
 }
 
 void WebDebuggerAgent::disable(bool isBeingDestroyed)
 {
-    m_instrumentingAgents.setEnabledWebDebuggerAgent(nullptr);
+    m_instrumentingAgents.setWebDebuggerAgent(nullptr);
 
     InspectorDebuggerAgent::disable(isBeingDestroyed);
 }
@@ -112,67 +112,55 @@ void WebDebuggerAgent::willHandleEvent(const RegisteredEventListener& listener)
     willDispatchAsyncCall(InspectorDebuggerAgent::AsyncCallType::EventListener, it->value);
 }
 
-int WebDebuggerAgent::willPostMessage()
-{
-    if (!breakpointsActive())
-        return 0;
-
-    auto postMessageIdentifier = m_nextPostMessageIdentifier++;
-    m_postMessageTasks.add(postMessageIdentifier);
-    return postMessageIdentifier;
-}
-
-void WebDebuggerAgent::didPostMessage(int postMessageIdentifier, JSC::JSGlobalObject& state)
+void WebDebuggerAgent::didPostMessage(const TimerBase& timer, JSC::JSGlobalObject& state)
 {
     if (!breakpointsActive())
         return;
 
-    if (!postMessageIdentifier || !m_postMessageTasks.contains(postMessageIdentifier))
+    if (m_postMessageTimers.contains(&timer))
         return;
+
+    int postMessageIdentifier = m_nextPostMessageIdentifier++;
+    m_postMessageTimers.set(&timer, postMessageIdentifier);
 
     didScheduleAsyncCall(&state, InspectorDebuggerAgent::AsyncCallType::PostMessage, postMessageIdentifier, true);
 }
 
-void WebDebuggerAgent::didFailPostMessage(int postMessageIdentifier)
+void WebDebuggerAgent::didFailPostMessage(const TimerBase& timer)
 {
-    if (!postMessageIdentifier)
+    auto it = m_postMessageTimers.find(&timer);
+    if (it == m_postMessageTimers.end())
         return;
 
-    auto it = m_postMessageTasks.find(postMessageIdentifier);
-    if (it == m_postMessageTasks.end())
-        return;
+    didCancelAsyncCall(InspectorDebuggerAgent::AsyncCallType::PostMessage, it->value);
 
-    didCancelAsyncCall(InspectorDebuggerAgent::AsyncCallType::PostMessage, postMessageIdentifier);
-
-    m_postMessageTasks.remove(it);
+    m_postMessageTimers.remove(it);
 }
 
-void WebDebuggerAgent::willDispatchPostMessage(int postMessageIdentifier)
+void WebDebuggerAgent::willDispatchPostMessage(const TimerBase& timer)
 {
-    if (!postMessageIdentifier || !m_postMessageTasks.contains(postMessageIdentifier))
+    auto it = m_postMessageTimers.find(&timer);
+    if (it == m_postMessageTimers.end())
         return;
 
-    willDispatchAsyncCall(InspectorDebuggerAgent::AsyncCallType::PostMessage, postMessageIdentifier);
+    willDispatchAsyncCall(InspectorDebuggerAgent::AsyncCallType::PostMessage, it->value);
 }
 
-void WebDebuggerAgent::didDispatchPostMessage(int postMessageIdentifier)
+void WebDebuggerAgent::didDispatchPostMessage(const TimerBase& timer)
 {
-    if (!postMessageIdentifier)
-        return;
-
-    auto it = m_postMessageTasks.find(postMessageIdentifier);
-    if (it == m_postMessageTasks.end())
+    auto it = m_postMessageTimers.find(&timer);
+    if (it == m_postMessageTimers.end())
         return;
 
     didDispatchAsyncCall();
 
-    m_postMessageTasks.remove(it);
+    m_postMessageTimers.remove(it);
 }
 
 void WebDebuggerAgent::didClearAsyncStackTraceData()
 {
     m_registeredEventListeners.clear();
-    m_postMessageTasks.clear();
+    m_postMessageTimers.clear();
     m_nextEventListenerIdentifier = 1;
     m_nextPostMessageIdentifier = 1;
 }

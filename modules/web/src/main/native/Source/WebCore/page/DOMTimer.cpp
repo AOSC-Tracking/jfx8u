@@ -48,6 +48,7 @@
 
 namespace WebCore {
 
+static const Seconds maxIntervalForUserGestureForwarding { 1_s }; // One second matches Gecko.
 static const Seconds minIntervalForNonUserObservableChangeTimers { 1_s }; // Empirically determined to maximize battery life.
 static const int maxTimerNestingLevel = 5;
 
@@ -300,7 +301,7 @@ void DOMTimer::fired()
 
     DOMTimerFireState fireState(context, std::min(m_nestingLevel + 1, maxTimerNestingLevel));
 
-    if (m_userGestureTokenToForward && m_userGestureTokenToForward->hasExpired(UserGestureToken::maximumIntervalForUserGestureForwarding))
+    if (m_userGestureTokenToForward && m_userGestureTokenToForward->hasExpired(maxIntervalForUserGestureForwarding))
         m_userGestureTokenToForward = nullptr;
 
     ASSERT(!isSuspended());

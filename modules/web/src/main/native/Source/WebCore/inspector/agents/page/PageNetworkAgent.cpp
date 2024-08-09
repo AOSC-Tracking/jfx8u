@@ -26,6 +26,7 @@
 #include "config.h"
 #include "PageNetworkAgent.h"
 
+#include "CustomHeaderFields.h"
 #include "Document.h"
 #include "DocumentLoader.h"
 #include "Frame.h"
@@ -50,7 +51,7 @@ PageNetworkAgent::~PageNetworkAgent() = default;
 String PageNetworkAgent::loaderIdentifier(DocumentLoader* loader)
 {
     if (loader) {
-        if (auto* pageAgent = m_instrumentingAgents.enabledPageAgent())
+        if (auto* pageAgent = m_instrumentingAgents.inspectorPageAgent())
             return pageAgent->loaderId(loader);
     }
     return { };
@@ -59,7 +60,7 @@ String PageNetworkAgent::loaderIdentifier(DocumentLoader* loader)
 String PageNetworkAgent::frameIdentifier(DocumentLoader* loader)
 {
     if (loader) {
-        if (auto* pageAgent = m_instrumentingAgents.enabledPageAgent())
+        if (auto* pageAgent = m_instrumentingAgents.inspectorPageAgent())
             return pageAgent->frameId(loader->frame());
     }
     return { };
@@ -101,7 +102,7 @@ void PageNetworkAgent::setResourceCachingDisabled(bool disabled)
 
 ScriptExecutionContext* PageNetworkAgent::scriptExecutionContext(ErrorString& errorString, const String& frameId)
 {
-    auto* pageAgent = m_instrumentingAgents.enabledPageAgent();
+    auto* pageAgent = m_instrumentingAgents.inspectorPageAgent();
     if (!pageAgent) {
         errorString = "Page domain must be enabled"_s;
         return nullptr;

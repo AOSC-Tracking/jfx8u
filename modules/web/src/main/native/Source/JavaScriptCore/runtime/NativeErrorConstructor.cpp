@@ -22,8 +22,11 @@
 #include "NativeErrorConstructor.h"
 
 #include "ErrorInstance.h"
-#include "JSCInlines.h"
+#include "Interpreter.h"
+#include "JSFunction.h"
+#include "JSString.h"
 #include "NativeErrorPrototype.h"
+#include "JSCInlines.h"
 
 namespace JSC {
 
@@ -52,22 +55,18 @@ EncodedJSValue JSC_HOST_CALL NativeErrorConstructor<errorType>::constructNativeE
     VM& vm = globalObject->vm();
     auto scope = DECLARE_THROW_SCOPE(vm);
     JSValue message = callFrame->argument(0);
-
-    JSObject* newTarget = asObject(callFrame->newTarget());
-    Structure* errorStructure = newTarget == callFrame->jsCallee()
-        ? globalObject->errorStructure(errorType)
-        : InternalFunction::createSubclassStructure(globalObject, newTarget, getFunctionRealm(vm, newTarget)->errorStructure(errorType));
-    RETURN_IF_EXCEPTION(scope, { });
+    Structure* errorStructure = InternalFunction::createSubclassStructure(globalObject, callFrame->jsCallee(), callFrame->newTarget(), jsCast<NativeErrorConstructor*>(callFrame->jsCallee())->errorStructure(vm));
+    RETURN_IF_EXCEPTION(scope, encodedJSValue());
     ASSERT(errorStructure);
-
     RELEASE_AND_RETURN(scope, JSValue::encode(ErrorInstance::create(globalObject, errorStructure, message, nullptr, TypeNothing, false)));
 }
 
 template<ErrorType errorType>
 EncodedJSValue JSC_HOST_CALL NativeErrorConstructor<errorType>::callNativeErrorConstructor(JSGlobalObject* globalObject, CallFrame* callFrame)
 {
+    VM& vm = globalObject->vm();
     JSValue message = callFrame->argument(0);
-    Structure* errorStructure = globalObject->errorStructure(errorType);
+    Structure* errorStructure = jsCast<NativeErrorConstructor*>(callFrame->jsCallee())->errorStructure(vm);
     return JSValue::encode(ErrorInstance::create(globalObject, errorStructure, message, nullptr, TypeNothing, false));
 }
 

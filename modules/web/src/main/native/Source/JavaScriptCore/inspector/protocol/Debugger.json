@@ -1,8 +1,7 @@
 {
     "domain": "Debugger",
     "description": "Debugger domain exposes JavaScript debugging capabilities. It allows setting and removing breakpoints, stepping through execution, exploring stack traces, etc.",
-    "debuggableTypes": ["itml", "javascript", "page", "service-worker", "web-page"],
-    "targetTypes": ["itml", "javascript", "page", "service-worker", "worker"],
+    "targetTypes": ["javascript", "page", "service-worker", "worker"],
     "types": [
         {
             "id": "BreakpointId",
@@ -195,10 +194,6 @@
             "parameters": [
                 { "name": "location", "$ref": "Location", "description": "Location to continue to." }
             ]
-        },
-        {
-            "name": "stepNext",
-            "description": "Steps over the expression. This will trigger either a Debugger.paused or Debugger.resumed event."
         },
         {
             "name": "stepOver",

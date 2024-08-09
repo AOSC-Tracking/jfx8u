@@ -32,12 +32,13 @@
 #include "config.h"
 #include "TextTrackCue.h"
 
-#if ENABLE(VIDEO)
+#if ENABLE(VIDEO_TRACK)
 
 #include "CSSPropertyNames.h"
 #include "CSSValueKeywords.h"
 #include "DOMRect.h"
 #include "Event.h"
+#include "HTMLCollection.h"
 #include "HTMLDivElement.h"
 #include "HTMLStyleElement.h"
 #include "Logging.h"
@@ -64,19 +65,19 @@ WTF_MAKE_ISO_ALLOCATED_IMPL(TextTrackCueBox);
 
 const AtomString& TextTrackCue::cueShadowPseudoId()
 {
-    static MainThreadNeverDestroyed<const AtomString> cue("cue", AtomString::ConstructFromLiteral);
+    static NeverDestroyed<const AtomString> cue("cue", AtomString::ConstructFromLiteral);
     return cue;
 }
 
 const AtomString& TextTrackCue::cueBoxShadowPseudoId()
 {
-    static MainThreadNeverDestroyed<const AtomString> trackDisplayBoxShadowPseudoId("-webkit-media-text-track-display", AtomString::ConstructFromLiteral);
+    static NeverDestroyed<const AtomString> trackDisplayBoxShadowPseudoId("-webkit-media-text-track-display", AtomString::ConstructFromLiteral);
     return trackDisplayBoxShadowPseudoId;
 }
 
 const AtomString& TextTrackCue::cueBackdropShadowPseudoId()
 {
-    static MainThreadNeverDestroyed<const AtomString> cueBackdropShadowPseudoId("-webkit-media-text-track-display-backdrop", AtomString::ConstructFromLiteral);
+    static NeverDestroyed<const AtomString> cueBackdropShadowPseudoId("-webkit-media-text-track-display-backdrop", AtomString::ConstructFromLiteral);
     return cueBackdropShadowPseudoId;
 }
 
@@ -183,24 +184,27 @@ static void removePseudoAttributes(Node& node)
         removePseudoAttributes(*child);
 }
 
-ExceptionOr<Ref<TextTrackCue>> TextTrackCue::create(Document& document, double start, double end, DocumentFragment& cueFragment)
+ExceptionOr<Ref<TextTrackCue>> TextTrackCue::create(ScriptExecutionContext& context, double start, double end, DocumentFragment& cueDocument)
 {
-    if (!cueFragment.firstChild())
+    ASSERT(context.isDocument());
+    ASSERT(is<DocumentFragment>(cueDocument));
+
+    if (!cueDocument.firstChild())
         return Exception { InvalidNodeTypeError, "Empty cue fragment" };
 
-    for (Node* node = cueFragment.firstChild(); node; node = node->nextSibling()) {
+    for (Node* node = cueDocument.firstChild(); node; node = node->nextSibling()) {
         auto result = checkForInvalidNodeTypes(*node);
         if (result.hasException())
             return result.releaseException();
     }
 
-    auto fragment = DocumentFragment::create(document);
-    for (Node* node = cueFragment.firstChild(); node; node = node->nextSibling()) {
+    auto fragment = DocumentFragment::create(downcast<Document>(context));
+    for (Node* node = cueDocument.firstChild(); node; node = node->nextSibling()) {
         auto result = fragment->ensurePreInsertionValidity(*node, nullptr);
         if (result.hasException())
             return result.releaseException();
     }
-    cueFragment.cloneChildNodes(fragment);
+    cueDocument.cloneChildNodes(fragment);
 
     OptionSet<RequiredNodes> nodeTypes = { };
     for (Node* node = fragment->firstChild(); node; node = node->nextSibling())
@@ -211,27 +215,21 @@ ExceptionOr<Ref<TextTrackCue>> TextTrackCue::create(Document& document, double s
     if (!nodeTypes.contains(RequiredNodes::CueBackground))
         return Exception { InvalidStateError, makeString("Missing required attribute: ", cueBackgroundAttributName().toString()) };
 
-    return adoptRef(*new TextTrackCue(document, MediaTime::createWithDouble(start), MediaTime::createWithDouble(end), WTFMove(fragment)));
+    return adoptRef(*new TextTrackCue(context, MediaTime::createWithDouble(start), MediaTime::createWithDouble(end), WTFMove(fragment.get())));
 }
 
-TextTrackCue::TextTrackCue(Document& document, const MediaTime& start, const MediaTime& end, Ref<DocumentFragment>&& cueFragment)
+TextTrackCue::TextTrackCue(ScriptExecutionContext& context, const MediaTime& start, const MediaTime& end, DocumentFragment&& cueFragment)
+    : TextTrackCue(context, start, end)
+{
+    m_cueNode = &cueFragment;
+}
+
+TextTrackCue::TextTrackCue(ScriptExecutionContext& context, const MediaTime& start, const MediaTime& end)
     : m_startTime(start)
     , m_endTime(end)
-    , m_document(document)
-    , m_cueNode(WTFMove(cueFragment))
+    , m_scriptExecutionContext(context)
 {
-}
-
-TextTrackCue::TextTrackCue(Document& context, const MediaTime& start, const MediaTime& end)
-    : m_startTime(start)
-    , m_endTime(end)
-    , m_document(context)
-{
-}
-
-ScriptExecutionContext* TextTrackCue::scriptExecutionContext() const
-{
-    return &m_document;
+    ASSERT(m_scriptExecutionContext.isDocument());
 }
 
 void TextTrackCue::willChange()
@@ -240,7 +238,7 @@ void TextTrackCue::willChange()
         return;
 
     if (m_track)
-        m_track->cueWillChange(*this);
+        m_track->cueWillChange(this);
 }
 
 void TextTrackCue::didChange()
@@ -252,7 +250,7 @@ void TextTrackCue::didChange()
     m_displayTreeNeedsUpdate = true;
 
     if (m_track)
-        m_track->cueDidChange(*this);
+        m_track->cueDidChange(this);
 }
 
 TextTrack* TextTrackCue::track() const
@@ -343,11 +341,11 @@ void TextTrackCue::setIsActive(bool active)
 
 unsigned TextTrackCue::cueIndex() const
 {
-    ASSERT(m_track && m_track->cuesInternal());
-    if (!m_track || !m_track->cuesInternal())
+    ASSERT(m_track && m_track->cues());
+    if (!m_track || !m_track->cues())
         return std::numeric_limits<unsigned>::max();
 
-    return m_track->cuesInternal()->cueIndex(*this);
+    return m_track->cues()->cueIndex(*this);
 }
 
 bool TextTrackCue::isOrderedBefore(const TextTrackCue* other) const
@@ -366,16 +364,30 @@ bool TextTrackCue::isOrderedBefore(const TextTrackCue* other) const
     return cueIndex() < other->cueIndex();
 }
 
-bool TextTrackCue::cueContentsMatch(const TextTrackCue& other) const
+bool TextTrackCue::cueContentsMatch(const TextTrackCue& cue) const
 {
-    return m_id == other.m_id;
+    if (cueType() != cue.cueType())
+        return false;
+
+    if (id() != cue.id())
+        return false;
+
+    return true;
 }
 
-bool TextTrackCue::isEqual(const TextTrackCue& other, TextTrackCue::CueMatchRules match) const
+bool TextTrackCue::isEqual(const TextTrackCue& cue, TextTrackCue::CueMatchRules match) const
 {
-    if (match != IgnoreDuration && endMediaTime() != other.endMediaTime())
+    if (cueType() != cue.cueType())
         return false;
-    return cueType() == other.cueType() && hasEquivalentStartTime(other) && cueContentsMatch(other);
+
+    if (match != IgnoreDuration && endMediaTime() != cue.endMediaTime())
+        return false;
+    if (!hasEquivalentStartTime(cue))
+        return false;
+    if (!cueContentsMatch(cue))
+        return false;
+
+    return true;
 }
 
 bool TextTrackCue::hasEquivalentStartTime(const TextTrackCue& cue) const
@@ -387,6 +399,17 @@ bool TextTrackCue::hasEquivalentStartTime(const TextTrackCue& cue) const
         startTimeVariance = cue.track()->startTimeVariance();
 
     return abs(abs(startMediaTime()) - abs(cue.startMediaTime())) <= startTimeVariance;
+}
+
+bool TextTrackCue::doesExtendCue(const TextTrackCue& cue) const
+{
+    if (!cueContentsMatch(cue))
+        return false;
+
+    if (endMediaTime() != cue.startMediaTime())
+        return false;
+
+    return true;
 }
 
 void TextTrackCue::toJSON(JSON::Object& value) const
@@ -415,7 +438,9 @@ void TextTrackCue::toJSON(JSON::Object& value) const
 String TextTrackCue::toJSONString() const
 {
     auto object = JSON::Object::create();
+
     toJSON(object.get());
+
     return object->toJSONString();
 }
 
@@ -425,7 +450,7 @@ TextStream& operator<<(TextStream& stream, const TextTrackCue& cue)
 {
     String text;
     if (is<VTTCue>(cue))
-        text = downcast<VTTCue>(cue).text();
+        text = toVTTCue(&cue)->text();
     return stream << &cue << " id=" << cue.id() << " interval=" << cue.startTime() << "-->" << cue.endTime() << " cue=" << text << ')';
 }
 
@@ -488,9 +513,8 @@ void TextTrackCue::rebuildDisplayTree()
     ScriptDisallowedScope::EventAllowedScope allowedScopeForReferenceTree(*m_cueNode);
 
     if (!m_displayTree) {
-        static MainThreadNeverDestroyed<const AtomString> webkitGenericCueRootName("-webkit-generic-cue-root", AtomString::ConstructFromLiteral);
         m_displayTree = TextTrackCueBox::create(ownerDocument(), *this);
-        m_displayTree->setPseudo(webkitGenericCueRootName);
+        m_displayTree->setPseudo(AtomString("-webkit-generic-cue-root", AtomString::ConstructFromLiteral));
     }
 
     m_displayTree->removeChildren();

@@ -25,7 +25,7 @@
  */
 
 [
-    Conditional=VIDEO,
+    Conditional=VIDEO_TRACK,
     ImplementationLacksVTable,
     NoInterfaceObject,
 ] interface VTTRegionList {

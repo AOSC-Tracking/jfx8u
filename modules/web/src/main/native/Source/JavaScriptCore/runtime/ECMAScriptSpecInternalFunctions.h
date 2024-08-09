@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2016 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -25,8 +25,10 @@
 
 #pragma once
 
-namespace WebCore {
+#include "JSCJSValue.h"
 
-enum class ShouldRelaxThirdPartyCookieBlocking : bool { No, Yes };
+namespace JSC {
 
-} // namespace WebCore
+EncodedJSValue JSC_HOST_CALL esSpecIsConstructor(JSGlobalObject*, CallFrame*);
+
+} // namespace JSC

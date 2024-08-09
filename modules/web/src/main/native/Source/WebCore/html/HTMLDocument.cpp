@@ -56,6 +56,7 @@
 #include "CSSPropertyNames.h"
 #include "CommonVM.h"
 #include "CookieJar.h"
+#include "CustomHeaderFields.h"
 #include "DOMWindow.h"
 #include "DocumentLoader.h"
 #include "DocumentType.h"
@@ -74,6 +75,7 @@
 #include "HTMLHtmlElement.h"
 #include "HTMLIFrameElement.h"
 #include "HTMLNames.h"
+#include "HashTools.h"
 #include "ScriptController.h"
 #include "StyleResolver.h"
 #include <wtf/IsoMallocInlines.h>

@@ -29,7 +29,6 @@
 #include <wtf/URL.h>
 #include "ScriptCachedFrameData.h"
 #include <wtf/RefPtr.h>
-#include <wtf/UniqueRef.h>
 
 namespace WebCore {
 
@@ -40,7 +39,6 @@ class DocumentLoader;
 class FrameView;
 class Node;
 enum class HasInsecureContent : bool;
-enum class UsedLegacyTLS : bool;
 
 class CachedFrameBase {
 public:
@@ -64,8 +62,9 @@ protected:
     std::unique_ptr<ScriptCachedFrameData> m_cachedFrameScriptData;
     std::unique_ptr<CachedFramePlatformData> m_cachedFramePlatformData;
     bool m_isMainFrame;
+    Optional<HasInsecureContent> m_hasInsecureContent;
 
-    Vector<UniqueRef<CachedFrame>> m_childFrames;
+    Vector<std::unique_ptr<CachedFrame>> m_childFrames;
 };
 
 class CachedFrame : private CachedFrameBase {
@@ -80,15 +79,15 @@ public:
     WEBCORE_EXPORT void setCachedFramePlatformData(std::unique_ptr<CachedFramePlatformData>);
     WEBCORE_EXPORT CachedFramePlatformData* cachedFramePlatformData();
 
-    HasInsecureContent hasInsecureContent() const;
-    UsedLegacyTLS usedLegacyTLS() const;
+    WEBCORE_EXPORT void setHasInsecureContent(HasInsecureContent);
+    Optional<HasInsecureContent> hasInsecureContent() const { return m_hasInsecureContent; }
 
     using CachedFrameBase::document;
     using CachedFrameBase::view;
     using CachedFrameBase::url;
     DocumentLoader* documentLoader() const { return m_documentLoader.get(); }
 
-    size_t descendantFrameCount() const;
+    int descendantFrameCount() const;
 };
 
 } // namespace WebCore

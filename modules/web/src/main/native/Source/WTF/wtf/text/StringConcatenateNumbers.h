@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2017 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -31,39 +31,36 @@
 
 namespace WTF {
 
-template<typename Integer>
-class StringTypeAdapter<Integer, typename std::enable_if_t<std::is_integral_v<Integer>>> {
+template<typename SignedInt>
+class StringTypeAdapter<SignedInt, typename std::enable_if_t<std::is_integral<SignedInt>::value && std::is_signed<SignedInt>::value>> {
 public:
-    StringTypeAdapter(Integer number)
+    StringTypeAdapter(SignedInt number)
         : m_number { number }
     {
     }
 
-    unsigned length() const { return lengthOfIntegerAsString(m_number); }
+    unsigned length() const { return lengthOfNumberAsStringSigned(m_number); }
     bool is8Bit() const { return true; }
-    template<typename CharacterType>
-    void writeTo(CharacterType* destination) const { writeIntegerToBuffer(m_number, destination); }
+    template<typename CharacterType> void writeTo(CharacterType* destination) const { writeNumberToBufferSigned(m_number, destination); }
 
 private:
-    Integer m_number;
+    SignedInt m_number;
 };
 
-template<typename Enum>
-class StringTypeAdapter<Enum, typename std::enable_if_t<std::is_enum_v<Enum>>> {
-using UnderlyingType = typename std::underlying_type_t<Enum>;
+template<typename UnsignedInt>
+class StringTypeAdapter<UnsignedInt, typename std::enable_if_t<std::is_integral<UnsignedInt>::value && !std::is_signed<UnsignedInt>::value>> {
 public:
-    StringTypeAdapter(Enum enumValue)
-        : m_enum { enumValue }
+    StringTypeAdapter(UnsignedInt number)
+        : m_number { number }
     {
     }
 
-    unsigned length() const { return lengthOfIntegerAsString(static_cast<UnderlyingType>(m_enum)); }
+    unsigned length() const { return lengthOfNumberAsStringUnsigned(m_number); }
     bool is8Bit() const { return true; }
-    template<typename CharacterType>
-    void writeTo(CharacterType* destination) const { writeIntegerToBuffer(static_cast<UnderlyingType>(m_enum), destination); }
+    template<typename CharacterType> void writeTo(CharacterType* destination) const { writeNumberToBufferUnsigned(m_number, destination); }
 
 private:
-    Enum m_enum;
+    UnsignedInt m_number;
 };
 
 template<typename FloatingPoint>

@@ -30,14 +30,11 @@
 #include "CachedResourceClientWalker.h"
 #include "CachedResourceLoader.h"
 #include "HTTPHeaderNames.h"
-#include "Logging.h"
 #include "SharedBuffer.h"
 #include "SubresourceLoader.h"
 #include <wtf/CompletionHandler.h>
 #include <wtf/SetForScope.h>
 #include <wtf/text/StringView.h>
-
-#define RELEASE_LOG_ALWAYS(fmt, ...) RELEASE_LOG(Network, "%p - CachedRawResource::" fmt, this, ##__VA_ARGS__)
 
 namespace WebCore {
 
@@ -86,7 +83,7 @@ void CachedRawResource::updateBuffer(SharedBuffer& data)
 
     if (m_delayedFinishLoading) {
         auto delayedFinishLoading = std::exchange(m_delayedFinishLoading, WTF::nullopt);
-        finishLoading(delayedFinishLoading->buffer.get(), { });
+        finishLoading(delayedFinishLoading->buffer.get());
     }
 }
 
@@ -97,7 +94,7 @@ void CachedRawResource::updateData(const char* data, unsigned length)
     CachedResource::updateData(data, length);
 }
 
-void CachedRawResource::finishLoading(SharedBuffer* data, const NetworkLoadMetrics& metrics)
+void CachedRawResource::finishLoading(SharedBuffer* data)
 {
     if (m_inIncrementalDataNotify) {
         // We may get here synchronously from updateBuffer() if the callback there ends up spinning a runloop.
@@ -120,7 +117,7 @@ void CachedRawResource::finishLoading(SharedBuffer* data, const NetworkLoadMetri
     m_allowEncodedDataReplacement = m_loader && !m_loader->isQuickLookResource();
 #endif
 
-    CachedResource::finishLoading(data, metrics);
+    CachedResource::finishLoading(data);
     if (dataBufferingPolicy == DataBufferingPolicy::BufferData && this->dataBufferingPolicy() == DataBufferingPolicy::DoNotBufferData) {
         if (m_loader)
             m_loader->setDataBufferingPolicy(DataBufferingPolicy::DoNotBufferData);
@@ -207,7 +204,6 @@ static void iterateClients(CachedResourceClientWalker<CachedRawResourceClient>&&
 
 void CachedRawResource::redirectReceived(ResourceRequest&& request, const ResourceResponse& response, CompletionHandler<void(ResourceRequest&&)>&& completionHandler)
 {
-    RELEASE_LOG_ALWAYS("redirectReceived:");
     if (response.isNull())
         CachedResource::redirectReceived(WTFMove(request), response, WTFMove(completionHandler));
     else {

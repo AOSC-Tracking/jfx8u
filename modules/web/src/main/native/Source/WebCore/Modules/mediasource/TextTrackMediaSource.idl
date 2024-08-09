@@ -24,7 +24,7 @@
  */
 
 [
-    Conditional=MEDIA_SOURCE,
+    Conditional=MEDIA_SOURCE&VIDEO_TRACK,
 ]
 partial interface TextTrack {
     readonly attribute SourceBuffer? sourceBuffer;

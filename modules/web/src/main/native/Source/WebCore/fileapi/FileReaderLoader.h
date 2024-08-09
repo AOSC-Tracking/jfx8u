@@ -31,12 +31,11 @@
 #pragma once
 
 #include "BlobResourceHandle.h"
-#include "ExceptionCode.h"
+#include "FileError.h"
 #include <wtf/URL.h>
 #include "TextEncoding.h"
 #include "ThreadableLoaderClient.h"
 #include <wtf/Forward.h>
-#include <wtf/Optional.h>
 #include <wtf/text/WTFString.h>
 
 namespace JSC {
@@ -78,7 +77,7 @@ public:
     WEBCORE_EXPORT RefPtr<JSC::ArrayBuffer> arrayBufferResult() const;
     unsigned bytesLoaded() const { return m_bytesLoaded; }
     unsigned totalBytes() const { return m_totalBytes; }
-    Optional<ExceptionCode> errorCode() const { return m_errorCode; }
+    FileError::ErrorCode errorCode() const { return m_errorCode; }
 
     void setEncoding(const String&);
     void setDataType(const String& dataType) { m_dataType = dataType; }
@@ -88,14 +87,14 @@ public:
 private:
     void terminate();
     void cleanup();
-    void failed(ExceptionCode);
+    void failed(FileError::ErrorCode);
     void convertToText();
     void convertToDataURL();
 
     bool isCompleted() const;
 
-    static ExceptionCode httpStatusCodeToErrorCode(int);
-    static ExceptionCode toErrorCode(BlobResourceHandle::Error);
+    static FileError::ErrorCode httpStatusCodeToErrorCode(int);
+    static FileError::ErrorCode toErrorCode(BlobResourceHandle::Error);
 
     ReadType m_readType;
     FileReaderLoaderClient* m_client;
@@ -118,7 +117,7 @@ private:
     unsigned m_bytesLoaded;
     unsigned m_totalBytes;
 
-    Optional<ExceptionCode> m_errorCode;
+    FileError::ErrorCode m_errorCode { FileError::OK };
 };
 
 } // namespace WebCore

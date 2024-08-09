@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2015-2019 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -59,12 +59,14 @@ private:
 
 public:
     static ScopedArgumentsTable* create(VM&);
-    static ScopedArgumentsTable* tryCreate(VM&, uint32_t length);
+    static ScopedArgumentsTable* create(VM&, uint32_t length);
 
     static void destroy(JSCell*);
 
+    ScopedArgumentsTable* clone(VM&);
+
     uint32_t length() const { return m_length; }
-    ScopedArgumentsTable* trySetLength(VM&, uint32_t newLength);
+    ScopedArgumentsTable* setLength(VM&, uint32_t newLength);
 
     ScopeOffset get(uint32_t i) const { return at(i); }
 
@@ -73,7 +75,7 @@ public:
         m_locked = true;
     }
 
-    ScopedArgumentsTable* trySet(VM&, uint32_t index, ScopeOffset);
+    ScopedArgumentsTable* set(VM&, uint32_t index, ScopeOffset);
 
     DECLARE_INFO;
 
@@ -85,8 +87,6 @@ public:
     typedef CagedUniquePtr<Gigacage::Primitive, ScopeOffset> ArgumentsPtr;
 
 private:
-    ScopedArgumentsTable* tryClone(VM&);
-
     ScopeOffset& at(uint32_t i) const
     {
         ASSERT_WITH_SECURITY_IMPLICATION(i < m_length);

@@ -49,17 +49,4 @@ TextStream& operator<<(TextStream& ts, ScrollClamping clamping)
     return ts;
 }
 
-TextStream& operator<<(TextStream& ts, ScrollBehaviorForFixedElements behavior)
-{
-    switch (behavior) {
-    case ScrollBehaviorForFixedElements::StickToDocumentBounds:
-        ts << 0;
-        break;
-    case ScrollBehaviorForFixedElements::StickToViewportBounds:
-        ts << 1;
-        break;
-    }
-    return ts;
-}
-
 } // namespace WebCore

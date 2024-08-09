@@ -196,10 +196,10 @@ const TextEncoding& WindowsLatin1Encoding()
     return globalWindowsLatin1Encoding;
 }
 
-String decodeURLEscapeSequences(StringView string, const TextEncoding& encoding)
+String decodeURLEscapeSequences(const String& string, const TextEncoding& encoding)
 {
     if (string.isEmpty())
-        return string.toString();
+        return string;
     return decodeEscapeSequences<URLEscapeSequence>(string, encoding);
 }
 

@@ -84,14 +84,4 @@ FontPlatformData FontPlatformData::cloneWithSize(const FontPlatformData& source,
 }
 #endif
 
-#if !PLATFORM(COCOA)
-
-String FontPlatformData::familyName() const
-{
-    // FIXME: Not implemented yet.
-    return { };
-}
-
-#endif
-
 }

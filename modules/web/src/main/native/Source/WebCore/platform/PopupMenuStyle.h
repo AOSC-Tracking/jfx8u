@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2020 Apple Inc.  All rights reserved.
+ * Copyright (C) 2008, 2011 Apple Inc.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -23,12 +23,12 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#pragma once
+#ifndef PopupMenuStyle_h
+#define PopupMenuStyle_h
 
 #include "Color.h"
 #include "FontCascade.h"
 #include "Length.h"
-#include <wtf/EnumTraits.h>
 
 namespace WebCore {
 
@@ -39,10 +39,7 @@ public:
     enum PopupMenuSize {
         PopupMenuSizeNormal,
         PopupMenuSizeSmall,
-        PopupMenuSizeMini,
-#if HAVE(LARGE_CONTROL_SIZE)
-        PopupMenuSizeLarge,
-#endif
+        PopupMenuSizeMini
     };
 
     PopupMenuStyle(const Color& foreground, const Color& background, const FontCascade& font, bool visible, bool isDisplayNone, bool hasDefaultAppearance, Length textIndent, TextDirection textDirection, bool hasTextDirectionOverride, BackgroundColorType backgroundColorType = DefaultBackgroundColor, PopupMenuType menuType = SelectPopup, PopupMenuSize menuSize = PopupMenuSizeNormal)
@@ -91,18 +88,4 @@ private:
 
 } // namespace WebCore
 
-namespace WTF {
-
-template<> struct EnumTraits<WebCore::PopupMenuStyle::PopupMenuSize> {
-    using values = EnumValues<
-        WebCore::PopupMenuStyle::PopupMenuSize,
-        WebCore::PopupMenuStyle::PopupMenuSize::PopupMenuSizeNormal,
-        WebCore::PopupMenuStyle::PopupMenuSize::PopupMenuSizeSmall,
-        WebCore::PopupMenuStyle::PopupMenuSize::PopupMenuSizeMini
-#if HAVE(LARGE_CONTROL_SIZE)
-        , WebCore::PopupMenuStyle::PopupMenuSize::PopupMenuSizeLarge
-#endif
-    >;
-};
-
-} // namespace WTF
+#endif // PopupMenuStyle_h

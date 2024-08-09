@@ -77,7 +77,6 @@ public:
     static LazyJSValue newString(Graph&, const String&);
 
     LazinessKind kind() const { return m_kind; }
-    SpeculatedType speculatedType() const { return kind() == KnownValue ? SpecBytecodeTop : SpecString; }
 
     FrozenValue* tryGetValue(Graph&) const
     {

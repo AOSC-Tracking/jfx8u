@@ -18,10 +18,9 @@
  */
 
 [
+    Constructor,
     ImplementationLacksVTable,
 ] interface XPathEvaluator {
-    constructor();
-
     [MayThrowException] XPathExpression createExpression(DOMString expression, optional XPathNSResolver? resolver);
 
     XPathNSResolver createNSResolver(Node nodeResolver);

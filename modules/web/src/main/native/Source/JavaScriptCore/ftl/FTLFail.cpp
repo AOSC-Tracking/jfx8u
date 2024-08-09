@@ -29,6 +29,7 @@
 #if ENABLE(FTL_JIT)
 
 #include "DFGFailedFinalizer.h"
+#include "FTLJITCode.h"
 
 namespace JSC { namespace FTL {
 

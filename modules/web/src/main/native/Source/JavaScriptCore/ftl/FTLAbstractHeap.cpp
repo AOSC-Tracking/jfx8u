@@ -28,9 +28,12 @@
 
 #if ENABLE(FTL_JIT)
 
+#include "DFGCommon.h"
 #include "FTLAbbreviatedTypes.h"
+#include "FTLAbstractHeapRepository.h"
 #include "FTLOutput.h"
 #include "FTLTypedPointer.h"
+#include "JSCInlines.h"
 #include "Options.h"
 
 namespace JSC { namespace FTL {
@@ -231,7 +234,7 @@ void IndexedAbstractHeap::initialize(AbstractHeap& field, ptrdiff_t signedIndex)
     RELEASE_ASSERT_NOT_REACHED();
 }
 
-void IndexedAbstractHeap::dump(PrintStream& out)
+void IndexedAbstractHeap::dump(PrintStream& out) const
 {
     out.print("Indexed:", atAnyIndex());
 }
@@ -245,7 +248,7 @@ NumberedAbstractHeap::~NumberedAbstractHeap()
 {
 }
 
-void NumberedAbstractHeap::dump(PrintStream& out)
+void NumberedAbstractHeap::dump(PrintStream& out) const
 {
     out.print("Numbered: ", atAnyNumber());
 }
@@ -259,7 +262,7 @@ AbsoluteAbstractHeap::~AbsoluteAbstractHeap()
 {
 }
 
-void AbsoluteAbstractHeap::dump(PrintStream& out)
+void AbsoluteAbstractHeap::dump(PrintStream& out) const
 {
     out.print("Absolute:", atAnyAddress());
 }

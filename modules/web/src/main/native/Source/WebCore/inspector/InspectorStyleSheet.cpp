@@ -461,7 +461,7 @@ static Ref<JSON::ArrayOf<Inspector::Protocol::CSS::Grouping>> buildArrayForGroup
 
         if (ruleGroupingPayload) {
             if (auto* parentStyleSheet = parentRule->parentStyleSheet()) {
-                String sourceURL = parentStyleSheet->contents().baseURL().string();
+                String sourceURL = parentStyleSheet->contents().baseURL();
                 if (sourceURL.isEmpty()) {
                     if (auto* ownerDocument = parentStyleSheet->ownerDocument())
                         sourceURL = InspectorDOMAgent::documentURLString(ownerDocument);
@@ -489,9 +489,9 @@ static Ref<JSON::ArrayOf<Inspector::Protocol::CSS::Grouping>> buildArrayForGroup
 
                 String sourceURL;
                 if (auto* ownerDocument = styleSheet->ownerDocument())
-                    sourceURL = ownerDocument->url().string();
+                    sourceURL = ownerDocument->url();
                 else if (!styleSheet->contents().baseURL().isEmpty())
-                    sourceURL = styleSheet->contents().baseURL().string();
+                    sourceURL = styleSheet->contents().baseURL();
                 if (!sourceURL.isEmpty())
                     sheetGroupingPayload->setSourceURL(sourceURL);
 
@@ -604,7 +604,6 @@ Vector<InspectorStyleProperty> InspectorStyle::collectProperties(bool includeAll
     if (includeAll) {
         for (auto i = firstCSSProperty; i < lastCSSProperty; ++i) {
             auto id = convertToCSSPropertyID(i);
-            // FIXME: Should take account for flags in settings().
             if (isInternalCSSProperty(id) || !isEnabledCSSProperty(id))
                 continue;
 
@@ -1048,24 +1047,58 @@ RefPtr<Inspector::Protocol::CSS::CSSStyleSheetHeader> InspectorStyleSheet::build
         .release();
 }
 
-static Ref<Inspector::Protocol::CSS::CSSSelector> buildObjectForSelectorHelper(const String& selectorText, const CSSSelector& selector)
+static bool hasDynamicSpecificity(const CSSSelector& simpleSelector)
+{
+    // It is possible that these can have a static specificity if each selector in the list has
+    // equal specificity, but lets always report that they can be dynamic.
+    for (const CSSSelector* selector = &simpleSelector; selector; selector = selector->tagHistory()) {
+        if (selector->match() == CSSSelector::PseudoClass) {
+            CSSSelector::PseudoClassType pseudoClassType = selector->pseudoClassType();
+            if (pseudoClassType == CSSSelector::PseudoClassMatches)
+                return true;
+            if (pseudoClassType == CSSSelector::PseudoClassNthChild || pseudoClassType == CSSSelector::PseudoClassNthLastChild) {
+                if (selector->selectorList())
+                    return true;
+                return false;
+            }
+        }
+    }
+
+    return false;
+}
+
+static Ref<Inspector::Protocol::CSS::CSSSelector> buildObjectForSelectorHelper(const String& selectorText, const CSSSelector& selector, Element* element)
 {
     auto inspectorSelector = Inspector::Protocol::CSS::CSSSelector::create()
         .setText(selectorText)
         .release();
 
-    auto specificity = selector.computeSpecificity();
+    if (element) {
+        bool dynamic = hasDynamicSpecificity(selector);
+        if (dynamic)
+            inspectorSelector->setDynamic(true);
 
-    auto tuple = JSON::ArrayOf<int>::create();
-    tuple->addItem(static_cast<int>((specificity & CSSSelector::idMask) >> 16));
-    tuple->addItem(static_cast<int>((specificity & CSSSelector::classMask) >> 8));
-    tuple->addItem(static_cast<int>(specificity & CSSSelector::elementMask));
-    inspectorSelector->setSpecificity(WTFMove(tuple));
+        SelectorChecker::CheckingContext context(SelectorChecker::Mode::CollectingRules);
+        SelectorChecker selectorChecker(element->document());
+
+        unsigned specificity;
+        bool okay = selectorChecker.match(selector, *element, context, specificity);
+        if (!okay)
+            specificity = selector.staticSpecificity(okay);
+
+        if (okay) {
+            auto tuple = JSON::ArrayOf<int>::create();
+            tuple->addItem(static_cast<int>((specificity & CSSSelector::idMask) >> 16));
+            tuple->addItem(static_cast<int>((specificity & CSSSelector::classMask) >> 8));
+            tuple->addItem(static_cast<int>(specificity & CSSSelector::elementMask));
+            inspectorSelector->setSpecificity(WTFMove(tuple));
+        }
+    }
 
     return inspectorSelector;
 }
 
-static Ref<JSON::ArrayOf<Inspector::Protocol::CSS::CSSSelector>> selectorsFromSource(const CSSRuleSourceData* sourceData, const String& sheetText, const CSSSelectorList& selectorList)
+static Ref<JSON::ArrayOf<Inspector::Protocol::CSS::CSSSelector>> selectorsFromSource(const CSSRuleSourceData* sourceData, const String& sheetText, const CSSSelectorList& selectorList, Element* element)
 {
     static NeverDestroyed<JSC::Yarr::RegularExpression> comment("/\\*[^]*?\\*/", JSC::Yarr::TextCaseSensitive, JSC::Yarr::MultilineEnabled);
 
@@ -1082,19 +1115,19 @@ static Ref<JSON::ArrayOf<Inspector::Protocol::CSS::CSSSelector>> selectorsFromSo
 
         // We don't want to see any comments in the selector components, only the meaningful parts.
         replace(selectorText, comment, String());
-        result->addItem(buildObjectForSelectorHelper(selectorText.stripWhiteSpace(), *selector));
+        result->addItem(buildObjectForSelectorHelper(selectorText.stripWhiteSpace(), *selector, element));
 
         selector = CSSSelectorList::next(selector);
     }
     return result;
 }
 
-Ref<Inspector::Protocol::CSS::CSSSelector> InspectorStyleSheet::buildObjectForSelector(const CSSSelector* selector)
+Ref<Inspector::Protocol::CSS::CSSSelector> InspectorStyleSheet::buildObjectForSelector(const CSSSelector* selector, Element* element)
 {
-    return buildObjectForSelectorHelper(selector->selectorText(), *selector);
+    return buildObjectForSelectorHelper(selector->selectorText(), *selector, element);
 }
 
-Ref<Inspector::Protocol::CSS::SelectorList> InspectorStyleSheet::buildObjectForSelectorList(CSSStyleRule* rule, int& endingLine)
+Ref<Inspector::Protocol::CSS::SelectorList> InspectorStyleSheet::buildObjectForSelectorList(CSSStyleRule* rule, Element* element, int& endingLine)
 {
     RefPtr<CSSRuleSourceData> sourceData;
     if (ensureParsedDataReady())
@@ -1105,12 +1138,12 @@ Ref<Inspector::Protocol::CSS::SelectorList> InspectorStyleSheet::buildObjectForS
     String selectorText = rule->selectorText();
 
     if (sourceData)
-        selectors = selectorsFromSource(sourceData.get(), m_parsedStyleSheet->text(), rule->styleRule().selectorList());
+        selectors = selectorsFromSource(sourceData.get(), m_parsedStyleSheet->text(), rule->styleRule().selectorList(), element);
     else {
         selectors = JSON::ArrayOf<Inspector::Protocol::CSS::CSSSelector>::create();
         const CSSSelectorList& selectorList = rule->styleRule().selectorList();
         for (const CSSSelector* selector = selectorList.first(); selector; selector = CSSSelectorList::next(selector))
-            selectors->addItem(buildObjectForSelector(selector));
+            selectors->addItem(buildObjectForSelector(selector, element));
     }
     auto result = Inspector::Protocol::CSS::SelectorList::create()
         .setSelectors(WTFMove(selectors))
@@ -1121,7 +1154,7 @@ Ref<Inspector::Protocol::CSS::SelectorList> InspectorStyleSheet::buildObjectForS
     return result;
 }
 
-RefPtr<Inspector::Protocol::CSS::CSSRule> InspectorStyleSheet::buildObjectForRule(CSSStyleRule* rule)
+RefPtr<Inspector::Protocol::CSS::CSSRule> InspectorStyleSheet::buildObjectForRule(CSSStyleRule* rule, Element* element)
 {
     CSSStyleSheet* styleSheet = pageStyleSheet();
     if (!styleSheet)
@@ -1129,13 +1162,13 @@ RefPtr<Inspector::Protocol::CSS::CSSRule> InspectorStyleSheet::buildObjectForRul
 
     int endingLine = 0;
     auto result = Inspector::Protocol::CSS::CSSRule::create()
-        .setSelectorList(buildObjectForSelectorList(rule, endingLine))
+        .setSelectorList(buildObjectForSelectorList(rule, element, endingLine))
         .setSourceLine(endingLine)
         .setOrigin(m_origin)
         .setStyle(buildObjectForStyle(&rule->style()))
         .release();
 
-    if (m_origin == Inspector::Protocol::CSS::StyleSheetOrigin::Author || m_origin == Inspector::Protocol::CSS::StyleSheetOrigin::User)
+    if (m_origin == Inspector::Protocol::CSS::StyleSheetOrigin::Regular || m_origin == Inspector::Protocol::CSS::StyleSheetOrigin::User)
         result->setSourceURL(finalURL());
 
     if (canBind()) {
@@ -1425,7 +1458,7 @@ Ref<JSON::ArrayOf<Inspector::Protocol::CSS::CSSRule>> InspectorStyleSheet::build
     collectFlatRules(WTFMove(refRuleList), &rules);
 
     for (auto& rule : rules)
-        result->addItem(buildObjectForRule(rule.get()));
+        result->addItem(buildObjectForRule(rule.get(), nullptr));
 
     return result;
 }

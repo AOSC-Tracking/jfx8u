@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include "Gradient.h"
 #include "ImageBuffer.h"
 #include "RenderSVGResourceContainer.h"
 #include "SVGGradientElement.h"
@@ -28,6 +29,13 @@
 #include <wtf/HashMap.h>
 
 namespace WebCore {
+
+struct GradientData {
+    WTF_MAKE_FAST_ALLOCATED;
+public:
+    RefPtr<Gradient> gradient;
+    AffineTransform userspaceTransform;
+};
 
 class GraphicsContext;
 
@@ -46,22 +54,19 @@ public:
 protected:
     RenderSVGResourceGradient(SVGGradientElement&, RenderStyle&&);
 
-    static void addStops(Gradient&, const Gradient::ColorStopVector&, const RenderStyle&);
-    static GradientSpreadMethod platformSpreadMethodFromSVGType(SVGSpreadMethodType);
-
-private:
     void element() const = delete;
 
-    virtual SVGUnitTypes::SVGUnitType gradientUnits() const = 0;
-    virtual AffineTransform gradientTransform() const = 0;
-    virtual bool collectGradientAttributes() = 0;
-    virtual Ref<Gradient> buildGradient(const RenderStyle&) const = 0;
+    void addStops(GradientData*, const Vector<Gradient::ColorStop>&, const RenderStyle&) const;
 
-    struct GradientData {
-        RefPtr<Gradient> gradient;
-        AffineTransform userspaceTransform;
-    };
-    HashMap<RenderObject*, GradientData> m_gradientMap;
+    virtual SVGUnitTypes::SVGUnitType gradientUnits() const = 0;
+    virtual void calculateGradientTransform(AffineTransform&) = 0;
+    virtual bool collectGradientAttributes() = 0;
+    virtual void buildGradient(GradientData*, const RenderStyle&) const = 0;
+
+    GradientSpreadMethod platformSpreadMethodFromSVGType(SVGSpreadMethodType) const;
+
+private:
+    HashMap<RenderObject*, std::unique_ptr<GradientData>> m_gradientMap;
 
 #if USE(CG)
     GraphicsContext* m_savedContext { nullptr };

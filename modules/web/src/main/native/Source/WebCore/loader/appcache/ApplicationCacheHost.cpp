@@ -30,6 +30,7 @@
 #include "ApplicationCacheGroup.h"
 #include "ApplicationCacheResource.h"
 #include "ContentSecurityPolicy.h"
+#include "CustomHeaderFields.h"
 #include "DocumentLoader.h"
 #include "DOMApplicationCache.h"
 #include "EventNames.h"
@@ -245,12 +246,15 @@ bool ApplicationCacheHost::maybeLoadFallbackForError(ResourceLoader* resourceLoa
 
 URL ApplicationCacheHost::createFileURL(const String& path)
 {
+    // FIXME: Can we just use fileURLWithFileSystemPath instead?
 #if USE(CF) && PLATFORM(WIN)
-    // FIXME: Is this correct? Seems improbable that the passed-in paths would be in the Windows path style.
-    return adoptCF(CFURLCreateWithFileSystemPath(0, path.createCFString().get(), kCFURLWindowsPathStyle, false)).get();
+    URL url(adoptCF(CFURLCreateWithFileSystemPath(0, path.createCFString().get(), kCFURLWindowsPathStyle, false)).get());
 #else
-    return URL::fileURLWithFileSystemPath(path);
+    URL url;
+    url.setProtocol("file"_s);
+    url.setPath(path);
 #endif
+    return url;
 }
 
 static inline RefPtr<SharedBuffer> bufferFromResource(ApplicationCacheResource& resource)
@@ -428,11 +432,11 @@ bool ApplicationCacheHost::shouldLoadResourceFromApplicationCache(const Resource
 
     // If the resource's URL is an master entry, the manifest, an explicit entry, or a fallback entry
     // in the application cache, then get the resource from the cache (instead of fetching it).
-    resource = cache->resourceForURL(request.url().string());
+    resource = cache->resourceForURL(request.url());
 
-    // Resources that match fallback namespaces or online allowlist entries are fetched from the network,
+    // Resources that match fallback namespaces or online whitelist entries are fetched from the network,
     // unless they are also cached.
-    if (!resource && (cache->allowsAllNetworkRequests() || cache->urlMatchesFallbackNamespace(request.url()) || cache->isURLInOnlineAllowlist(request.url())))
+    if (!resource && (cache->allowsAllNetworkRequests() || cache->urlMatchesFallbackNamespace(request.url()) || cache->isURLInOnlineWhitelist(request.url())))
         return false;
 
     // Resources that are not present in the manifest will always fail to load (at least, after the
@@ -455,12 +459,12 @@ bool ApplicationCacheHost::getApplicationCacheFallbackResource(const ResourceReq
         return false;
 
     URL fallbackURL;
-    if (cache->isURLInOnlineAllowlist(request.url()))
+    if (cache->isURLInOnlineWhitelist(request.url()))
         return false;
     if (!cache->urlMatchesFallbackNamespace(request.url(), &fallbackURL))
         return false;
 
-    resource = cache->resourceForURL(fallbackURL.string());
+    resource = cache->resourceForURL(fallbackURL);
     ASSERT(resource);
     return true;
 }

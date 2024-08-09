@@ -65,10 +65,9 @@ public:
 private:
     void notifyFinished(CachedModuleScriptLoader&, RefPtr<DeferredPromise>) final;
     URL moduleURL(JSC::JSGlobalObject&, JSC::JSValue);
-    URL responseURLFromRequestURL(JSC::JSGlobalObject&, JSC::JSValue);
 
     Document& m_document;
-    HashMap<String, URL> m_requestURLToResponseURLMap;
+    HashMap<URL, URL> m_requestURLToResponseURLMap;
     HashSet<Ref<CachedModuleScriptLoader>> m_loaders;
 };
 

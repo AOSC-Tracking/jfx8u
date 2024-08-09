@@ -48,8 +48,6 @@ static const char* toString(PerformanceLogging::PointOfInterest poi)
     case PerformanceLogging::MainFrameLoadCompleted:
         return "MainFrameLoadCompleted";
     }
-    RELEASE_ASSERT_NOT_REACHED();
-    return "";
 }
 #endif
 
@@ -58,7 +56,6 @@ HashMap<const char*, size_t> PerformanceLogging::memoryUsageStatistics(ShouldInc
     HashMap<const char*, size_t> stats;
 
     auto& vm = commonVM();
-    JSC::JSLockHolder locker(vm);
     stats.add("javascript_gc_heap_capacity", vm.heap.capacity());
     stats.add("javascript_gc_heap_extra_memory_size", vm.heap.extraMemorySize());
 

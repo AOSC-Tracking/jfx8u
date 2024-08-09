@@ -120,9 +120,6 @@ void printInternal(PrintStream& out, Opcode opcode)
     case ConstFloat:
         out.print("ConstFloat");
         return;
-    case BottomTuple:
-        out.print("BottomTuple");
-        return;
     case Get:
         out.print("Get");
         return;

@@ -105,11 +105,8 @@ public:
 
     const MediaQueryEvaluator& mediaQueryEvaluator() const { return m_mediaQueryEvaluator; }
 
-    const RenderStyle* overrideDocumentElementStyle() const { return m_overrideDocumentElementStyle; }
-    void setOverrideDocumentElementStyle(const RenderStyle* style) { m_overrideDocumentElementStyle = style; }
-
-    // FIXME: Remove and pass this through the animation system normally.
-    void setParentElementStyleForKeyframes(const RenderStyle* style) { m_parentElementStyleForKeyframes = style; }
+    RenderStyle* overrideDocumentElementStyle() const { return m_overrideDocumentElementStyle; }
+    void setOverrideDocumentElementStyle(RenderStyle* style) { m_overrideDocumentElementStyle = style; }
 
     void addCurrentSVGFontFaceRules();
 
@@ -129,6 +126,10 @@ public:
 
     bool hasSelectorForId(const AtomString&) const;
     bool hasSelectorForAttribute(const Element&, const AtomString&) const;
+
+#if ENABLE(CSS_DEVICE_ADAPTATION)
+    ViewportStyleResolver* viewportStyleResolver() { return m_viewportStyleResolver.get(); }
+#endif
 
     bool hasViewportDependentMediaQueries() const;
     Optional<DynamicMediaQueryEvaluationChanges> evaluateDynamicMediaQueries();
@@ -190,8 +191,11 @@ private:
 
     Document& m_document;
 
-    const RenderStyle* m_overrideDocumentElementStyle { nullptr };
-    const RenderStyle* m_parentElementStyleForKeyframes { nullptr };
+    RenderStyle* m_overrideDocumentElementStyle { nullptr };
+
+#if ENABLE(CSS_DEVICE_ADAPTATION)
+    RefPtr<ViewportStyleResolver> m_viewportStyleResolver;
+#endif
 
     InspectorCSSOMWrappers m_inspectorCSSOMWrappers;
 

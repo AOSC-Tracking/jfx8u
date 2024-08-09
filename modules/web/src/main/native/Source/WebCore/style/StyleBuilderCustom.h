@@ -124,15 +124,6 @@ public:
     // Custom handling of inherit + value setting only.
     static void applyInheritDisplay(BuilderState&);
     static void applyValueDisplay(BuilderState&, CSSValue&);
-    // FIXME: <https://webkit.org/b/212506> Teach makeprop.pl to generate setters for hasExplicitlySet* flags
-    static void applyInheritBorderBottomLeftRadius(BuilderState&);
-    static void applyValueBorderBottomLeftRadius(BuilderState&, CSSValue&);
-    static void applyInheritBorderBottomRightRadius(BuilderState&);
-    static void applyValueBorderBottomRightRadius(BuilderState&, CSSValue&);
-    static void applyInheritBorderTopLeftRadius(BuilderState&);
-    static void applyValueBorderTopLeftRadius(BuilderState&, CSSValue&);
-    static void applyInheritBorderTopRightRadius(BuilderState&);
-    static void applyValueBorderTopRightRadius(BuilderState&, CSSValue&);
 
     // Custom handling of value setting only.
     static void applyValueBaselineShift(BuilderState&, CSSValue&);
@@ -142,7 +133,6 @@ public:
     static void applyValueTextAlign(BuilderState&, CSSValue&);
     static void applyValueWebkitLocale(BuilderState&, CSSValue&);
     static void applyValueWebkitTextOrientation(BuilderState&, CSSValue&);
-    static void applyValueTextOrientation(BuilderState&, CSSValue&);
 #if ENABLE(TEXT_AUTOSIZING)
     static void applyValueWebkitTextSizeAdjust(BuilderState&, CSSValue&);
 #endif
@@ -538,9 +528,9 @@ public:
             image.setVerticalRule(NinePieceImageRule::Stretch);
             break;
         case Slice:
-            // Masks have a different initial value for slices. Preserve the value of "0 fill" for backwards compatibility.
+            // Masks have a different initial value for slices. Preserve the value of 0 for backwards compatibility.
             image.setImageSlices(type == BorderImage ? LengthBox(Length(100, Percent), Length(100, Percent), Length(100, Percent), Length(100, Percent)) : LengthBox());
-            image.setFill(type != BorderImage);
+            image.setFill(false);
             break;
         case Width:
             // FIXME: This is a local variable to work around a bug in the GCC 8.1 Address Sanitizer.
@@ -630,8 +620,7 @@ static inline float computeBaseSpecifiedFontSize(const Document& document, const
     if (frame && style.textZoom() != TextZoom::Reset)
         result *= frame->textZoomFactor();
     result *= style.effectiveZoom();
-    if (percentageAutosizingEnabled
-        && (!document.settings().textAutosizingUsesIdempotentMode() || document.settings().idempotentModeAutosizingOnlyHonorsPercentages()))
+    if (percentageAutosizingEnabled && !document.settings().textAutosizingUsesIdempotentMode())
         result *= style.textSizeAdjust().multiplier();
     return result;
 }
@@ -751,9 +740,9 @@ inline void BuilderCustom::applyValueWebkitLocale(BuilderState& builderState, CS
 
     FontCascadeDescription fontDescription = builderState.style().fontDescription();
     if (primitiveValue.valueID() == CSSValueAuto)
-        fontDescription.setSpecifiedLocale(nullAtom());
+        fontDescription.setLocale(nullAtom());
     else
-        fontDescription.setSpecifiedLocale(primitiveValue.stringValue());
+        fontDescription.setLocale(primitiveValue.stringValue());
     builderState.setFontDescription(WTFMove(fontDescription));
 }
 
@@ -764,11 +753,6 @@ inline void BuilderCustom::applyValueWritingMode(BuilderState& builderState, CSS
 }
 
 inline void BuilderCustom::applyValueWebkitTextOrientation(BuilderState& builderState, CSSValue& value)
-{
-    builderState.setTextOrientation(downcast<CSSPrimitiveValue>(value));
-}
-
-inline void BuilderCustom::applyValueTextOrientation(BuilderState& builderState, CSSValue& value)
 {
     builderState.setTextOrientation(downcast<CSSPrimitiveValue>(value));
 }
@@ -829,11 +813,10 @@ inline void BuilderCustom::applyTextOrBoxShadowValue(BuilderState& builderState,
         ShadowStyle shadowStyle = shadowValue.style && shadowValue.style->valueID() == CSSValueInset ? ShadowStyle::Inset : ShadowStyle::Normal;
         Color color;
         if (shadowValue.color)
-            color = builderState.colorFromPrimitiveValueWithResolvedCurrentColor(*shadowValue.color);
+            color = builderState.colorFromPrimitiveValue(*shadowValue.color);
         else
             color = builderState.style().color();
-
-        auto shadowData = makeUnique<ShadowData>(LayoutPoint(x, y), blur, spread, shadowStyle, property == CSSPropertyWebkitBoxShadow, color.isValid() ? color : Color::transparentBlack);
+        auto shadowData = makeUnique<ShadowData>(LayoutPoint(x, y), blur, spread, shadowStyle, property == CSSPropertyWebkitBoxShadow, color.isValid() ? color : Color::transparent);
         if (property == CSSPropertyTextShadow)
             builderState.style().setTextShadow(WTFMove(shadowData), !isFirstEntry); // add to the list if this is not the first entry
         else
@@ -988,54 +971,6 @@ inline void BuilderCustom::applyValueFontFamily(BuilderState& builderState, CSSV
     }
 
     builderState.setFontDescription(WTFMove(fontDescription));
-}
-
-inline void BuilderCustom::applyInheritBorderBottomLeftRadius(BuilderState& builderState)
-{
-    builderState.style().setBorderBottomLeftRadius(forwardInheritedValue(builderState.parentStyle().borderBottomLeftRadius()));
-    builderState.style().setHasExplicitlySetBorderRadius(builderState.parentStyle().hasExplicitlySetBorderRadius());
-}
-
-inline void BuilderCustom::applyValueBorderBottomLeftRadius(BuilderState& builderState, CSSValue& value)
-{
-    builderState.style().setBorderBottomLeftRadius(BuilderConverter::convertRadius(builderState, value));
-    builderState.style().setHasExplicitlySetBorderRadius(true);
-}
-
-inline void BuilderCustom::applyInheritBorderBottomRightRadius(BuilderState& builderState)
-{
-    builderState.style().setBorderBottomRightRadius(forwardInheritedValue(builderState.parentStyle().borderBottomRightRadius()));
-    builderState.style().setHasExplicitlySetBorderRadius(builderState.parentStyle().hasExplicitlySetBorderRadius());
-}
-
-inline void BuilderCustom::applyValueBorderBottomRightRadius(BuilderState& builderState, CSSValue& value)
-{
-    builderState.style().setBorderBottomRightRadius(BuilderConverter::convertRadius(builderState, value));
-    builderState.style().setHasExplicitlySetBorderRadius(true);
-}
-
-inline void BuilderCustom::applyInheritBorderTopLeftRadius(BuilderState& builderState)
-{
-    builderState.style().setBorderTopLeftRadius(forwardInheritedValue(builderState.parentStyle().borderTopLeftRadius()));
-    builderState.style().setHasExplicitlySetBorderRadius(builderState.parentStyle().hasExplicitlySetBorderRadius());
-}
-
-inline void BuilderCustom::applyValueBorderTopLeftRadius(BuilderState& builderState, CSSValue& value)
-{
-    builderState.style().setBorderTopLeftRadius(BuilderConverter::convertRadius(builderState, value));
-    builderState.style().setHasExplicitlySetBorderRadius(true);
-}
-
-inline void BuilderCustom::applyInheritBorderTopRightRadius(BuilderState& builderState)
-{
-    builderState.style().setBorderTopRightRadius(forwardInheritedValue(builderState.parentStyle().borderTopRightRadius()));
-    builderState.style().setHasExplicitlySetBorderRadius(builderState.parentStyle().hasExplicitlySetBorderRadius());
-}
-
-inline void BuilderCustom::applyValueBorderTopRightRadius(BuilderState& builderState, CSSValue& value)
-{
-    builderState.style().setBorderTopRightRadius(BuilderConverter::convertRadius(builderState, value));
-    builderState.style().setHasExplicitlySetBorderRadius(true);
 }
 
 inline bool BuilderCustom::isValidDisplayValue(BuilderState& builderState, DisplayType display)
@@ -1680,14 +1615,14 @@ inline void BuilderCustom::applyValueFontSize(BuilderState& builderState, CSSVal
     } else {
         fontDescription.setIsAbsoluteSize(parentIsAbsoluteSize || !(primitiveValue.isPercentage() || primitiveValue.isFontRelativeLength()));
         if (primitiveValue.isLength()) {
-            size = primitiveValue.computeLength<float>(CSSToLengthConversionData(&builderState.parentStyle(), builderState.rootElementStyle(), &builderState.parentStyle(), builderState.document().renderView(), 1.0f, CSSPropertyFontSize));
+            size = primitiveValue.computeLength<float>(CSSToLengthConversionData(&builderState.parentStyle(), builderState.rootElementStyle(), builderState.document().renderView(), 1.0f, true));
             if (primitiveValue.isViewportPercentageLength())
                 builderState.style().setHasViewportUnits();
         } else if (primitiveValue.isPercentage())
             size = (primitiveValue.floatValue() * parentSize) / 100.0f;
         else if (primitiveValue.isCalculatedPercentageWithLength()) {
             const auto& conversionData = builderState.cssToLengthConversionData();
-            CSSToLengthConversionData parentConversionData { &builderState.parentStyle(), conversionData.rootStyle(), &builderState.parentStyle(), builderState.document().renderView(), 1.0f, CSSPropertyFontSize };
+            CSSToLengthConversionData parentConversionData { &builderState.parentStyle(), conversionData.rootStyle(), builderState.document().renderView(), 1.0f, true };
             size = primitiveValue.cssCalcValue()->createCalculationValue(parentConversionData)->evaluate(parentSize);
         } else
             return;
@@ -1702,9 +1637,6 @@ inline void BuilderCustom::applyValueFontSize(BuilderState& builderState, CSSVal
 
 inline void BuilderCustom::applyInitialGridTemplateAreas(BuilderState& builderState)
 {
-    builderState.style().setImplicitNamedGridColumnLines(RenderStyle::initialNamedGridColumnLines());
-    builderState.style().setImplicitNamedGridRowLines(RenderStyle::initialNamedGridRowLines());
-
     builderState.style().setNamedGridArea(RenderStyle::initialNamedGridArea());
     builderState.style().setNamedGridAreaRowCount(RenderStyle::initialNamedGridAreaCount());
     builderState.style().setNamedGridAreaColumnCount(RenderStyle::initialNamedGridAreaCount());
@@ -1712,9 +1644,6 @@ inline void BuilderCustom::applyInitialGridTemplateAreas(BuilderState& builderSt
 
 inline void BuilderCustom::applyInheritGridTemplateAreas(BuilderState& builderState)
 {
-    builderState.style().setImplicitNamedGridColumnLines(builderState.parentStyle().implicitNamedGridColumnLines());
-    builderState.style().setImplicitNamedGridRowLines(builderState.parentStyle().implicitNamedGridRowLines());
-
     builderState.style().setNamedGridArea(builderState.parentStyle().namedGridArea());
     builderState.style().setNamedGridAreaRowCount(builderState.parentStyle().namedGridAreaRowCount());
     builderState.style().setNamedGridAreaColumnCount(builderState.parentStyle().namedGridAreaColumnCount());
@@ -1724,19 +1653,18 @@ inline void BuilderCustom::applyValueGridTemplateAreas(BuilderState& builderStat
 {
     if (is<CSSPrimitiveValue>(value)) {
         ASSERT(downcast<CSSPrimitiveValue>(value).valueID() == CSSValueNone);
-        applyInitialGridTemplateAreas(builderState);
         return;
     }
 
     auto& gridTemplateAreasValue = downcast<CSSGridTemplateAreasValue>(value);
     const NamedGridAreaMap& newNamedGridAreas = gridTemplateAreasValue.gridAreaMap();
 
-    NamedGridLinesMap implicitNamedGridColumnLines;
-    NamedGridLinesMap implicitNamedGridRowLines;
-    BuilderConverter::createImplicitNamedGridLinesFromGridArea(newNamedGridAreas, implicitNamedGridColumnLines, ForColumns);
-    BuilderConverter::createImplicitNamedGridLinesFromGridArea(newNamedGridAreas, implicitNamedGridRowLines, ForRows);
-    builderState.style().setImplicitNamedGridColumnLines(implicitNamedGridColumnLines);
-    builderState.style().setImplicitNamedGridRowLines(implicitNamedGridRowLines);
+    NamedGridLinesMap namedGridColumnLines = builderState.style().namedGridColumnLines();
+    NamedGridLinesMap namedGridRowLines = builderState.style().namedGridRowLines();
+    BuilderConverter::createImplicitNamedGridLinesFromGridArea(newNamedGridAreas, namedGridColumnLines, ForColumns);
+    BuilderConverter::createImplicitNamedGridLinesFromGridArea(newNamedGridAreas, namedGridRowLines, ForRows);
+    builderState.style().setNamedGridColumnLines(namedGridColumnLines);
+    builderState.style().setNamedGridRowLines(namedGridRowLines);
 
     builderState.style().setNamedGridArea(gridTemplateAreasValue.gridAreaMap());
     builderState.style().setNamedGridAreaRowCount(gridTemplateAreasValue.rowCount());

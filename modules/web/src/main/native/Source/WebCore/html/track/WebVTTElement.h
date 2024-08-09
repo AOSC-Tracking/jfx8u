@@ -25,7 +25,7 @@
 
 #pragma once
 
-#if ENABLE(VIDEO)
+#if ENABLE(VIDEO_TRACK)
 
 #include "HTMLElement.h"
 #include <wtf/NeverDestroyed.h>
@@ -90,4 +90,4 @@ SPECIALIZE_TYPE_TRAITS_BEGIN(WebCore::WebVTTElement)
     static bool isType(const WebCore::Node& node) { return node.isWebVTTElement(); }
 SPECIALIZE_TYPE_TRAITS_END()
 
-#endif // ENABLE(VIDEO)
+#endif // ENABLE(VIDEO_TRACK)

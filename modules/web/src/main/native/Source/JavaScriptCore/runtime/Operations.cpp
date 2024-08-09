@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 1999-2000 Harri Porten (porten@kde.org)
- * Copyright (C) 2008-2020 Apple Inc. All Rights Reserved.
+ * Copyright (C) 2008, 2016 Apple Inc. All Rights Reserved.
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Library General Public
@@ -22,14 +22,23 @@
 #include "config.h"
 #include "Operations.h"
 
+#include "Error.h"
 #include "JSBigInt.h"
 #include "JSCInlines.h"
+#include "JSObject.h"
+#include "JSString.h"
+#include <wtf/MathExtras.h>
 
 namespace JSC {
 
 bool JSValue::equalSlowCase(JSGlobalObject* globalObject, JSValue v1, JSValue v2)
 {
     return equalSlowCaseInline(globalObject, v1, v2);
+}
+
+bool JSValue::strictEqualSlowCase(JSGlobalObject* globalObject, JSValue v1, JSValue v2)
+{
+    return strictEqualSlowCaseInline(globalObject, v1, v2);
 }
 
 NEVER_INLINE JSValue jsAddSlowCase(JSGlobalObject* globalObject, JSValue v1, JSValue v2)
@@ -64,15 +73,21 @@ NEVER_INLINE JSValue jsAddSlowCase(JSGlobalObject* globalObject, JSValue v1, JSV
         RELEASE_AND_RETURN(scope, jsString(globalObject, p1String, asString(p2)));
     }
 
-    auto doubleOp = [] (double left, double right) -> double {
-        return left + right;
-    };
+    auto leftNumeric = p1.toNumeric(globalObject);
+    RETURN_IF_EXCEPTION(scope, { });
+    auto rightNumeric = p2.toNumeric(globalObject);
+    RETURN_IF_EXCEPTION(scope, { });
 
-    auto bigIntOp = [] (JSGlobalObject* globalObject, auto left, auto right) {
-        return JSBigInt::add(globalObject, left, right);
-    };
+    if (WTF::holds_alternative<JSBigInt*>(leftNumeric) || WTF::holds_alternative<JSBigInt*>(rightNumeric)) {
+        if (WTF::holds_alternative<JSBigInt*>(leftNumeric) && WTF::holds_alternative<JSBigInt*>(rightNumeric)) {
+            scope.release();
+            return JSBigInt::add(globalObject, WTF::get<JSBigInt*>(leftNumeric), WTF::get<JSBigInt*>(rightNumeric));
+        }
 
-    RELEASE_AND_RETURN(scope, arithmeticBinaryOp(globalObject, p1, p2, doubleOp, bigIntOp, "Invalid mix of BigInt and other type in addition."_s));
+        return throwTypeError(globalObject, scope, "Invalid mix of BigInt and other type in addition."_s);
+    }
+
+    return jsNumber(WTF::get<double>(leftNumeric) + WTF::get<double>(rightNumeric));
 }
 
 JSValue jsTypeStringForValue(VM& vm, JSGlobalObject* globalObject, JSValue v)
@@ -95,7 +110,7 @@ JSValue jsTypeStringForValue(VM& vm, JSGlobalObject* globalObject, JSValue v)
         // as null when doing comparisons.
         if (object->structure(vm)->masqueradesAsUndefined(globalObject))
             return vm.smallStrings.undefinedString();
-        if (object->isCallable(vm))
+        if (object->isFunction(vm))
             return vm.smallStrings.functionString();
     }
     return vm.smallStrings.objectString();
@@ -113,13 +128,13 @@ bool jsIsObjectTypeOrNull(JSGlobalObject* globalObject, JSValue v)
         return v.isNull();
 
     JSType type = v.asCell()->type();
-    if (type == StringType || type == SymbolType || type == HeapBigIntType)
+    if (type == StringType || type == SymbolType || type == BigIntType)
         return false;
     if (type >= ObjectType) {
         if (asObject(v)->structure(vm)->masqueradesAsUndefined(globalObject))
             return false;
         JSObject* object = asObject(v);
-        if (object->isCallable(vm))
+        if (object->isFunction(vm))
             return false;
     }
     return true;

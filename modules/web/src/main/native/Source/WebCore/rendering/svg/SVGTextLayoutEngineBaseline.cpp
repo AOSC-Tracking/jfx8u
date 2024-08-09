@@ -162,6 +162,9 @@ float SVGTextLayoutEngineBaseline::calculateGlyphOrientationAngle(bool isVertica
         case U_EA_FULLWIDTH:
         case U_EA_WIDE:
             return 0;
+        case U_EA_COUNT:
+            ASSERT_NOT_REACHED();
+            break;
         }
         ASSERT_NOT_REACHED();
         break;

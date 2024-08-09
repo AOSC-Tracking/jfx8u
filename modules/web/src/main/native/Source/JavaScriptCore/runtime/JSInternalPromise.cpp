@@ -40,11 +40,6 @@ JSInternalPromise* JSInternalPromise::create(VM& vm, Structure* structure)
     return promise;
 }
 
-JSInternalPromise* JSInternalPromise::createWithInitialValues(VM& vm, Structure* structure)
-{
-    return create(vm, structure);
-}
-
 Structure* JSInternalPromise::createStructure(VM& vm, JSGlobalObject* globalObject, JSValue prototype)
 {
     return Structure::create(vm, globalObject, prototype, TypeInfo(JSPromiseType, StructureFlags), info());
@@ -62,15 +57,16 @@ JSInternalPromise* JSInternalPromise::then(JSGlobalObject* globalObject, JSFunct
 
     JSObject* function = jsCast<JSObject*>(get(globalObject, vm.propertyNames->builtinNames().thenPublicName()));
     RETURN_IF_EXCEPTION(scope, nullptr);
-    auto callData = JSC::getCallData(vm, function);
-    ASSERT(callData.type != CallData::Type::None);
+    CallData callData;
+    CallType callType = JSC::getCallData(vm, function, callData);
+    ASSERT(callType != CallType::None);
 
     MarkedArgumentBuffer arguments;
     arguments.append(onFulfilled ? onFulfilled : jsUndefined());
     arguments.append(onRejected ? onRejected : jsUndefined());
     ASSERT(!arguments.hasOverflowed());
 
-    RELEASE_AND_RETURN(scope, jsCast<JSInternalPromise*>(call(globalObject, function, callData, this, arguments)));
+    RELEASE_AND_RETURN(scope, jsCast<JSInternalPromise*>(call(globalObject, function, callType, callData, this, arguments)));
 }
 
 } // namespace JSC

@@ -25,10 +25,8 @@
 
 #pragma once
 
-#include "IntPoint.h"
 #include <cstdint>
 #include <wtf/Assertions.h>
-#include <wtf/EnumTraits.h>
 
 namespace WTF {
 class TextStream;
@@ -36,12 +34,7 @@ class TextStream;
 
 namespace WebCore {
 
-// scrollPosition is in content coordinates (0,0 is at scrollOrigin), so may have negative components.
-using ScrollPosition = IntPoint;
-// scrollOffset() is the value used by scrollbars (min is 0,0), and should never have negative components.
-using ScrollOffset = IntPoint;
-
-enum class ScrollType : bool {
+enum class ScrollType : uint8_t {
     User,
     Programmatic
 };
@@ -58,18 +51,6 @@ enum ScrollLogicalDirection : uint8_t {
     ScrollBlockDirectionForward,
     ScrollInlineDirectionBackward,
     ScrollInlineDirectionForward
-};
-
-// FIXME: Add another status InNativeAnimation to indicate native scrolling is in progress.
-// See: https://bugs.webkit.org/show_bug.cgi?id=204936
-enum class ScrollBehaviorStatus : uint8_t {
-    NotInAnimation,
-    InNonNativeAnimation,
-};
-
-enum class AnimatedScroll : uint8_t {
-    No,
-    Yes
 };
 
 inline ScrollDirection logicalToPhysical(ScrollLogicalDirection direction, bool isVertical, bool isFlipped)
@@ -154,9 +135,9 @@ enum ScrollbarMode : uint8_t {
     ScrollbarAlwaysOn
 };
 
-enum class ScrollbarControlSize : uint8_t {
-    Regular,
-    Small
+enum ScrollbarControlSize : uint8_t {
+    RegularScrollbar,
+    SmallScrollbar
 };
 
 enum class ScrollbarExpansionState : uint8_t {
@@ -214,12 +195,12 @@ enum ScrollPinningBehavior : uint8_t {
     PinToBottom
 };
 
-enum class ScrollClamping : bool {
+enum class ScrollClamping : uint8_t {
     Unclamped,
     Clamped
 };
 
-enum ScrollBehaviorForFixedElements : bool {
+enum ScrollBehaviorForFixedElements : uint8_t {
     StickToDocumentBounds,
     StickToViewportBounds
 };
@@ -249,38 +230,5 @@ using ScrollingNodeID = uint64_t;
 
 WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, ScrollType);
 WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, ScrollClamping);
-WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, ScrollBehaviorForFixedElements);
 
 } // namespace WebCore
-
-namespace WTF {
-
-template<> struct EnumTraits<WebCore::ScrollbarMode> {
-    using values = EnumValues<
-        WebCore::ScrollbarMode,
-        WebCore::ScrollbarMode::ScrollbarAuto,
-        WebCore::ScrollbarMode::ScrollbarAlwaysOff,
-        WebCore::ScrollbarMode::ScrollbarAlwaysOn
-    >;
-};
-
-template<> struct EnumTraits<WebCore::ScrollElasticity> {
-    using values = EnumValues<
-        WebCore::ScrollElasticity,
-        WebCore::ScrollElasticity::ScrollElasticityAutomatic,
-        WebCore::ScrollElasticity::ScrollElasticityNone,
-        WebCore::ScrollElasticity::ScrollElasticityAllowed
-    >;
-};
-
-
-template<> struct EnumTraits<WebCore::ScrollPinningBehavior> {
-    using values = EnumValues<
-        WebCore::ScrollPinningBehavior,
-        WebCore::ScrollPinningBehavior::DoNotPin,
-        WebCore::ScrollPinningBehavior::PinToTop,
-        WebCore::ScrollPinningBehavior::PinToBottom
-    >;
-};
-
-} // namespace WTF

@@ -129,7 +129,7 @@ void ResizeObserver::deliverObservations()
         return;
 
     InspectorInstrumentation::willFireObserverCallback(*context, "ResizeObserver"_s);
-    m_callback->handleEvent(*this, entries, *this);
+    m_callback->handleEvent(entries, *this);
     InspectorInstrumentation::didFireObserverCallback(*context);
 }
 
@@ -169,7 +169,7 @@ bool ResizeObserver::removeObservation(const Element& target)
     });
 }
 
-bool ResizeObserver::virtualHasPendingActivity() const
+bool ResizeObserver::hasPendingActivity() const
 {
     return (hasObservations() && m_document) || !m_activeObservations.isEmpty();
 }

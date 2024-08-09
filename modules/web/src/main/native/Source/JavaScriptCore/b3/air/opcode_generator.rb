@@ -54,7 +54,7 @@ class Arg
     
     def self.widthCode(width)
         if width == "Ptr"
-            "pointerWidth()"
+            "POINTER_WIDTH"
         else
             "Width#{width}"
         end

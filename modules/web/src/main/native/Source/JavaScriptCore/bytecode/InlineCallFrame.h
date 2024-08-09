@@ -231,7 +231,7 @@ struct InlineCallFrame {
     ptrdiff_t callerFrameOffset() const { return stackOffset * sizeof(Register) + CallFrame::callerFrameOffset(); }
     ptrdiff_t returnPCOffset() const { return stackOffset * sizeof(Register) + CallFrame::returnPCOffset(); }
 
-    bool isInStrictContext() const { return baselineCodeBlock->ownerExecutable()->isInStrictContext(); }
+    bool isStrictMode() const { return baselineCodeBlock->isStrictMode(); }
 
     void dumpBriefFunctionInformation(PrintStream&) const;
     void dump(PrintStream&) const;

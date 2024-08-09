@@ -25,14 +25,14 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#pragma once
+#ifndef ResourceRequestBase_h
+#define ResourceRequestBase_h
 
 #include "FormData.h"
 #include "FrameLoaderTypes.h"
 #include "HTTPHeaderMap.h"
 #include "IntRect.h"
 #include "ResourceLoadPriority.h"
-#include <wtf/EnumTraits.h>
 #include <wtf/URL.h>
 
 namespace WebCore {
@@ -67,7 +67,6 @@ public:
     WEBCORE_EXPORT const URL& url() const;
     WEBCORE_EXPORT void setURL(const URL& url);
 
-    void redirectAsGETIfNeeded(const ResourceRequestBase &, const ResourceResponse&);
     WEBCORE_EXPORT ResourceRequest redirectedRequest(const ResourceResponse&, bool shouldClearReferrerOnHTTPSToHTTPRedirect) const;
 
     WEBCORE_EXPORT void removeCredentials();
@@ -136,6 +135,10 @@ public:
     WEBCORE_EXPORT void setHTTPUserAgent(const String&);
     void clearHTTPUserAgent();
 
+    String httpAccept() const;
+    void setHTTPAccept(const String&);
+    void clearHTTPAccept();
+
     void clearHTTPAcceptEncoding();
 
     WEBCORE_EXPORT void clearPurpose();
@@ -165,7 +168,7 @@ public:
     bool hiddenFromInspector() const { return m_hiddenFromInspector; }
     void setHiddenFromInspector(bool hiddenFromInspector) { m_hiddenFromInspector = hiddenFromInspector; }
 
-    enum class Requester : uint8_t { Unspecified, Main, XHR, Fetch, Media, ImportScripts, Ping, Beacon };
+    enum class Requester : uint8_t { Unspecified, Main, XHR, Fetch, Media, ImportScripts };
     Requester requester() const { return m_requester; }
     void setRequester(Requester requester) { m_requester = requester; }
 
@@ -188,7 +191,7 @@ public:
     bool encodingRequiresPlatformData() const { return true; }
 #endif
     template<class Encoder> void encodeWithoutPlatformData(Encoder&) const;
-    template<class Decoder> WARN_UNUSED_RETURN bool decodeWithoutPlatformData(Decoder&);
+    template<class Decoder> bool decodeWithoutPlatformData(Decoder&);
 
     WEBCORE_EXPORT static double defaultTimeoutInterval(); // May return 0 when using platform default.
     WEBCORE_EXPORT static void setDefaultTimeoutInterval(double);
@@ -227,7 +230,7 @@ protected:
     void updateResourceRequest(HTTPBodyUpdatePolicy = HTTPBodyUpdatePolicy::DoNotUpdateHTTPBody) const;
 
     template<class Encoder> void encodeBase(Encoder&) const;
-    template<class Decoder> WARN_UNUSED_RETURN bool decodeBase(Decoder&);
+    template<class Decoder> bool decodeBase(Decoder&);
 
     // The ResourceRequest subclass may "shadow" this method to compare platform specific fields
     static bool platformCompare(const ResourceRequest&, const ResourceRequest&) { return true; }
@@ -282,88 +285,64 @@ ALWAYS_INLINE void ResourceRequestBase::encodeBase(Encoder& encoder) const
     encoder << m_httpMethod;
     encoder << m_httpHeaderFields;
     encoder << m_responseContentDispositionEncodingFallbackArray;
-    encoder << m_cachePolicy;
+    encoder.encodeEnum(m_cachePolicy);
     encoder << m_allowCookies;
-    encoder << m_sameSiteDisposition;
+    encoder.encodeEnum(m_sameSiteDisposition);
     encoder << m_isTopSite;
-    encoder << m_priority;
-    encoder << m_requester;
+    encoder.encodeEnum(m_priority);
+    encoder.encodeEnum(m_requester);
 }
 
 template<class Decoder>
 ALWAYS_INLINE bool ResourceRequestBase::decodeBase(Decoder& decoder)
 {
-    Optional<URL> url;
-    decoder >> url;
-    if (!url)
+    if (!decoder.decode(m_url))
         return false;
-    m_url = WTFMove(*url);
 
-    Optional<double> timeoutInterval;
-    decoder >> timeoutInterval;
-    if (!timeoutInterval)
+    if (!decoder.decode(m_timeoutInterval))
         return false;
-    m_timeoutInterval = WTFMove(*timeoutInterval);
 
-    Optional<String> firstPartyForCookies;
-    decoder >> firstPartyForCookies;
-    if (!firstPartyForCookies)
+    String firstPartyForCookies;
+    if (!decoder.decode(firstPartyForCookies))
         return false;
-    m_firstPartyForCookies = URL({ }, *firstPartyForCookies);
+    m_firstPartyForCookies = URL({ }, firstPartyForCookies);
 
-    Optional<String> httpMethod;
-    decoder >> httpMethod;
-    if (!httpMethod)
+    if (!decoder.decode(m_httpMethod))
         return false;
-    m_httpMethod = WTFMove(*httpMethod);
 
-    Optional<HTTPHeaderMap> fields;
-    decoder >> fields;
-    if (!fields)
+    if (!decoder.decode(m_httpHeaderFields))
         return false;
-    m_httpHeaderFields = WTFMove(*fields);
 
-    Optional<Vector<String>> array;
-    decoder >> array;
-    if (!array)
+    if (!decoder.decode(m_responseContentDispositionEncodingFallbackArray))
         return false;
-    m_responseContentDispositionEncodingFallbackArray = WTFMove(*array);
 
-    Optional<ResourceRequestCachePolicy> cachePolicy;
-    decoder >> cachePolicy;
-    if (!cachePolicy)
+    ResourceRequestCachePolicy cachePolicy;
+    if (!decoder.decodeEnum(cachePolicy))
         return false;
-    m_cachePolicy = *cachePolicy;
+    m_cachePolicy = cachePolicy;
 
-    Optional<bool> allowCookies;
-    decoder >> allowCookies;
-    if (!allowCookies)
+    bool allowCookies;
+    if (!decoder.decode(allowCookies))
         return false;
-    m_allowCookies = *allowCookies;
+    m_allowCookies = allowCookies;
 
-    Optional<SameSiteDisposition> sameSiteDisposition;
-    decoder >> sameSiteDisposition;
-    if (!sameSiteDisposition)
+    SameSiteDisposition sameSiteDisposition;
+    if (!decoder.decodeEnum(sameSiteDisposition))
         return false;
-    m_sameSiteDisposition = *sameSiteDisposition;
+    m_sameSiteDisposition = sameSiteDisposition;
 
-    Optional<bool> isTopSite;
-    decoder >> isTopSite;
-    if (!isTopSite)
+    bool isTopSite;
+    if (!decoder.decode(isTopSite))
         return false;
-    m_isTopSite = *isTopSite;
+    m_isTopSite = isTopSite;
 
-    Optional<ResourceLoadPriority> priority;
-    decoder >> priority;
-    if (!priority)
+    ResourceLoadPriority priority;
+    if (!decoder.decodeEnum(priority))
         return false;
-    m_priority = *priority;
+    m_priority = priority;
 
-    Optional<Requester> requester;
-    decoder >> requester;
-    if (!requester)
+    if (!decoder.decodeEnum(m_requester))
         return false;
-    m_requester = *requester;
 
     return true;
 }
@@ -384,41 +363,4 @@ bool ResourceRequestBase::decodeWithoutPlatformData(Decoder& decoder)
 
 } // namespace WebCore
 
-namespace WTF {
-
-template<> struct EnumTraits<WebCore::ResourceRequestCachePolicy> {
-    using values = EnumValues<
-        WebCore::ResourceRequestCachePolicy,
-        WebCore::ResourceRequestCachePolicy::UseProtocolCachePolicy,
-        WebCore::ResourceRequestCachePolicy::ReloadIgnoringCacheData,
-        WebCore::ResourceRequestCachePolicy::ReturnCacheDataElseLoad,
-        WebCore::ResourceRequestCachePolicy::ReturnCacheDataDontLoad,
-        WebCore::ResourceRequestCachePolicy::DoNotUseAnyCache,
-        WebCore::ResourceRequestCachePolicy::RefreshAnyCacheData
-    >;
-};
-
-template<> struct EnumTraits<WebCore::ResourceRequestBase::SameSiteDisposition> {
-    using values = EnumValues<
-        WebCore::ResourceRequestBase::SameSiteDisposition,
-        WebCore::ResourceRequestBase::SameSiteDisposition::Unspecified,
-        WebCore::ResourceRequestBase::SameSiteDisposition::SameSite,
-        WebCore::ResourceRequestBase::SameSiteDisposition::CrossSite
-    >;
-};
-
-template<> struct EnumTraits<WebCore::ResourceRequestBase::Requester> {
-    using values = EnumValues<
-        WebCore::ResourceRequestBase::Requester,
-        WebCore::ResourceRequestBase::Requester::Unspecified,
-        WebCore::ResourceRequestBase::Requester::Main,
-        WebCore::ResourceRequestBase::Requester::XHR,
-        WebCore::ResourceRequestBase::Requester::Fetch,
-        WebCore::ResourceRequestBase::Requester::Media,
-        WebCore::ResourceRequestBase::Requester::ImportScripts,
-        WebCore::ResourceRequestBase::Requester::Ping,
-        WebCore::ResourceRequestBase::Requester::Beacon
-    >;
-};
-
-} // namespace WTF
+#endif // ResourceRequestBase_h

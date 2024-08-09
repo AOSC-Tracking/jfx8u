@@ -47,8 +47,6 @@ public:
 
     void updateMarginsAndContent();
 
-    void addOverflowFromListMarker();
-
 private:
     void willBeDestroyed() override;
 
@@ -74,7 +72,7 @@ private:
     bool isImage() const override;
     bool isText() const { return !isImage(); }
 
-    void setSelectionState(HighlightState) override;
+    void setSelectionState(SelectionState) override;
     LayoutRect selectionRectForRepaint(const RenderLayerModelObject* repaintContainer, bool clipToVisibleContent = true) override;
     bool canBeSelectionLeaf() const override { return true; }
 
@@ -82,8 +80,6 @@ private:
     void updateContent();
 
     void styleDidChange(StyleDifference, const RenderStyle* oldStyle) override;
-
-    RenderBox* parentBox(RenderBox&);
 
     FloatRect getRelativeMarkerRect();
     LayoutRect localSelectionRect();

@@ -22,6 +22,7 @@
 #pragma once
 
 #include "CSSCustomPropertyValue.h"
+#include "CSSVariableReferenceValue.h"
 #include <wtf/Forward.h>
 #include <wtf/HashMap.h>
 #include <wtf/RefCounted.h>

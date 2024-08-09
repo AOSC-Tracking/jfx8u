@@ -53,9 +53,11 @@ void SMILTimeContainer::schedule(SVGSMILElement* animation, SVGElement* target, 
     ASSERT(animation->hasValidAttributeName());
 
     ElementAttributePair key(target, attributeName);
-    auto& animations = m_scheduledAnimations.add(key, AnimationsVector()).iterator->value;
-    ASSERT(!animations.contains(animation));
-    animations.append(animation);
+    std::unique_ptr<AnimationsVector>& scheduled = m_scheduledAnimations.add(key, nullptr).iterator->value;
+    if (!scheduled)
+        scheduled = makeUnique<AnimationsVector>();
+    ASSERT(!scheduled->contains(animation));
+    scheduled->append(animation);
 
     SMILTime nextFireTime = animation->nextProgressTime();
     if (nextFireTime.isFinite())
@@ -67,9 +69,10 @@ void SMILTimeContainer::unschedule(SVGSMILElement* animation, SVGElement* target
     ASSERT(animation->timeContainer() == this);
 
     ElementAttributePair key(target, attributeName);
-    auto& animations = m_scheduledAnimations.find(key)->value;
-    ASSERT(animations.contains(animation));
-    animations.removeFirst(animation);
+    AnimationsVector* scheduled = m_scheduledAnimations.get(key);
+    ASSERT(scheduled);
+    bool removed = scheduled->removeFirst(animation);
+    ASSERT_UNUSED(removed, removed);
 }
 
 void SMILTimeContainer::notifyIntervalsChanged()
@@ -168,8 +171,8 @@ void SMILTimeContainer::setElapsed(SMILTime time)
     } else
         m_resumeTime = m_beginTime;
 
-    processScheduledAnimations([](auto& animation) {
-        animation.reset();
+    processScheduledAnimations([](auto* animation) {
+        animation->reset();
     });
 
     updateAnimations(time, true);
@@ -228,12 +231,19 @@ void SMILTimeContainer::sortByPriority(AnimationsVector& animations, SMILTime el
     std::sort(animations.begin(), animations.end(), PriorityCompare(elapsed));
 }
 
-void SMILTimeContainer::processScheduledAnimations(const Function<void(SVGSMILElement&)>& callback)
+void SMILTimeContainer::processAnimations(const AnimationsVector& animations, Function<void(SVGSMILElement*)>&& callback)
 {
-    for (auto& animations : copyToVector(m_scheduledAnimations.values())) {
-        for (auto* animation : animations)
-            callback(*animation);
-    }
+    // 'animations' may change if 'callback' causes an animation to end which will end up calling
+    // unschedule(). Copy 'animations' so none of the items gets deleted out from underneath us.
+    auto animationsCopy = animations;
+    for (auto* animation : animations)
+        callback(animation);
+}
+
+void SMILTimeContainer::processScheduledAnimations(Function<void(SVGSMILElement*)>&& callback)
+{
+    for (auto& it : m_scheduledAnimations)
+        processAnimations(*it.value, WTFMove(callback));
 }
 
 void SMILTimeContainer::updateAnimations(SMILTime elapsed, bool seekToTime)
@@ -241,23 +251,23 @@ void SMILTimeContainer::updateAnimations(SMILTime elapsed, bool seekToTime)
     // Don't mutate the DOM while updating the animations.
     EventQueueScope scope;
 
-    processScheduledAnimations([](auto& animation) {
-        if (!animation.hasConditionsConnected())
-            animation.connectConditions();
+    processScheduledAnimations([](auto* animation) {
+        if (!animation->hasConditionsConnected())
+            animation->connectConditions();
     });
 
     AnimationsVector animationsToApply;
     SMILTime earliestFireTime = SMILTime::unresolved();
 
-    for (auto& animations : copyToVector(m_scheduledAnimations.values())) {
+    for (auto& it : m_scheduledAnimations) {
         // Sort according to priority. Elements with later begin time have higher priority.
         // In case of a tie, document order decides.
         // FIXME: This should also consider timing relationships between the elements. Dependents
         // have higher priority.
-        sortByPriority(animations, elapsed);
+        sortByPriority(*it.value, elapsed);
 
         RefPtr<SVGSMILElement> firstAnimation;
-        for (auto* animation : animations) {
+        processAnimations(*it.value, [&](auto* animation) {
             ASSERT(animation->timeContainer() == this);
             ASSERT(animation->targetElement());
             ASSERT(animation->hasValidAttributeName());
@@ -276,7 +286,7 @@ void SMILTimeContainer::updateAnimations(SMILTime elapsed, bool seekToTime)
             SMILTime nextFireTime = animation->nextProgressTime();
             if (nextFireTime.isFinite())
                 earliestFireTime = std::min(nextFireTime, earliestFireTime);
-        }
+        });
 
         if (firstAnimation)
             animationsToApply.append(firstAnimation.get());

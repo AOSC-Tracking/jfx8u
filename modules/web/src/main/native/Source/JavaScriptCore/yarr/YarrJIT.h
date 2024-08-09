@@ -29,7 +29,6 @@
 
 #include "MacroAssemblerCodeRef.h"
 #include "MatchResult.h"
-#include "VM.h"
 #include "Yarr.h"
 #include "YarrPattern.h"
 
@@ -42,8 +41,6 @@ class ExecutablePool;
 
 namespace Yarr {
 
-class YarrCodeBlock;
-
 enum class JITFailureReason : uint8_t {
     DecodeSurrogatePair,
     BackReference,
@@ -55,35 +52,15 @@ enum class JITFailureReason : uint8_t {
     ExecutableMemoryAllocationFailure,
 };
 
-class MatchingContextHolder {
-    WTF_FORBID_HEAP_ALLOCATION;
-public:
-    MatchingContextHolder(VM&, YarrCodeBlock*, MatchFrom matchFrom = MatchFrom::VMThread);
-    ~MatchingContextHolder();
-
-    static ptrdiff_t offsetOfStackLimit() { return OBJECT_OFFSETOF(MatchingContextHolder, m_stackLimit); }
-#if ENABLE(YARR_JIT_ALL_PARENS_EXPRESSIONS)
-    static ptrdiff_t offsetOfPatternContextBuffer() { return OBJECT_OFFSETOF(MatchingContextHolder, m_patternContextBuffer); }
-    static ptrdiff_t offsetOfPatternContextBufferSize() { return OBJECT_OFFSETOF(MatchingContextHolder, m_patternContextBufferSize); }
-#endif
-
-private:
-    VM& m_vm;
-    void* m_stackLimit;
-#if ENABLE(YARR_JIT_ALL_PARENS_EXPRESSIONS)
-    void* m_patternContextBuffer { nullptr };
-    unsigned m_patternContextBufferSize { 0 };
-#endif
-};
-
 class YarrCodeBlock {
     WTF_MAKE_FAST_ALLOCATED;
     WTF_MAKE_NONCOPYABLE(YarrCodeBlock);
 
-    using YarrJITCode8 = EncodedMatchResult (*)(const LChar* input, unsigned start, unsigned length, int* output, MatchingContextHolder& matchingContext) YARR_CALL;
-    using YarrJITCode16 = EncodedMatchResult (*)(const UChar* input, unsigned start, unsigned length, int* output, MatchingContextHolder& matchingContext) YARR_CALL;
-    using YarrJITCodeMatchOnly8 = EncodedMatchResult (*)(const LChar* input, unsigned start, unsigned length, void*, MatchingContextHolder& matchingContext) YARR_CALL;
-    using YarrJITCodeMatchOnly16 = EncodedMatchResult (*)(const UChar* input, unsigned start, unsigned length, void*, MatchingContextHolder& matchingContext) YARR_CALL;
+    // Technically freeParenContext and parenContextSize are only used if ENABLE(YARR_JIT_ALL_PARENS_EXPRESSIONS) is set. Fortunately, all the calling conventions we support have caller save argument registers.
+    using YarrJITCode8 = EncodedMatchResult (*)(const LChar* input, unsigned start, unsigned length, int* output, void* freeParenContext, unsigned parenContextSize) YARR_CALL;
+    using YarrJITCode16 = EncodedMatchResult (*)(const UChar* input, unsigned start, unsigned length, int* output, void* freeParenContext, unsigned parenContextSize) YARR_CALL;
+    using YarrJITCodeMatchOnly8 = EncodedMatchResult (*)(const LChar* input, unsigned start, unsigned length, void*, void* freeParenContext, unsigned parenContextSize) YARR_CALL;
+    using YarrJITCodeMatchOnly16 = EncodedMatchResult (*)(const UChar* input, unsigned start, unsigned length, void*, void* freeParenContext, unsigned parenContextSize) YARR_CALL;
 
 public:
     YarrCodeBlock() = default;
@@ -106,28 +83,28 @@ public:
     void setUsesPatternContextBuffer() { m_usesPatternContextBuffer = true; }
 #endif
 
-    MatchResult execute(const LChar* input, unsigned start, unsigned length, int* output, MatchingContextHolder& matchingContext)
+    MatchResult execute(const LChar* input, unsigned start, unsigned length, int* output, void* freeParenContext, unsigned parenContextSize)
     {
         ASSERT(has8BitCode());
-        return MatchResult(untagCFunctionPtr<YarrJITCode8, Yarr8BitPtrTag>(m_ref8.code().executableAddress())(input, start, length, output, matchingContext));
+        return MatchResult(untagCFunctionPtr<YarrJITCode8, Yarr8BitPtrTag>(m_ref8.code().executableAddress())(input, start, length, output, freeParenContext, parenContextSize));
     }
 
-    MatchResult execute(const UChar* input, unsigned start, unsigned length, int* output, MatchingContextHolder& matchingContext)
+    MatchResult execute(const UChar* input, unsigned start, unsigned length, int* output, void* freeParenContext, unsigned parenContextSize)
     {
         ASSERT(has16BitCode());
-        return MatchResult(untagCFunctionPtr<YarrJITCode16, Yarr16BitPtrTag>(m_ref16.code().executableAddress())(input, start, length, output, matchingContext));
+        return MatchResult(untagCFunctionPtr<YarrJITCode16, Yarr16BitPtrTag>(m_ref16.code().executableAddress())(input, start, length, output, freeParenContext, parenContextSize));
     }
 
-    MatchResult execute(const LChar* input, unsigned start, unsigned length, MatchingContextHolder& matchingContext)
+    MatchResult execute(const LChar* input, unsigned start, unsigned length, void* freeParenContext, unsigned parenContextSize)
     {
         ASSERT(has8BitCodeMatchOnly());
-        return MatchResult(untagCFunctionPtr<YarrJITCodeMatchOnly8, YarrMatchOnly8BitPtrTag>(m_matchOnly8.code().executableAddress())(input, start, length, nullptr, matchingContext));
+        return MatchResult(untagCFunctionPtr<YarrJITCodeMatchOnly8, YarrMatchOnly8BitPtrTag>(m_matchOnly8.code().executableAddress())(input, start, length, 0, freeParenContext, parenContextSize));
     }
 
-    MatchResult execute(const UChar* input, unsigned start, unsigned length, MatchingContextHolder& matchingContext)
+    MatchResult execute(const UChar* input, unsigned start, unsigned length, void* freeParenContext, unsigned parenContextSize)
     {
         ASSERT(has16BitCodeMatchOnly());
-        return MatchResult(untagCFunctionPtr<YarrJITCodeMatchOnly16, YarrMatchOnly16BitPtrTag>(m_matchOnly16.code().executableAddress())(input, start, length, nullptr, matchingContext));
+        return MatchResult(untagCFunctionPtr<YarrJITCodeMatchOnly16, YarrMatchOnly16BitPtrTag>(m_matchOnly16.code().executableAddress())(input, start, length, 0, freeParenContext, parenContextSize));
     }
 
 #if ENABLE(REGEXP_TRACING)

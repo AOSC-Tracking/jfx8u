@@ -1,6 +1,6 @@
 /*
  *  Copyright (C) 1999-2000 Harri Porten (porten@kde.org)
- *  Copyright (C) 2004-2020 Apple Inc. All rights reserved.
+ *  Copyright (C) 2004-2019 Apple Inc. All rights reserved.
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -111,17 +111,10 @@ static EncodedJSValue pluginElementPropertyGetter(JSGlobalObject* lexicalGlobalO
 
 bool pluginElementCustomGetOwnPropertySlot(JSHTMLElement* element, JSGlobalObject* lexicalGlobalObject, PropertyName propertyName, PropertySlot& slot)
 {
-    slot.setIsTaintedByOpaqueObject();
-
     if (!element->globalObject()->world().isNormal()) {
         JSC::JSValue proto = element->getPrototypeDirect(lexicalGlobalObject->vm());
         if (proto.isObject() && JSC::jsCast<JSC::JSObject*>(asObject(proto))->hasProperty(lexicalGlobalObject, propertyName))
             return false;
-    }
-
-    if (slot.isVMInquiry()) {
-        slot.setValue(element, static_cast<unsigned>(JSC::PropertyAttribute::None), jsUndefined());
-        return false; // Can't execute stuff below because they can call back into JS.
     }
 
     JSObject* scriptObject = pluginScriptObject(lexicalGlobalObject, element);
@@ -160,35 +153,34 @@ static EncodedJSValue JSC_HOST_CALL callPlugin(JSGlobalObject* lexicalGlobalObje
         argumentList.append(callFrame->argument(i));
     ASSERT(!argumentList.hasOverflowed());
 
-    auto callData = getCallData(lexicalGlobalObject->vm(), scriptObject);
-    ASSERT(callData.type == CallData::Type::Native);
+    CallData callData;
+    CallType callType = getCallData(lexicalGlobalObject->vm(), scriptObject, callData);
+    ASSERT(callType == CallType::Host);
 
     // Call the object.
-    JSValue result = call(lexicalGlobalObject, scriptObject, callData, callFrame->thisValue(), argumentList);
+    JSValue result = call(lexicalGlobalObject, scriptObject, callType, callData, callFrame->thisValue(), argumentList);
     return JSValue::encode(result);
 }
 
-CallData pluginElementCustomGetCallData(JSHTMLElement* element)
+CallType pluginElementCustomGetCallData(JSHTMLElement* element, CallData& callData)
 {
-    CallData callData;
-
     // First, ask the plug-in view base for its runtime object.
     if (JSObject* scriptObject = pluginScriptObjectFromPluginViewBase(element)) {
+        CallData scriptObjectCallData;
+
         VM& vm = scriptObject->vm();
-        auto scriptObjectCallData = getCallData(vm, scriptObject);
-        if (scriptObjectCallData.type != CallData::Type::None) {
-            callData.type = CallData::Type::Native;
-            callData.native.function = callPlugin;
-        }
-    } else {
-        Instance* instance = pluginInstance(element->wrapped());
-        if (instance && instance->supportsInvokeDefaultMethod()) {
-            callData.type = CallData::Type::Native;
-            callData.native.function = callPlugin;
-        }
+        if (scriptObject->methodTable(vm)->getCallData(scriptObject, scriptObjectCallData) == CallType::None)
+            return CallType::None;
+
+        callData.native.function = callPlugin;
+        return CallType::Host;
     }
 
-    return callData;
+    Instance* instance = pluginInstance(element->wrapped());
+    if (!instance || !instance->supportsInvokeDefaultMethod())
+        return CallType::None;
+    callData.native.function = callPlugin;
+    return CallType::Host;
 }
 
 } // namespace WebCore

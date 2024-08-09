@@ -25,20 +25,20 @@
 
 #include "config.h"
 
-#if ENABLE(VIDEO)
+#if ENABLE(VIDEO_TRACK)
 
 #include "TextTrackCueGeneric.h"
 
 #include "CSSPropertyNames.h"
 #include "CSSStyleDeclaration.h"
 #include "CSSValueKeywords.h"
-#include "ColorSerialization.h"
 #include "HTMLSpanElement.h"
 #include "InbandTextTrackPrivateClient.h"
 #include "Logging.h"
 #include "RenderObject.h"
 #include "ScriptExecutionContext.h"
 #include "StyleProperties.h"
+#include "TextTrackCue.h"
 #include <wtf/IsoMallocInlines.h>
 #include <wtf/MathExtras.h>
 
@@ -126,9 +126,9 @@ void TextTrackCueGenericBoxElement::applyCSSProperties(const IntSize& videoSize)
     }
 
     if (cue->foregroundColor().isValid())
-        cueElement->setInlineStyleProperty(CSSPropertyColor, serializationForHTML(cue->foregroundColor()));
+        cueElement->setInlineStyleProperty(CSSPropertyColor, cue->foregroundColor().serialized());
     if (cue->highlightColor().isValid())
-        cueElement->setInlineStyleProperty(CSSPropertyBackgroundColor, serializationForHTML(cue->highlightColor()));
+        cueElement->setInlineStyleProperty(CSSPropertyBackgroundColor, cue->highlightColor().serialized());
 
     if (cue->getWritingDirection() == VTTCue::Horizontal)
         setInlineStyleProperty(CSSPropertyHeight, CSSValueAuto);
@@ -146,7 +146,7 @@ void TextTrackCueGenericBoxElement::applyCSSProperties(const IntSize& videoSize)
         setInlineStyleProperty(CSSPropertyTextAlign, CSSValueStart);
 
     if (cue->backgroundColor().isValid())
-        setInlineStyleProperty(CSSPropertyBackgroundColor, serializationForHTML(cue->backgroundColor()));
+        setInlineStyleProperty(CSSPropertyBackgroundColor, cue->backgroundColor().serialized());
     setInlineStyleProperty(CSSPropertyWritingMode, cue->getCSSWritingMode(), false);
     setInlineStyleProperty(CSSPropertyWhiteSpace, CSSValuePreWrap);
 
@@ -155,13 +155,10 @@ void TextTrackCueGenericBoxElement::applyCSSProperties(const IntSize& videoSize)
     cueElement->setInlineStyleProperty(CSSPropertyOverflow, CSSValueVisible);
 }
 
-Ref<TextTrackCueGeneric> TextTrackCueGeneric::create(ScriptExecutionContext& context, const MediaTime& start, const MediaTime& end, const String& content)
-{
-    return adoptRef(*new TextTrackCueGeneric(downcast<Document>(context), start, end, content));
-}
-
-TextTrackCueGeneric::TextTrackCueGeneric(Document& document, const MediaTime& start, const MediaTime& end, const String& content)
-    : VTTCue(document, start, end, String { content })
+TextTrackCueGeneric::TextTrackCueGeneric(ScriptExecutionContext& context, const MediaTime& start, const MediaTime& end, const String& content)
+    : VTTCue(context, start, end, content)
+    , m_baseFontSizeRelativeToVideoHeight(0)
+    , m_fontSizeMultiplier(0)
 {
 }
 
@@ -202,15 +199,49 @@ void TextTrackCueGeneric::setFontSize(int fontSize, const IntSize& videoSize, bo
     displayTreeInternal().setInlineStyleProperty(CSSPropertyFontSize, lround(size), CSSUnitType::CSS_PX);
 }
 
-bool TextTrackCueGeneric::cueContentsMatch(const TextTrackCue& otherTextTrackCue) const
+bool TextTrackCueGeneric::cueContentsMatch(const TextTrackCue& cue) const
 {
-    auto& other = downcast<TextTrackCueGeneric>(otherTextTrackCue);
-    return VTTCue::cueContentsMatch(other)
-        && m_baseFontSizeRelativeToVideoHeight == other.m_baseFontSizeRelativeToVideoHeight
-        && m_fontSizeMultiplier == other.m_fontSizeMultiplier
-        && m_fontName == other.m_fontName
-        && m_foregroundColor == other.m_foregroundColor
-        && m_backgroundColor == other.m_backgroundColor;
+    // Do call the parent class cueContentsMatch here, because we want to confirm
+    // the content of the two cues are identical (even though the types are not the same).
+    if (!VTTCue::cueContentsMatch(cue))
+        return false;
+
+    const TextTrackCueGeneric* other = static_cast<const TextTrackCueGeneric*>(&cue);
+
+    if (m_baseFontSizeRelativeToVideoHeight != other->baseFontSizeRelativeToVideoHeight())
+        return false;
+    if (m_fontSizeMultiplier != other->fontSizeMultiplier())
+        return false;
+    if (m_fontName != other->fontName())
+        return false;
+    if (m_foregroundColor != other->foregroundColor())
+        return false;
+    if (m_backgroundColor != other->backgroundColor())
+        return false;
+
+    return true;
+}
+
+bool TextTrackCueGeneric::isEqual(const TextTrackCue& cue, TextTrackCue::CueMatchRules match) const
+{
+    // Do not call the parent class isEqual here, because we are not cueType() == VTTCue,
+    // and will fail that equality test.
+    if (!TextTrackCue::isEqual(cue, match))
+        return false;
+
+    if (cue.cueType() != TextTrackCue::ConvertedToWebVTT)
+        return false;
+
+    return cueContentsMatch(cue);
+}
+
+
+bool TextTrackCueGeneric::doesExtendCue(const TextTrackCue& cue) const
+{
+    if (!cueContentsMatch(cue))
+        return false;
+
+    return VTTCue::doesExtendCue(cue);
 }
 
 bool TextTrackCueGeneric::isOrderedBefore(const TextTrackCue* that) const
@@ -218,10 +249,10 @@ bool TextTrackCueGeneric::isOrderedBefore(const TextTrackCue* that) const
     if (VTTCue::isOrderedBefore(that))
         return true;
 
-    if (is<TextTrackCueGeneric>(*that) && startTime() == that->startTime() && endTime() == that->endTime()) {
+    if (that->cueType() == ConvertedToWebVTT && startTime() == that->startTime() && endTime() == that->endTime()) {
         // Further order generic cues by their calculated line value.
-        auto thisPosition = getPositionCoordinates();
-        auto thatPosition = downcast<TextTrackCueGeneric>(*that).getPositionCoordinates();
+        std::pair<double, double> thisPosition = getPositionCoordinates();
+        std::pair<double, double> thatPosition = toVTTCue(that)->getPositionCoordinates();
         return thisPosition.second > thatPosition.second || (thisPosition.second == thatPosition.second && thisPosition.first < thatPosition.first);
     }
 
@@ -230,33 +261,39 @@ bool TextTrackCueGeneric::isOrderedBefore(const TextTrackCue* that) const
 
 bool TextTrackCueGeneric::isPositionedAbove(const TextTrackCue* that) const
 {
-    if (is<TextTrackCueGeneric>(*that)) {
-        if (startTime() == that->startTime() && endTime() == that->endTime()) {
-            // Further order generic cues by their calculated line value.
-            auto thisPosition = getPositionCoordinates();
-            auto thatPosition = downcast<TextTrackCueGeneric>(*that).getPositionCoordinates();
-            return thisPosition.second > thatPosition.second || (thisPosition.second == thatPosition.second && thisPosition.first < thatPosition.first);
-        }
-        return startTime() > that->startTime();
+    if (that->cueType() == ConvertedToWebVTT && startTime() == that->startTime() && endTime() == that->endTime()) {
+        // Further order generic cues by their calculated line value.
+        std::pair<double, double> thisPosition = getPositionCoordinates();
+        std::pair<double, double> thatPosition = toVTTCue(that)->getPositionCoordinates();
+        return thisPosition.second > thatPosition.second || (thisPosition.second == thatPosition.second && thisPosition.first < thatPosition.first);
     }
+
+    if (that->cueType() == ConvertedToWebVTT)
+        return startTime() > that->startTime();
 
     return VTTCue::isOrderedBefore(that);
 }
 
-void TextTrackCueGeneric::toJSON(JSON::Object& object) const
+String TextTrackCueGeneric::toJSONString() const
 {
+    auto object = JSON::Object::create();
+
+    toJSON(object.get());
+
     if (m_foregroundColor.isValid())
-        object.setString("foregroundColor"_s, serializationForHTML(m_foregroundColor));
+        object->setString("foregroundColor"_s, m_foregroundColor.serialized());
     if (m_backgroundColor.isValid())
-        object.setString("backgroundColor"_s, serializationForHTML(m_backgroundColor));
+        object->setString("backgroundColor"_s, m_backgroundColor.serialized());
     if (m_highlightColor.isValid())
-        object.setString("highlightColor"_s, serializationForHTML(m_highlightColor));
+        object->setString("highlightColor"_s, m_highlightColor.serialized());
     if (m_baseFontSizeRelativeToVideoHeight)
-        object.setDouble("relativeFontSize"_s, m_baseFontSizeRelativeToVideoHeight);
+        object->setDouble("relativeFontSize"_s, m_baseFontSizeRelativeToVideoHeight);
     if (m_fontSizeMultiplier)
-        object.setDouble("fontSizeMultiplier"_s, m_fontSizeMultiplier);
+        object->setDouble("fontSizeMultiplier"_s, m_fontSizeMultiplier);
     if (!m_fontName.isEmpty())
-        object.setString("font"_s, m_fontName);
+        object->setString("font"_s, m_fontName);
+
+    return object->toJSONString();
 }
 
 } // namespace WebCore

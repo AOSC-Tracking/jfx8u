@@ -26,7 +26,6 @@
 #include "config.h"
 #include "GradientImage.h"
 
-#include "Gradient.h"
 #include "GraphicsContext.h"
 #include "ImageBuffer.h"
 

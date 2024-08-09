@@ -23,7 +23,6 @@
 #include "config.h"
 #include "FEFlood.h"
 
-#include "ColorSerialization.h"
 #include "Filter.h"
 #include "GraphicsContext.h"
 #include <wtf/text/TextStream.h>
@@ -31,7 +30,7 @@
 namespace WebCore {
 
 FEFlood::FEFlood(Filter& filter, const Color& floodColor, float floodOpacity)
-    : FilterEffect(filter, Type::Flood)
+    : FilterEffect(filter)
     , m_floodColor(floodColor)
     , m_floodOpacity(floodOpacity)
 {
@@ -64,7 +63,9 @@ void FEFlood::platformApplySoftware()
     if (!resultImage)
         return;
 
-    auto color = floodColor().colorWithAlphaMultipliedBy(floodOpacity());
+    // FIXME: This should use colorWithAlphaMultipliedBy() but that has different rounding of the alpha component that breaks some tests.
+    float colorAlpha = floodColor().alpha() / 255.0;
+    auto color = colorWithOverrideAlpha(floodColor().rgb(), colorAlpha * floodOpacity());
     resultImage->context().fillRect(FloatRect(FloatPoint(), absolutePaintRect().size()), color);
 }
 
@@ -72,7 +73,7 @@ TextStream& FEFlood::externalRepresentation(TextStream& ts, RepresentationType r
 {
     ts << indent << "[feFlood";
     FilterEffect::externalRepresentation(ts, representation);
-    ts << " flood-color=\"" << serializationForRenderTreeAsText(floodColor()) << "\" "
+    ts << " flood-color=\"" << floodColor().nameForRenderTreeAsText() << "\" "
        << "flood-opacity=\"" << floodOpacity() << "\"]\n";
     return ts;
 }

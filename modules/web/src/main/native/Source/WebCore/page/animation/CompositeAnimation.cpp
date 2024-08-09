@@ -97,13 +97,13 @@ void CompositeAnimation::updateTransitions(Element& element, const RenderStyle* 
             auto& animation = targetStyle.transitions()->animation(i);
             bool isActiveTransition = animation.duration() || animation.delay() > 0;
 
-            auto mode = animation.property().mode;
-            if (mode == Animation::TransitionMode::None || mode == Animation::TransitionMode::UnknownProperty)
+            Animation::AnimationMode mode = animation.animationMode();
+            if (mode == Animation::AnimateNone || mode == Animation::AnimateUnknownProperty)
                 continue;
 
-            CSSPropertyID prop = animation.property().id;
+            CSSPropertyID prop = animation.property();
 
-            bool all = mode == Animation::TransitionMode::All;
+            bool all = mode == Animation::AnimateAll;
 
             // Handle both the 'all' and single property cases. For the single prop case, we make only one pass
             // through the loop.
@@ -221,7 +221,7 @@ void CompositeAnimation::updateKeyframeAnimations(Element& element, const Render
     // Toss the animation order map.
     m_keyframeAnimationOrderMap.clear();
 
-    static MainThreadNeverDestroyed<const AtomString> none("none", AtomString::ConstructFromLiteral);
+    static NeverDestroyed<const AtomString> none("none", AtomString::ConstructFromLiteral);
 
     // Now mark any still active animations as active and add any new animations.
     if (targetStyle.animations()) {

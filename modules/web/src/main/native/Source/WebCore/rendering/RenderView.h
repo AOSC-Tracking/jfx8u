@@ -22,10 +22,10 @@
 #pragma once
 
 #include "FrameView.h"
-#include "HighlightData.h"
 #include "Region.h"
 #include "RenderBlockFlow.h"
 #include "RenderWidget.h"
+#include "SelectionRangeData.h"
 #include <memory>
 #include <wtf/HashSet.h>
 #include <wtf/ListHashSet.h>
@@ -68,12 +68,6 @@ public:
 
     FrameView& frameView() const { return m_frameView; }
 
-    bool needsRepaintHackAfterCompositingLayerUpdateForDebugOverlaysOnly() const { return m_needsRepaintHackAfterCompositingLayerUpdateForDebugOverlaysOnly; };
-    void setNeedsRepaintHackAfterCompositingLayerUpdateForDebugOverlaysOnly(bool value = true) { m_needsRepaintHackAfterCompositingLayerUpdateForDebugOverlaysOnly = value; }
-
-    bool needsEventRegionUpdateForNonCompositedFrame() const { return m_needsEventRegionUpdateForNonCompositedFrame; }
-    void setNeedsEventRegionUpdateForNonCompositedFrame(bool value = true) { m_needsEventRegionUpdateForNonCompositedFrame = value; }
-
     Optional<LayoutRect> computeVisibleRectInContainer(const LayoutRect&, const RenderLayerModelObject* container, VisibleRectContext) const override;
     void repaintRootContents();
     void repaintViewRectangle(const LayoutRect&) const;
@@ -84,7 +78,7 @@ public:
     // Return the renderer whose background style is used to paint the root background.
     RenderElement* rendererForRootBackground() const;
 
-    HighlightData& selection() { return m_selection; }
+    SelectionRangeData& selection() { return m_selection; }
 
     bool printing() const;
 
@@ -140,6 +134,8 @@ public:
 
     // Renderer that paints the root background has background-images which all have background-attachment: fixed.
     bool rootBackgroundIsEntirelyFixed() const;
+
+    void styleDidChange(StyleDifference, const RenderStyle* oldStyle) override;
 
     IntSize viewportSizeForCSSViewportUnits() const;
 
@@ -201,12 +197,13 @@ public:
     const HashSet<const RenderBox*>& boxesWithScrollSnapPositions() { return m_boxesWithScrollSnapPositions; }
 #endif
 
-private:
+protected:
     void mapLocalToContainer(const RenderLayerModelObject* repaintContainer, TransformState&, MapCoordinatesFlags, bool* wasFixed) const override;
     const RenderObject* pushMappingToContainer(const RenderLayerModelObject* ancestorToStopAt, RenderGeometryMap&) const override;
     void mapAbsoluteToLocalPoint(MapCoordinatesFlags, TransformState&) const override;
     bool requiresColumns(int desiredColumnCount) const override;
 
+private:
     void computeColumnCountAndWidth() override;
 
     bool shouldRepaint(const LayoutRect&) const;
@@ -216,15 +213,14 @@ private:
 
     bool isScrollableOrRubberbandableBox() const override;
 
-    Node* nodeForHitTest() const override;
-
+private:
     FrameView& m_frameView;
 
     // Include this RenderView.
     uint64_t m_rendererCount { 1 };
 
     mutable std::unique_ptr<Region> m_accumulatedRepaintRegion;
-    HighlightData m_selection;
+    SelectionRangeData m_selection;
 
     WeakPtr<RenderLayer> m_styleChangeLayerMutationRoot;
 
@@ -259,8 +255,6 @@ private:
     bool m_hasSoftwareFilters { false };
     bool m_usesFirstLineRules { false };
     bool m_usesFirstLetterRules { false };
-    bool m_needsRepaintHackAfterCompositingLayerUpdateForDebugOverlaysOnly { false };
-    bool m_needsEventRegionUpdateForNonCompositedFrame { false };
 
     HashMap<RenderElement*, Vector<CachedImage*>> m_renderersWithPausedImageAnimation;
     HashSet<RenderElement*> m_visibleInViewportRenderers;

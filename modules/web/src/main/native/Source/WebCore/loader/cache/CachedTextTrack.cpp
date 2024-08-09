@@ -25,6 +25,8 @@
 
 #include "config.h"
 
+#if ENABLE(VIDEO_TRACK)
+
 #include "CachedTextTrack.h"
 
 #include "CachedResourceClient.h"
@@ -57,10 +59,12 @@ void CachedTextTrack::updateBuffer(SharedBuffer& data)
     CachedResource::updateBuffer(data);
 }
 
-void CachedTextTrack::finishLoading(SharedBuffer* data, const NetworkLoadMetrics& metrics)
+void CachedTextTrack::finishLoading(SharedBuffer* data)
 {
     doUpdateBuffer(data);
-    CachedResource::finishLoading(data, metrics);
+    CachedResource::finishLoading(data);
 }
 
 }
+
+#endif

@@ -38,8 +38,8 @@ const char* exitKindToString(ExitKind kind)
         return "Unset";
     case BadType:
         return "BadType";
-    case BadConstantValue:
-        return "BadConstantValue";
+    case BadCell:
+        return "BadCell";
     case BadIdent:
         return "BadIdent";
     case BadExecutable:
@@ -88,8 +88,6 @@ const char* exitKindToString(ExitKind kind)
         return "ExceptionCheck";
     case GenericUnwind:
         return "GenericUnwind";
-    case BigInt32Overflow:
-        return "BigInt32Overflow";
     }
     RELEASE_ASSERT_NOT_REACHED();
     return "Unknown";

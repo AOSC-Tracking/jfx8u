@@ -24,9 +24,9 @@
  */
 
 #include "config.h"
+
 #include "GraphicsLayer.h"
 
-#include "ColorSerialization.h"
 #include "FloatPoint.h"
 #include "FloatRect.h"
 #include "GraphicsContext.h"
@@ -135,7 +135,6 @@ GraphicsLayer::GraphicsLayer(Type type, GraphicsLayerClient& layerClient)
     , m_masksToBounds(false)
     , m_drawsContent(false)
     , m_contentsVisible(true)
-    , m_contentsRectClipsDescendants(false)
     , m_acceleratesDrawing(false)
     , m_usesDisplayListDrawing(false)
     , m_appliesPageScale(false)
@@ -598,34 +597,34 @@ void GraphicsLayer::getDebugBorderInfo(Color& color, float& width) const
     width = 2;
 
     if (needsBackdrop()) {
-        color = Color::magenta.colorWithAlphaByte(128); // has backdrop: magenta
+        color = Color(255, 0, 255, 128); // has backdrop: magenta
         width = 12;
         return;
     }
 
     if (drawsContent()) {
         if (tiledBacking()) {
-            color = Color::orange.colorWithAlphaByte(128); // tiled layer: orange
+            color = Color(255, 128, 0, 128); // tiled layer: orange
             return;
         }
 
-        color = SRGBA<uint8_t> { 0, 128, 32, 128 }; // normal layer: green
+        color = Color(0, 128, 32, 128); // normal layer: green
         return;
     }
 
     if (usesContentsLayer()) {
-        color = SRGBA<uint8_t> { 0, 64, 128, 150 }; // non-painting layer with contents: blue
+        color = Color(0, 64, 128, 150); // non-painting layer with contents: blue
         width = 8;
         return;
     }
 
     if (masksToBounds()) {
-        color = SRGBA<uint8_t> { 128, 255, 255, 48 }; // masking layer: pale blue
+        color = Color(128, 255, 255, 48); // masking layer: pale blue
         width = 16;
         return;
     }
 
-    color = Color::yellow.colorWithAlphaByte(192); // container: yellow
+    color = Color(255, 255, 0, 192); // container: yellow
 }
 
 void GraphicsLayer::updateDebugIndicators()
@@ -931,7 +930,7 @@ void GraphicsLayer::dumpProperties(TextStream& ts, LayerTreeAsTextBehavior behav
         ts << indent << "(primary-layer-id " << primaryLayerID() << ")\n";
 
     if (m_backgroundColor.isValid() && client().shouldDumpPropertyForLayer(this, "backgroundColor", behavior))
-        ts << indent << "(backgroundColor " << serializationForRenderTreeAsText(m_backgroundColor) << ")\n";
+        ts << indent << "(backgroundColor " << m_backgroundColor.nameForRenderTreeAsText() << ")\n";
 
     if (behavior & LayerTreeAsTextIncludeAcceleratesDrawing && m_acceleratesDrawing)
         ts << indent << "(acceleratesDrawing " << m_acceleratesDrawing << ")\n";
@@ -1005,11 +1004,6 @@ void GraphicsLayer::dumpProperties(TextStream& ts, LayerTreeAsTextBehavior behav
         ts << indent << "(event region" << m_eventRegion;
         ts << indent << ")\n";
     }
-
-#if ENABLE(SCROLLING_THREAD)
-    if ((behavior & LayerTreeAsTextDebug) && m_scrollingNodeID)
-        ts << indent << "(scrolling node " << m_scrollingNodeID << ")\n";
-#endif
 
     if (behavior & LayerTreeAsTextIncludePaintingPhases && paintingPhase())
         ts << indent << "(paintingPhases " << paintingPhase() << ")\n";

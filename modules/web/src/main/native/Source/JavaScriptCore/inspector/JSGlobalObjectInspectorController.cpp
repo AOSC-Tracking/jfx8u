@@ -36,14 +36,17 @@
 #include "InspectorAgent.h"
 #include "InspectorBackendDispatcher.h"
 #include "InspectorConsoleAgent.h"
+#include "InspectorFrontendChannel.h"
 #include "InspectorFrontendRouter.h"
 #include "InspectorHeapAgent.h"
 #include "InspectorScriptProfilerAgent.h"
+#include "JSCInlines.h"
 #include "JSGlobalObject.h"
 #include "JSGlobalObjectAuditAgent.h"
 #include "JSGlobalObjectConsoleClient.h"
 #include "JSGlobalObjectDebuggerAgent.h"
 #include "JSGlobalObjectRuntimeAgent.h"
+#include "ScriptArguments.h"
 #include "ScriptCallStack.h"
 #include "ScriptCallStackFactory.h"
 #include <wtf/StackTrace.h>
@@ -115,8 +118,7 @@ void JSGlobalObjectInspectorController::connectFrontend(FrontendChannel& fronten
     m_agents.didCreateFrontendAndBackend(nullptr, nullptr);
 
 #if ENABLE(INSPECTOR_ALTERNATE_DISPATCHERS)
-    if (m_globalObject.inspectorDebuggable().type() == Inspector::RemoteControllableTarget::Type::JavaScript)
-        ensureInspectorAgent().activateExtraDomains(m_agents.extraDomains());
+    ensureInspectorAgent().activateExtraDomains(m_agents.extraDomains());
 
     if (m_augmentingClient)
         m_augmentingClient->inspectorConnected();
@@ -245,9 +247,9 @@ void JSGlobalObjectInspectorController::frontendInitialized()
 #endif
 }
 
-Stopwatch& JSGlobalObjectInspectorController::executionStopwatch() const
+Ref<Stopwatch> JSGlobalObjectInspectorController::executionStopwatch()
 {
-    return m_executionStopwatch;
+    return m_executionStopwatch.copyRef();
 }
 
 JSGlobalObjectScriptDebugServer& JSGlobalObjectInspectorController::scriptDebugServer()
@@ -270,8 +272,7 @@ void JSGlobalObjectInspectorController::appendExtraAgent(std::unique_ptr<Inspect
 
     m_agents.appendExtraAgent(WTFMove(agent));
 
-    if (m_globalObject.inspectorDebuggable().type() == Inspector::RemoteControllableTarget::Type::JavaScript)
-        ensureInspectorAgent().activateExtraDomain(domainName);
+    ensureInspectorAgent().activateExtraDomain(domainName);
 }
 #endif
 
@@ -292,7 +293,7 @@ InspectorDebuggerAgent& JSGlobalObjectInspectorController::ensureDebuggerAgent()
         auto context = jsAgentContext();
         auto debuggerAgent = makeUnique<JSGlobalObjectDebuggerAgent>(context, m_consoleAgent);
         m_debuggerAgent = debuggerAgent.get();
-        m_consoleClient->setDebuggerAgent(m_debuggerAgent);
+        m_consoleClient->setInspectorDebuggerAgent(m_debuggerAgent);
         m_agents.append(WTFMove(debuggerAgent));
     }
     return *m_debuggerAgent;
@@ -331,12 +332,12 @@ void JSGlobalObjectInspectorController::createLazyAgents()
     ensureDebuggerAgent();
 
     auto scriptProfilerAgentPtr = makeUnique<InspectorScriptProfilerAgent>(context);
-    m_consoleClient->setPersistentScriptProfilerAgent(scriptProfilerAgentPtr.get());
+    m_consoleClient->setInspectorScriptProfilerAgent(scriptProfilerAgentPtr.get());
     m_agents.append(WTFMove(scriptProfilerAgentPtr));
 
     auto heapAgent = makeUnique<InspectorHeapAgent>(context);
     if (m_consoleAgent)
-        m_consoleAgent->setHeapAgent(heapAgent.get());
+        m_consoleAgent->setInspectorHeapAgent(heapAgent.get());
     m_agents.append(WTFMove(heapAgent));
 
     m_agents.append(makeUnique<JSGlobalObjectAuditAgent>(context));

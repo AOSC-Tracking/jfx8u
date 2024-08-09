@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2015 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -28,7 +28,8 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#pragma once
+#ifndef RealtimeMediaSourceSupportedConstraints_h
+#define RealtimeMediaSourceSupportedConstraints_h
 
 #if ENABLE(MEDIA_STREAM)
 
@@ -36,7 +37,7 @@
 
 namespace WebCore {
 
-enum class MediaConstraintType : uint8_t {
+enum class MediaConstraintType {
     Unknown,
     Width,
     Height,
@@ -101,7 +102,7 @@ public:
     bool supportsConstraint(MediaConstraintType) const;
 
     template<class Encoder> void encode(Encoder&) const;
-    template<class Decoder> static WARN_UNUSED_RETURN bool decode(Decoder&, RealtimeMediaSourceSupportedConstraints&);
+    template<class Decoder> static bool decode(Decoder&, RealtimeMediaSourceSupportedConstraints&);
 
 private:
     bool m_supportsWidth { false };
@@ -157,28 +158,6 @@ bool RealtimeMediaSourceSupportedConstraints::decode(Decoder& decoder, RealtimeM
 
 } // namespace WebCore
 
-namespace WTF {
-
-template<> struct EnumTraits<WebCore::MediaConstraintType> {
-    using values = EnumValues<
-        WebCore::MediaConstraintType,
-        WebCore::MediaConstraintType::Unknown,
-        WebCore::MediaConstraintType::Width,
-        WebCore::MediaConstraintType::Height,
-        WebCore::MediaConstraintType::AspectRatio,
-        WebCore::MediaConstraintType::FrameRate,
-        WebCore::MediaConstraintType::FacingMode,
-        WebCore::MediaConstraintType::Volume,
-        WebCore::MediaConstraintType::SampleRate,
-        WebCore::MediaConstraintType::SampleSize,
-        WebCore::MediaConstraintType::EchoCancellation,
-        WebCore::MediaConstraintType::DeviceId,
-        WebCore::MediaConstraintType::GroupId,
-        WebCore::MediaConstraintType::DisplaySurface,
-        WebCore::MediaConstraintType::LogicalSurface
-    >;
-};
-
-} // namespace WTF
-
 #endif // ENABLE(MEDIA_STREAM)
+
+#endif // RealtimeMediaSourceSupportedConstraints_h

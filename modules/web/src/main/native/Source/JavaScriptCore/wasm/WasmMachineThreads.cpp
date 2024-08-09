@@ -31,6 +31,7 @@
 #include "MachineStackMarker.h"
 #include <wtf/NeverDestroyed.h>
 #include <wtf/ThreadMessage.h>
+#include <wtf/threads/Signals.h>
 
 namespace JSC { namespace Wasm {
 

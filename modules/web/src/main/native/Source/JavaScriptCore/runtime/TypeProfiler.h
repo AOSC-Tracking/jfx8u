@@ -98,7 +98,9 @@ struct QueryKeyHash {
 namespace WTF {
 
 template<typename T> struct DefaultHash;
-template<> struct DefaultHash<JSC::QueryKey> : JSC::QueryKeyHash { };
+template<> struct DefaultHash<JSC::QueryKey> {
+    typedef JSC::QueryKeyHash Hash;
+};
 
 template<typename T> struct HashTraits;
 template<> struct HashTraits<JSC::QueryKey> : SimpleClassHashTraits<JSC::QueryKey> {

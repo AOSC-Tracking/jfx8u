@@ -107,7 +107,7 @@ LayoutUnit RenderMathMLOperator::minSize() const
 
 LayoutUnit RenderMathMLOperator::maxSize() const
 {
-    LayoutUnit maxSize = intMaxForLayoutUnit; // Default maxsize is ∞.
+    LayoutUnit maxSize = intMaxForLayoutUnit; // Default maxsize is "infinity".
     maxSize = toUserUnits(element().maxSize(), style(), maxSize);
     return std::max<LayoutUnit>(0, maxSize);
 }

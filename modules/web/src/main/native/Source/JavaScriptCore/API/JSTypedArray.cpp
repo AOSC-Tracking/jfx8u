@@ -30,7 +30,10 @@
 #include "APICast.h"
 #include "APIUtils.h"
 #include "ClassInfo.h"
+#include "Error.h"
+#include "JSArrayBufferViewInlines.h"
 #include "JSCInlines.h"
+#include "JSDataView.h"
 #include "JSGenericTypedArrayViewInlines.h"
 #include "JSTypedArrays.h"
 #include "TypedArrayController.h"
@@ -238,7 +241,7 @@ JSObjectRef JSObjectMakeTypedArrayWithArrayBufferAndOffset(JSContextRef ctx, JST
     return toRef(result);
 }
 
-void* JSObjectGetTypedArrayBytesPtr(JSContextRef ctx, JSObjectRef objectRef, JSValueRef* exception)
+void* JSObjectGetTypedArrayBytesPtr(JSContextRef ctx, JSObjectRef objectRef, JSValueRef*)
 {
     JSGlobalObject* globalObject = toJS(ctx);
     VM& vm = globalObject->vm();
@@ -246,12 +249,9 @@ void* JSObjectGetTypedArrayBytesPtr(JSContextRef ctx, JSObjectRef objectRef, JSV
     JSObject* object = toJS(objectRef);
 
     if (JSArrayBufferView* typedArray = jsDynamicCast<JSArrayBufferView*>(vm, object)) {
-        if (ArrayBuffer* buffer = typedArray->possiblySharedBuffer()) {
-            buffer->pinAndLock();
-            return buffer->data();
-        }
-
-        setException(ctx, exception, createOutOfMemoryError(globalObject));
+        ArrayBuffer* buffer = typedArray->possiblySharedBuffer();
+        buffer->pinAndLock();
+        return buffer->data();
     }
     return nullptr;
 }
@@ -292,20 +292,15 @@ size_t JSObjectGetTypedArrayByteOffset(JSContextRef ctx, JSObjectRef objectRef, 
     return 0;
 }
 
-JSObjectRef JSObjectGetTypedArrayBuffer(JSContextRef ctx, JSObjectRef objectRef, JSValueRef* exception)
+JSObjectRef JSObjectGetTypedArrayBuffer(JSContextRef ctx, JSObjectRef objectRef, JSValueRef*)
 {
     JSGlobalObject* globalObject = toJS(ctx);
     VM& vm = globalObject->vm();
     JSLockHolder locker(vm);
     JSObject* object = toJS(objectRef);
 
-
-    if (JSArrayBufferView* typedArray = jsDynamicCast<JSArrayBufferView*>(vm, object)) {
-        if (ArrayBuffer* buffer = typedArray->possiblySharedBuffer())
-            return toRef(vm.m_typedArrayController->toJS(globalObject, typedArray->globalObject(vm), buffer));
-
-        setException(ctx, exception, createOutOfMemoryError(globalObject));
-    }
+    if (JSArrayBufferView* typedArray = jsDynamicCast<JSArrayBufferView*>(vm, object))
+        return toRef(vm.m_typedArrayController->toJS(globalObject, typedArray->globalObject(vm), typedArray->possiblySharedBuffer()));
 
     return nullptr;
 }

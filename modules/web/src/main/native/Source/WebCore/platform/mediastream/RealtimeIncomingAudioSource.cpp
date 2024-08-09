@@ -42,35 +42,37 @@ RealtimeIncomingAudioSource::RealtimeIncomingAudioSource(rtc::scoped_refptr<webr
     : RealtimeMediaSource(RealtimeMediaSource::Type::Audio, "remote audio"_s, WTFMove(audioTrackId))
     , m_audioTrack(WTFMove(audioTrack))
 {
-    ASSERT(m_audioTrack);
-    m_audioTrack->RegisterObserver(this);
+    notifyMutedChange(!m_audioTrack);
 }
 
 RealtimeIncomingAudioSource::~RealtimeIncomingAudioSource()
 {
     stop();
-    m_audioTrack->UnregisterObserver(this);
 }
 
 void RealtimeIncomingAudioSource::startProducingData()
 {
-    m_audioTrack->AddSink(this);
+    if (m_audioTrack)
+        m_audioTrack->AddSink(this);
 }
 
 void RealtimeIncomingAudioSource::stopProducingData()
 {
-    m_audioTrack->RemoveSink(this);
+    if (m_audioTrack)
+        m_audioTrack->RemoveSink(this);
 }
 
-void RealtimeIncomingAudioSource::OnChanged()
+void RealtimeIncomingAudioSource::setSourceTrack(rtc::scoped_refptr<webrtc::AudioTrackInterface>&& track)
 {
-    callOnMainThread([this, weakThis = makeWeakPtr(this)] {
-        if (!weakThis)
-            return;
+    ASSERT(track);
 
-        if (m_audioTrack->state() == webrtc::MediaStreamTrackInterface::kEnded)
-            end();
-    });
+    if (m_audioTrack && isProducingData())
+        m_audioTrack->RemoveSink(this);
+
+    m_audioTrack = WTFMove(track);
+    notifyMutedChange(!m_audioTrack);
+    if (isProducingData())
+        m_audioTrack->AddSink(this);
 }
 
 const RealtimeMediaSourceCapabilities& RealtimeIncomingAudioSource::capabilities()

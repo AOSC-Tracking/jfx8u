@@ -37,7 +37,6 @@
 #include <unicode/uloc.h>
 #include <wtf/DateMath.h>
 #include <wtf/text/StringBuilder.h>
-#include <wtf/unicode/icu/ICUHelpers.h>
 
 
 namespace WebCore {
@@ -70,8 +69,8 @@ String LocaleICU::decimalSymbol(UNumberFormatSymbol symbol)
 {
     UErrorCode status = U_ZERO_ERROR;
     int32_t bufferLength = unum_getSymbol(m_numberFormat, symbol, 0, 0, &status);
-    ASSERT(U_SUCCESS(status) || needsToGrowToProduceBuffer(status));
-    if (U_FAILURE(status) && !needsToGrowToProduceBuffer(status))
+    ASSERT(U_SUCCESS(status) || status == U_BUFFER_OVERFLOW_ERROR);
+    if (U_FAILURE(status) && status != U_BUFFER_OVERFLOW_ERROR)
         return String();
     Vector<UChar> buffer(bufferLength);
     status = U_ZERO_ERROR;
@@ -85,8 +84,8 @@ String LocaleICU::decimalTextAttribute(UNumberFormatTextAttribute tag)
 {
     UErrorCode status = U_ZERO_ERROR;
     int32_t bufferLength = unum_getTextAttribute(m_numberFormat, tag, 0, 0, &status);
-    ASSERT(U_SUCCESS(status) || needsToGrowToProduceBuffer(status));
-    if (U_FAILURE(status) && !needsToGrowToProduceBuffer(status))
+    ASSERT(U_SUCCESS(status) || status == U_BUFFER_OVERFLOW_ERROR);
+    if (U_FAILURE(status) && status != U_BUFFER_OVERFLOW_ERROR)
         return String();
     Vector<UChar> buffer(bufferLength);
     status = U_ZERO_ERROR;
@@ -151,7 +150,7 @@ static String getDateFormatPattern(const UDateFormat* dateFormat)
 
     UErrorCode status = U_ZERO_ERROR;
     int32_t length = udat_toPattern(dateFormat, TRUE, 0, 0, &status);
-    if (!needsToGrowToProduceBuffer(status) || !length)
+    if (status != U_BUFFER_OVERFLOW_ERROR || !length)
         return emptyString();
     Vector<UChar> buffer(length);
     status = U_ZERO_ERROR;
@@ -173,7 +172,7 @@ std::unique_ptr<Vector<String>> LocaleICU::createLabelVector(const UDateFormat* 
     for (int32_t i = 0; i < size; ++i) {
         UErrorCode status = U_ZERO_ERROR;
         int32_t length = udat_getSymbols(dateFormat, type, startIndex + i, 0, 0, &status);
-        if (!needsToGrowToProduceBuffer(status))
+        if (status != U_BUFFER_OVERFLOW_ERROR)
             return makeUnique<Vector<String>>();
         Vector<UChar> buffer(length);
         status = U_ZERO_ERROR;
@@ -265,7 +264,7 @@ static String getFormatForSkeleton(const char* locale, const UChar* skeleton, in
         return format;
     status = U_ZERO_ERROR;
     int32_t length = udatpg_getBestPattern(patternGenerator, skeleton, skeletonLength, 0, 0, &status);
-    if (needsToGrowToProduceBuffer(status) && length) {
+    if (status == U_BUFFER_OVERFLOW_ERROR && length) {
         Vector<UChar> buffer(length);
         status = U_ZERO_ERROR;
         udatpg_getBestPattern(patternGenerator, skeleton, skeletonLength, buffer.data(), length, &status);

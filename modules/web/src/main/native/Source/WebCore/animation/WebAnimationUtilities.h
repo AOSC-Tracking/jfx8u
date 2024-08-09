@@ -31,7 +31,7 @@
 
 namespace WebCore {
 
-class Element;
+class AnimationList;
 class WebAnimation;
 
 inline double secondsToWebAnimationsAPITime(const Seconds time)
@@ -50,7 +50,21 @@ inline double secondsToWebAnimationsAPITime(const Seconds time)
 
 const auto timeEpsilon = Seconds::fromMilliseconds(0.001);
 
-bool compareAnimationsByCompositeOrder(const WebAnimation&, const WebAnimation&);
+struct WebAnimationsMarkableDoubleTraits {
+    static bool isEmptyValue(double value)
+    {
+        return std::isnan(value);
+    }
+
+    static constexpr double emptyValue()
+    {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+};
+
+using MarkableDouble = Markable<double, WebAnimationsMarkableDoubleTraits>;
+
+bool compareAnimationsByCompositeOrder(WebAnimation&, WebAnimation&, const AnimationList*);
 
 } // namespace WebCore
 

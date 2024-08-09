@@ -23,12 +23,13 @@
 #include "config.h"
 #include "JSString.h"
 
+#include "JSGlobalObject.h"
 #include "JSGlobalObjectFunctions.h"
-#include "JSGlobalObjectInlines.h"
-#include "JSObjectInlines.h"
+#include "JSObject.h"
+#include "JSCInlines.h"
 #include "StringObject.h"
+#include "StringPrototype.h"
 #include "StrongInlines.h"
-#include "StructureInlines.h"
 
 namespace JSC {
 
@@ -416,7 +417,7 @@ JSObject* JSString::toObject(JSGlobalObject* globalObject) const
 
 JSValue JSString::toThis(JSCell* cell, JSGlobalObject* globalObject, ECMAMode ecmaMode)
 {
-    if (ecmaMode.isStrict())
+    if (ecmaMode == StrictMode)
         return cell;
     return StringObject::create(globalObject->vm(), globalObject, asString(cell));
 }

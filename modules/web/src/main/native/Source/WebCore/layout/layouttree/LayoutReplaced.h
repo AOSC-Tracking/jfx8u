@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2018 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -28,7 +28,6 @@
 #if ENABLE(LAYOUT_FORMATTING_CONTEXT)
 
 #include "CachedImage.h"
-#include "LayoutBox.h"
 #include "LayoutSize.h"
 #include "LayoutUnit.h"
 #include <wtf/IsoMalloc.h>
@@ -37,16 +36,19 @@
 namespace WebCore {
 namespace Layout {
 
-class ReplacedBox : public Box {
-    WTF_MAKE_ISO_ALLOCATED(ReplacedBox);
+class Box;
+
+// HTMLAudioElement, HTMLCanvasElement. HTMLEmbedElement, HTMLIFrameElement, HTMLImageElement, HTMLInputElement, HTMLObjectElement, HTMLVideoElement.
+class Replaced {
+    WTF_MAKE_ISO_ALLOCATED(Replaced);
 public:
-    ReplacedBox(Optional<ElementAttributes>, RenderStyle&&);
-    virtual ~ReplacedBox() = default;
+    Replaced(const Box&);
+    ~Replaced() = default;
 
     void setCachedImage(CachedImage& cachedImage) { m_cachedImage = &cachedImage; }
     CachedImage* cachedImage() const { return m_cachedImage; }
 
-    // FIXME: Temporary until after intrinsic size change is tracked internally.
+    // FIXME: Temporary until after intrinsic size change is tracked internallys.
     void setIntrinsicSize(LayoutSize size) { m_intrinsicSize = size; }
     void setIntrinsicRatio(LayoutUnit ratio) { m_intrinsicRatio = ratio; };
 
@@ -60,6 +62,7 @@ public:
 private:
     bool hasAspectRatio() const;
 
+    WeakPtr<const Box> m_layoutBox;
     Optional<LayoutSize> m_intrinsicSize;
     Optional<LayoutUnit> m_intrinsicRatio;
     CachedImage* m_cachedImage { nullptr };
@@ -67,7 +70,4 @@ private:
 
 }
 }
-
-SPECIALIZE_TYPE_TRAITS_LAYOUT_BOX(ReplacedBox, isReplacedBox())
-
 #endif

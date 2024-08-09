@@ -41,7 +41,7 @@ struct DragItem final {
     // Where the image should be positioned relative to the cursor.
     FloatPoint imageAnchorPoint;
 
-    Optional<DragSourceAction> sourceAction;
+    DragSourceAction sourceAction { DragSourceActionNone };
     IntPoint eventPositionInContentCoordinates;
     IntPoint dragLocationInContentCoordinates;
     IntPoint dragLocationInWindowCoordinates;
@@ -53,7 +53,7 @@ struct DragItem final {
     PromisedAttachmentInfo promisedAttachmentInfo;
 
     template<class Encoder> void encode(Encoder&) const;
-    template<class Decoder> static WARN_UNUSED_RETURN bool decode(Decoder&, DragItem&);
+    template<class Decoder> static bool decode(Decoder&, DragItem&);
 };
 
 template<class Encoder>
@@ -61,7 +61,7 @@ void DragItem::encode(Encoder& encoder) const
 {
     // FIXME(173815): We should encode and decode PasteboardWriterData and platform drag image data
     // here too, as part of moving off of the legacy dragging codepath.
-    encoder << sourceAction;
+    encoder.encodeEnum(sourceAction);
     encoder << imageAnchorPoint << eventPositionInContentCoordinates << dragLocationInContentCoordinates << dragLocationInWindowCoordinates << title << url << dragPreviewFrameInRootViewCoordinates;
     bool hasIndicatorData = image.hasIndicatorData();
     encoder << hasIndicatorData;
@@ -77,7 +77,7 @@ void DragItem::encode(Encoder& encoder) const
 template<class Decoder>
 bool DragItem::decode(Decoder& decoder, DragItem& result)
 {
-    if (!decoder.decode(result.sourceAction))
+    if (!decoder.decodeEnum(result.sourceAction))
         return false;
     if (!decoder.decode(result.imageAnchorPoint))
         return false;

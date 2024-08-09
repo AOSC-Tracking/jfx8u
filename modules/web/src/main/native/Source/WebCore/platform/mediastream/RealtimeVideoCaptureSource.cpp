@@ -34,6 +34,10 @@
 #include "RemoteVideoSample.h"
 #include <wtf/JSONValues.h>
 
+#if PLATFORM(COCOA)
+#include "ImageTransferSessionVT.h"
+#endif
+
 namespace WebCore {
 
 RealtimeVideoCaptureSource::RealtimeVideoCaptureSource(String&& name, String&& id, String&& hashSalt)
@@ -158,8 +162,7 @@ void RealtimeVideoCaptureSource::updateCapabilities(RealtimeMediaSourceCapabilit
     int maximumHeight = 0;
     double minimumAspectRatio = std::numeric_limits<double>::max();
     double maximumAspectRatio = 0;
-    // RealtimeVideoSource will decimate frame rate if the source cannot go below a given value.
-    double minimumFrameRate = 1;
+    double minimumFrameRate = std::numeric_limits<double>::max();
     double maximumFrameRate = 0;
     for (const auto& preset : presets()) {
         const auto& size = preset->size;
@@ -167,15 +170,15 @@ void RealtimeVideoCaptureSource::updateCapabilities(RealtimeMediaSourceCapabilit
         updateMinMax(minimumHeight, maximumHeight, size.height());
         updateMinMax(minimumAspectRatio, maximumAspectRatio, static_cast<double>(size.width()) / size.height());
 
-        for (const auto& rate : preset->frameRateRanges)
-            maximumFrameRate = std::max(maximumFrameRate, rate.maximum);
+        for (const auto& rate : preset->frameRateRanges) {
+            updateMinMax(minimumFrameRate, maximumFrameRate, rate.minimum);
+            updateMinMax(minimumFrameRate, maximumFrameRate, rate.maximum);
+        }
     }
 
     if (canResizeVideoFrames()) {
         minimumWidth = 1;
         minimumHeight = 1;
-        minimumAspectRatio = 1.0 / maximumHeight;
-        maximumAspectRatio = maximumWidth;
     }
 
     capabilities.setWidth({ minimumWidth, maximumWidth });
@@ -235,13 +238,6 @@ bool RealtimeVideoCaptureSource::shouldUsePreset(VideoPreset& current, VideoPres
     return candidate.size.width() <= current.size.width() && candidate.size.height() <= current.size.height() && prefersPreset(candidate);
 }
 
-static inline double frameRateFromPreset(const VideoPreset& preset, double currentFrameRate)
-{
-    auto minFrameRate = preset.minFrameRate();
-    auto maxFrameRate = preset.maxFrameRate();
-    return currentFrameRate >= minFrameRate && currentFrameRate <= maxFrameRate ? currentFrameRate : maxFrameRate;
-}
-
 Optional<RealtimeVideoCaptureSource::CaptureSizeAndFrameRate> RealtimeVideoCaptureSource::bestSupportedSizeAndFrameRate(Optional<int> requestedWidth, Optional<int> requestedHeight, Optional<double> requestedFrameRate)
 {
     if (!requestedWidth && !requestedHeight && !requestedFrameRate)
@@ -251,7 +247,10 @@ Optional<RealtimeVideoCaptureSource::CaptureSizeAndFrameRate> RealtimeVideoCaptu
         requestedWidth = size().width();
         requestedHeight = size().height();
     }
+    if (!requestedFrameRate)
+        requestedFrameRate = frameRate();
 
+    CaptureSizeAndFrameRate result;
     RefPtr<VideoPreset> exactSizePreset;
     RefPtr<VideoPreset> aspectRatioPreset;
     IntSize aspectRatioMatchSize;
@@ -261,12 +260,12 @@ Optional<RealtimeVideoCaptureSource::CaptureSizeAndFrameRate> RealtimeVideoCaptu
     for (const auto& preset : presets()) {
         const auto& presetSize = preset->size;
 
-        if (requestedFrameRate && !presetSupportsFrameRate(&preset.get(), requestedFrameRate.value()))
+        if (!presetSupportsFrameRate(&preset.get(), requestedFrameRate.value()))
             continue;
 
         if (!requestedWidth && !requestedHeight) {
-            exactSizePreset = preset.ptr();
-            break;
+            result.requestedFrameRate = requestedFrameRate.value();
+            return result;
         }
 
         // Don't look at presets smaller than the requested resolution because we never want to resize larger.
@@ -334,27 +333,25 @@ Optional<RealtimeVideoCaptureSource::CaptureSizeAndFrameRate> RealtimeVideoCaptu
         }
     }
 
-    if (!exactSizePreset && !aspectRatioPreset && !resizePreset) {
-        WTFLogAlways("RealtimeVideoCaptureSource::bestSupportedSizeAndFrameRate failed supporting constraints %d %d %f", requestedWidth ? *requestedWidth : -1, requestedHeight ? *requestedHeight : -1, requestedFrameRate ? *requestedFrameRate : -1);
-        for (const auto& preset : presets())
-            preset->log();
-
+    if (!exactSizePreset && !aspectRatioPreset && !resizePreset)
         return { };
-    }
 
+    result.requestedFrameRate = requestedFrameRate.value();
     if (exactSizePreset) {
-        auto size = exactSizePreset->size;
-        auto captureFrameRate = requestedFrameRate ? *requestedFrameRate : frameRateFromPreset(*exactSizePreset, frameRate());
-        return CaptureSizeAndFrameRate { WTFMove(exactSizePreset), size, captureFrameRate };
+        result.encodingPreset = exactSizePreset;
+        result.requestedSize = exactSizePreset->size;
+        return result;
     }
 
     if (aspectRatioPreset) {
-        auto captureFrameRate = requestedFrameRate ? *requestedFrameRate : frameRateFromPreset(*aspectRatioPreset, frameRate());
-        return CaptureSizeAndFrameRate { WTFMove(aspectRatioPreset), aspectRatioMatchSize, captureFrameRate };
+        result.encodingPreset = aspectRatioPreset;
+        result.requestedSize = aspectRatioMatchSize;
+        return result;
     }
 
-    auto captureFrameRate = requestedFrameRate ? *requestedFrameRate : frameRateFromPreset(*resizePreset, frameRate());
-    return CaptureSizeAndFrameRate { WTFMove(resizePreset), resizeSize, captureFrameRate };
+    result.encodingPreset = resizePreset;
+    result.requestedSize = resizeSize;
+    return result;
 }
 
 void RealtimeVideoCaptureSource::setSizeAndFrameRate(Optional<int> width, Optional<int> height, Optional<double> frameRate)
@@ -367,13 +364,10 @@ void RealtimeVideoCaptureSource::setSizeAndFrameRate(Optional<int> width, Option
         height = size.height();
     }
 
-    auto match = bestSupportedSizeAndFrameRate(width, height, frameRate);
-    if (!match) {
-        match = bestSupportedSizeAndFrameRate(width, height, { });
-        ASSERT(match);
-        if (!match)
-            return;
-    }
+    Optional<RealtimeVideoCaptureSource::CaptureSizeAndFrameRate> match = bestSupportedSizeAndFrameRate(width, height, frameRate);
+    ASSERT(match);
+    if (!match)
+        return;
 
     setFrameRateWithPreset(match->requestedFrameRate, match->encodingPreset);
 
@@ -382,9 +376,11 @@ void RealtimeVideoCaptureSource::setSizeAndFrameRate(Optional<int> width, Option
     setFrameRate(match->requestedFrameRate);
 }
 
-void RealtimeVideoCaptureSource::dispatchMediaSampleToObservers(MediaSample& sample)
+RefPtr<MediaSample> RealtimeVideoCaptureSource::adaptVideoSample(MediaSample& sample)
 {
-    MediaTime sampleTime = sample.presentationTime();
+    MediaTime sampleTime = sample.outputPresentationTime();
+    if (!sampleTime || !sampleTime.isValid())
+        sampleTime = sample.presentationTime();
 
     auto frameTime = sampleTime.toDouble();
     m_observedFrameTimeStamps.append(frameTime);
@@ -396,7 +392,33 @@ void RealtimeVideoCaptureSource::dispatchMediaSampleToObservers(MediaSample& sam
     if (interval > 1)
         m_observedFrameRate = (m_observedFrameTimeStamps.size() / interval);
 
-    videoSampleAvailable(sample);
+    auto mediaSample = makeRefPtr(&sample);
+
+#if PLATFORM(COCOA)
+    auto size = this->size();
+    if (!size.isEmpty() && size != expandedIntSize(sample.presentationSize())) {
+
+        if (!m_imageTransferSession || m_imageTransferSession->pixelFormat() != sample.videoPixelFormat())
+            m_imageTransferSession = ImageTransferSessionVT::create(sample.videoPixelFormat());
+
+        ASSERT(m_imageTransferSession);
+        if (m_imageTransferSession) {
+            mediaSample = m_imageTransferSession->convertMediaSample(sample, size);
+            if (!mediaSample) {
+                ASSERT_NOT_REACHED();
+                return nullptr;
+            }
+        }
+    }
+#endif
+
+    return mediaSample.releaseNonNull();
+}
+
+void RealtimeVideoCaptureSource::dispatchMediaSampleToObservers(MediaSample& sample)
+{
+    if (auto mediaSample = adaptVideoSample(sample))
+        videoSampleAvailable(*mediaSample);
 }
 
 void RealtimeVideoCaptureSource::clientUpdatedSizeAndFrameRate(Optional<int> width, Optional<int> height, Optional<double> frameRate)
@@ -407,10 +429,9 @@ void RealtimeVideoCaptureSource::clientUpdatedSizeAndFrameRate(Optional<int> wid
         width = { };
     if (height && *height < static_cast<int>(settings.height()))
         height = { };
-    if (frameRate && *frameRate < static_cast<double>(settings.frameRate()))
-        frameRate = { };
 
-    if (!width && !height && !frameRate)
+    // FIXME: handle frameRate potential increase.
+    if (!width && !height)
         return;
 
     auto match = bestSupportedSizeAndFrameRate(width, height, frameRate);

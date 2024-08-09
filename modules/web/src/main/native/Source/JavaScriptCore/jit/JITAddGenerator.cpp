@@ -28,6 +28,7 @@
 
 #include "ArithProfile.h"
 #include "JITMathIC.h"
+#include "LinkBuffer.h"
 
 #if ENABLE(JIT)
 

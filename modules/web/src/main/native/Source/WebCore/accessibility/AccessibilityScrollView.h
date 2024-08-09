@@ -37,11 +37,11 @@ class AccessibilityScrollView final : public AccessibilityObject {
 public:
     static Ref<AccessibilityScrollView> create(ScrollView*);
     AccessibilityRole roleValue() const override { return AccessibilityRole::ScrollArea; }
-    ScrollView* scrollView() const override { return m_scrollView.get(); }
+    ScrollView* scrollView() const { return m_scrollView; }
 
     virtual ~AccessibilityScrollView();
 
-    AccessibilityObject* webAreaObject() const override;
+    AccessibilityObject* webAreaObject() const;
 
 private:
     explicit AccessibilityScrollView(ScrollView*);
@@ -50,11 +50,10 @@ private:
     ScrollableArea* getScrollableAreaIfScrollable() const override;
     void scrollTo(const IntPoint&) const override;
     bool computeAccessibilityIsIgnored() const override;
-    bool isAccessibilityScrollViewInstance() const override { return true; }
+    bool isAccessibilityScrollView() const override { return true; }
     bool isEnabled() const override { return true; }
 
     bool isAttachment() const override;
-    PlatformWidget platformWidget() const override;
     Widget* widgetForAttachmentView() const override;
 
     AccessibilityObject* scrollBar(AccessibilityOrientation) override;
@@ -77,7 +76,7 @@ private:
     AccessibilityScrollbar* addChildScrollbar(Scrollbar*);
     void removeChildScrollbar(AccessibilityObject*);
 
-    WeakPtr<ScrollView> m_scrollView;
+    ScrollView* m_scrollView;
     RefPtr<AccessibilityObject> m_horizontalScrollbar;
     RefPtr<AccessibilityObject> m_verticalScrollbar;
     bool m_childrenDirty;
@@ -85,4 +84,4 @@ private:
 
 } // namespace WebCore
 
-SPECIALIZE_TYPE_TRAITS_ACCESSIBILITY(AccessibilityScrollView, isAccessibilityScrollViewInstance())
+SPECIALIZE_TYPE_TRAITS_ACCESSIBILITY(AccessibilityScrollView, isAccessibilityScrollView())

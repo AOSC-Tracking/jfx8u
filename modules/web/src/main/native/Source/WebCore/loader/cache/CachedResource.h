@@ -48,7 +48,6 @@ class CachedResourceRequest;
 class CookieJar;
 class LoadTiming;
 class MemoryCache;
-class NetworkLoadMetrics;
 class SecurityOrigin;
 class SharedBuffer;
 class SubresourceLoader;
@@ -82,7 +81,9 @@ public:
         XSLStyleSheet,
 #endif
         LinkPrefetch,
+#if ENABLE(VIDEO_TRACK)
         TextTrackResource,
+#endif
 #if ENABLE(APPLICATION_MANIFEST)
         ApplicationManifest,
 #endif
@@ -112,7 +113,7 @@ public:
     virtual const TextResourceDecoder* textResourceDecoder() const { return nullptr; }
     virtual void updateBuffer(SharedBuffer&);
     virtual void updateData(const char* data, unsigned length);
-    virtual void finishLoading(SharedBuffer*, const NetworkLoadMetrics&);
+    virtual void finishLoading(SharedBuffer*);
     virtual void error(CachedResource::Status);
 
     void setResourceError(const ResourceError& error) { m_error = error; }
@@ -313,7 +314,7 @@ private:
 
     void decodedDataDeletionTimerFired();
 
-    virtual void checkNotify(const NetworkLoadMetrics&);
+    virtual void checkNotify();
     virtual bool mayTryReplaceEncodedData() const { return false; }
 
     Seconds freshnessLifetime(const ResourceResponse&) const;

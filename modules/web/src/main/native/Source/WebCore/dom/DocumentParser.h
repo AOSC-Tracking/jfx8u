@@ -65,10 +65,10 @@ public:
     // document() will return 0 after detach() is called.
     Document* document() const { ASSERT(m_document); return m_document.get(); }
 
-    bool isParsing() const { return m_state == ParserState::Parsing; }
-    bool isStopping() const { return m_state == ParserState::Stopping; }
-    bool isStopped() const { return m_state >= ParserState::Stopped; }
-    bool isDetached() const { return m_state == ParserState::Detached; }
+    bool isParsing() const { return m_state == ParsingState; }
+    bool isStopping() const { return m_state == StoppingState; }
+    bool isStopped() const { return m_state >= StoppedState; }
+    bool isDetached() const { return m_state == DetachedState; }
 
     // FIXME: Is this necessary? Does XMLDocumentParserLibxml2 really need to set this?
     virtual void startParsing();
@@ -104,11 +104,11 @@ protected:
     explicit DocumentParser(Document&);
 
 private:
-    enum class ParserState : uint8_t {
-        Parsing,
-        Stopping,
-        Stopped,
-        Detached
+    enum ParserState {
+        ParsingState,
+        StoppingState,
+        StoppedState,
+        DetachedState
     };
     ParserState m_state;
     bool m_documentWasLoadedAsPartOfNavigation;

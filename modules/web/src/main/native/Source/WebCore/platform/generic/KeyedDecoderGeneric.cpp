@@ -48,36 +48,38 @@ private:
     HashMap<String, std::unique_ptr<Node>> m_map;
 };
 
-static Optional<String> readString(WTF::Persistence::Decoder& decoder)
+static bool readString(WTF::Persistence::Decoder& decoder, String& result)
 {
-    Optional<size_t> size;
-    decoder >> size;
-    if (!size)
-        return WTF::nullopt;
-    if (!size.value())
-        return emptyString();
+    size_t size;
+    if (!decoder.decode(size))
+        return false;
+    if (!size) {
+        result = emptyString();
+        return true;
+    }
 
-    Vector<uint8_t> buffer(size.value());
-    if (!decoder.decodeFixedLengthData(buffer.data(), size.value()))
-        return WTF::nullopt;
-    auto result = String::fromUTF8(buffer.data(), size.value());
+    Vector<uint8_t> buffer(size);
+    if (!decoder.decodeFixedLengthData(buffer.data(), size))
+        return false;
+    result = String::fromUTF8(buffer.data(), size);
     if (result.isNull())
-        return WTF::nullopt;
+        return false;
 
-    return result;
+    return true;
 }
 
 template<typename T>
 static bool readSimpleValue(WTF::Persistence::Decoder& decoder, KeyedDecoderGeneric::Dictionary& dictionary)
 {
-    auto key = readString(decoder);
-    if (!key)
+    String key;
+    bool ok = readString(decoder, key);
+    if (!ok)
         return false;
-    Optional<T> value;
-    decoder >> value;
-    if (!value)
+    T value;
+    ok = decoder.decode(value);
+    if (!ok)
         return false;
-    dictionary.add(key.value(), WTFMove(value.value()));
+    dictionary.add(key, WTFMove(value));
     return true;
 }
 
@@ -89,38 +91,28 @@ std::unique_ptr<KeyedDecoder> KeyedDecoder::decoder(const uint8_t* data, size_t 
 KeyedDecoderGeneric::KeyedDecoderGeneric(const uint8_t* data, size_t size)
 {
     WTF::Persistence::Decoder decoder(data, size);
+    KeyedEncoderGeneric::Type type;
+    String key;
 
     m_rootDictionary = makeUnique<Dictionary>();
     m_dictionaryStack.append(m_rootDictionary.get());
 
     bool ok = true;
-    while (ok) {
-        Optional<KeyedEncoderGeneric::Type> type;
-        decoder >> type;
-        if (!type)
-            break;
-
-        switch (*type) {
+    while (ok && decoder.decodeEnum(type)) {
+        switch (type) {
         case KeyedEncoderGeneric::Type::Bytes: {
-            auto key = readString(decoder);
-            if (!key)
-                ok = false;
+            ok = readString(decoder, key);
             if (!ok)
                 break;
-            Optional<size_t> size;
-            decoder >> size;
-            if (!size)
-                ok = false;
+            size_t size;
+            ok = decoder.decode(size);
             if (!ok)
                 break;
-            ok = decoder.bufferIsLargeEnoughToContain<uint8_t>(*size);
+            Vector<uint8_t> buffer(size);
+            ok = decoder.decodeFixedLengthData(buffer.data(), size);
             if (!ok)
                 break;
-            Vector<uint8_t> buffer(*size);
-            ok = decoder.decodeFixedLengthData(buffer.data(), *size);
-            if (!ok)
-                break;
-            m_dictionaryStack.last()->add(*key, WTFMove(buffer));
+            m_dictionaryStack.last()->add(key, WTFMove(buffer));
             break;
         }
         case KeyedEncoderGeneric::Type::Bool:
@@ -145,51 +137,39 @@ KeyedDecoderGeneric::KeyedDecoderGeneric(const uint8_t* data, size_t size)
             ok = readSimpleValue<double>(decoder, *m_dictionaryStack.last());
             break;
         case KeyedEncoderGeneric::Type::String: {
-            auto key = readString(decoder);
-            if (!key)
-                ok = false;
+            ok = readString(decoder, key);
             if (!ok)
                 break;
-            auto value = readString(decoder);
-            if (!value)
-                ok = false;
+            String value;
+            ok = readString(decoder, value);
             if (!ok)
                 break;
-            m_dictionaryStack.last()->add(*key, WTFMove(*value));
+            m_dictionaryStack.last()->add(key, WTFMove(value));
             break;
         }
         case KeyedEncoderGeneric::Type::BeginObject: {
-            auto key = readString(decoder);
-            if (!key)
-                ok = false;
+            ok = readString(decoder, key);
             if (!ok)
                 break;
             auto* currentDictinary = m_dictionaryStack.last();
             auto newDictionary = makeUnique<Dictionary>();
             m_dictionaryStack.append(newDictionary.get());
-            currentDictinary->add(*key, WTFMove(newDictionary));
+            currentDictinary->add(key, WTFMove(newDictionary));
             break;
         }
         case KeyedEncoderGeneric::Type::EndObject:
             m_dictionaryStack.removeLast();
-            if (m_dictionaryStack.isEmpty())
-                ok = false;
             break;
         case KeyedEncoderGeneric::Type::BeginArray: {
-            auto key = readString(decoder);
-            if (!key)
-                ok = false;
+            ok = readString(decoder, key);
             if (!ok)
                 break;
             auto newArray = makeUnique<Array>();
             m_arrayStack.append(newArray.get());
-            m_dictionaryStack.last()->add(*key, WTFMove(newArray));
+            m_dictionaryStack.last()->add(key, WTFMove(newArray));
             break;
         }
         case KeyedEncoderGeneric::Type::BeginArrayElement: {
-            ok = !m_arrayStack.isEmpty();
-            if (!ok)
-                break;
             auto newDictionary = makeUnique<Dictionary>();
             m_dictionaryStack.append(newDictionary.get());
             m_arrayStack.last()->append(WTFMove(newDictionary));
@@ -197,13 +177,8 @@ KeyedDecoderGeneric::KeyedDecoderGeneric(const uint8_t* data, size_t size)
         }
         case KeyedEncoderGeneric::Type::EndArrayElement:
             m_dictionaryStack.removeLast();
-            if (m_dictionaryStack.isEmpty())
-                ok = false;
             break;
         case KeyedEncoderGeneric::Type::EndArray:
-            ok = !m_arrayStack.isEmpty();
-            if (!ok)
-                break;
             m_arrayStack.removeLast();
             break;
         }

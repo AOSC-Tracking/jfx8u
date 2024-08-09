@@ -253,10 +253,10 @@ void AudioBus::copyFrom(const AudioBus& sourceBus, ChannelInterpretation channel
             channel(i)->copyFrom(sourceBus.channel(i));
     } else {
         switch (channelInterpretation) {
-        case ChannelInterpretation::Speakers:
+        case Speakers:
             speakersCopyFrom(sourceBus);
             break;
-        case ChannelInterpretation::Discrete:
+        case Discrete:
             discreteCopyFrom(sourceBus);
             break;
         default:
@@ -278,10 +278,10 @@ void AudioBus::sumFrom(const AudioBus& sourceBus, ChannelInterpretation channelI
             channel(i)->sumFrom(sourceBus.channel(i));
     } else {
         switch (channelInterpretation) {
-        case ChannelInterpretation::Speakers:
+        case Speakers:
             speakersSumFrom(sourceBus);
             break;
-        case ChannelInterpretation::Discrete:
+        case Discrete:
             discreteSumFrom(sourceBus);
             break;
         default:

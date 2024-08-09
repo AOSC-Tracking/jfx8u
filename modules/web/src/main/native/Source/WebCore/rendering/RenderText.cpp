@@ -195,6 +195,16 @@ inline RenderText::RenderText(Node& node, const String& text)
     ASSERT(!m_text.isNull());
     setIsText();
     m_canUseSimpleFontCodePath = computeCanUseSimpleFontCodePath();
+
+    // FIXME: Find out how to increment the visually non empty character count when the font becomes available.
+    auto isTextVisible = false;
+    if (auto* parentElement = node.parentElement()) {
+        auto* style = parentElement->renderer() ? &parentElement->renderer()->style() : nullptr;
+        isTextVisible = style && style->visibility() == Visibility::Visible && !style->fontCascade().isLoadingCustomFonts();
+    }
+
+    if (isTextVisible)
+        view().frameView().incrementVisuallyNonEmptyCharacterCount(text);
 }
 
 RenderText::RenderText(Text& textNode, const String& text)
@@ -280,7 +290,7 @@ void RenderText::removeAndDestroyTextBoxes()
     else
         m_lineBoxes.invalidateParentChildLists();
 #endif
-    deleteLineBoxes();
+    m_lineBoxes.deleteAll();
 }
 
 void RenderText::willBeDestroyed()
@@ -739,7 +749,7 @@ static float maxWordFragmentWidth(RenderText& renderer, const RenderStyle& style
     Vector<int, 8> hyphenLocations;
     ASSERT(word.length() >= minimumSuffixLength);
     unsigned hyphenLocation = word.length() - minimumSuffixLength;
-    while ((hyphenLocation = lastHyphenLocation(word, hyphenLocation, style.computedLocale())) >= std::max(minimumPrefixLength, 1U))
+    while ((hyphenLocation = lastHyphenLocation(word, hyphenLocation, style.locale())) >= std::max(minimumPrefixLength, 1U))
         hyphenLocations.append(hyphenLocation);
 
     if (hyphenLocations.isEmpty())
@@ -793,7 +803,7 @@ void RenderText::computePreferredLogicalWidths(float leadWidth, HashSet<const Fo
     auto& string = text();
     unsigned length = string.length();
     auto iteratorMode = mapLineBreakToIteratorMode(style.lineBreak());
-    LazyLineBreakIterator breakIterator(string, style.computedLocale(), iteratorMode);
+    LazyLineBreakIterator breakIterator(string, style.locale(), iteratorMode);
     bool needsWordSpacing = false;
     bool ignoringSpaces = false;
     bool isSpace = false;
@@ -808,7 +818,7 @@ void RenderText::computePreferredLogicalWidths(float leadWidth, HashSet<const Fo
     float maxWordWidth = std::numeric_limits<float>::max();
     unsigned minimumPrefixLength = 0;
     unsigned minimumSuffixLength = 0;
-    if (style.hyphens() == Hyphens::Auto && canHyphenate(style.computedLocale())) {
+    if (style.hyphens() == Hyphens::Auto && canHyphenate(style.locale())) {
         maxWordWidth = 0;
 
         // Map 'hyphenate-limit-{before,after}: auto;' to 2.
@@ -1082,9 +1092,9 @@ IntPoint RenderText::firstRunLocation() const
     return IntPoint(first->rect().location());
 }
 
-void RenderText::setSelectionState(HighlightState state)
+void RenderText::setSelectionState(SelectionState state)
 {
-    if (state != HighlightState::None)
+    if (state != SelectionNone)
         ensureLineBoxes();
 
     RenderObject::setSelectionState(state);
@@ -1143,9 +1153,9 @@ String applyTextTransform(const RenderStyle& style, const String& text, UChar pr
     case TextTransform::Capitalize:
         return capitalize(text, previousCharacter); // FIXME: Need to take locale into account.
     case TextTransform::Uppercase:
-        return text.convertToUppercaseWithLocale(style.computedLocale());
+        return text.convertToUppercaseWithLocale(style.locale());
     case TextTransform::Lowercase:
-        return text.convertToLowercaseWithLocale(style.computedLocale());
+        return text.convertToLowercaseWithLocale(style.locale());
     }
     ASSERT_NOT_REACHED();
     return text;
@@ -1166,8 +1176,6 @@ void RenderText::setRenderedText(const String& newText)
     if (style.textTransform() != TextTransform::None)
         m_text = applyTextTransform(style, m_text, previousCharacter());
 
-    // At rendering time, if certain fonts are used, these characters get swapped out with higher-quality PUA characters.
-    // See RenderBlock::updateSecurityDiscCharacters().
     switch (style.textSecurity()) {
     case TextSecurity::None:
         break;
@@ -1300,15 +1308,10 @@ String RenderText::textWithoutConvertingBackslashToYenSymbol() const
 void RenderText::dirtyLineBoxes(bool fullLayout)
 {
     if (fullLayout)
-        deleteLineBoxes();
+        m_lineBoxes.deleteAll();
     else if (!m_linesDirty)
         m_lineBoxes.dirtyAll();
     m_linesDirty = false;
-}
-
-void RenderText::deleteLineBoxes()
-{
-    m_lineBoxes.deleteAll();
 }
 
 std::unique_ptr<InlineTextBox> RenderText::createTextBox()
@@ -1400,7 +1403,7 @@ float RenderText::width(unsigned from, unsigned len, const FontCascade& f, float
         w = f.width(run, fallbackFonts, glyphOverflow);
     }
 
-    return clampTo(w, 0.f);
+    return w;
 }
 
 IntRect RenderText::linesBoundingBox() const
@@ -1443,7 +1446,7 @@ LayoutRect RenderText::collectSelectionRectsForLineBoxes(const RenderLayerModelO
     ASSERT(!needsLayout());
     ASSERT(!simpleLineLayout());
 
-    if (selectionState() == HighlightState::None)
+    if (selectionState() == SelectionNone)
         return LayoutRect();
     if (!containingBlock())
         return LayoutRect();
@@ -1452,16 +1455,16 @@ LayoutRect RenderText::collectSelectionRectsForLineBoxes(const RenderLayerModelO
     // We include a selection while endPos > 0
     unsigned startOffset;
     unsigned endOffset;
-    if (selectionState() == HighlightState::Inside) {
+    if (selectionState() == SelectionInside) {
         // We are fully selected.
         startOffset = 0;
         endOffset = text().length();
     } else {
         startOffset = view().selection().startOffset();
         endOffset = view().selection().endOffset();
-        if (selectionState() == HighlightState::Start)
+        if (selectionState() == SelectionStart)
             endOffset = text().length();
-        else if (selectionState() == HighlightState::End)
+        else if (selectionState() == SelectionEnd)
             startOffset = 0;
     }
 

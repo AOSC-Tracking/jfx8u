@@ -33,14 +33,7 @@ namespace JSC {
 // https://tc39.github.io/ecma262/#sec-generatorfunction.prototype
 class GeneratorFunctionPrototype final : public JSNonFinalObject {
 public:
-    using Base = JSNonFinalObject;
-
-    template<typename CellType, SubspaceAccess>
-    static IsoSubspace* subspaceFor(VM& vm)
-    {
-        STATIC_ASSERT_ISO_SUBSPACE_SHARABLE(GeneratorFunctionPrototype, Base);
-        return &vm.plainObjectSpace;
-    }
+    typedef JSNonFinalObject Base;
 
     static GeneratorFunctionPrototype* create(VM& vm, Structure* structure)
     {
@@ -56,9 +49,11 @@ public:
 
     DECLARE_INFO;
 
+protected:
+    void finishCreation(VM&);
+
 private:
     GeneratorFunctionPrototype(VM&, Structure*);
-    void finishCreation(VM&);
 };
 
 } // namespace JSC

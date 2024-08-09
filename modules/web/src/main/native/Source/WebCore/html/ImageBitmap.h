@@ -26,7 +26,6 @@
 #pragma once
 
 #include "IDLTypes.h"
-#include "ImageBuffer.h"
 #include "ScriptWrappable.h"
 #include <wtf/RefCounted.h>
 
@@ -44,6 +43,7 @@ class HTMLCanvasElement;
 class HTMLImageElement;
 class HTMLVideoElement;
 class ImageBitmapImageObserver;
+class ImageBuffer;
 class ImageData;
 class IntRect;
 class IntSize;
@@ -83,7 +83,7 @@ public:
     static void createPromise(ScriptExecutionContext&, Source&&, ImageBitmapOptions&&, int sx, int sy, int sw, int sh, Promise&&);
 
     static Ref<ImageBitmap> create(IntSize);
-    static Ref<ImageBitmap> create(std::pair<std::unique_ptr<ImageBuffer>, ImageBuffer::SerializationState>&&);
+    static Ref<ImageBitmap> create(std::pair<std::unique_ptr<ImageBuffer>, bool>&&);
 
     ~ImageBitmap();
 
@@ -97,17 +97,9 @@ public:
 
     bool originClean() const { return m_originClean; }
 
-    bool premultiplyAlpha() const { return m_premultiplyAlpha; }
-
-    // When WebGL consumes an Image coming from an ImageBitmap's ImageBuffer, it typically honors
-    // the alpha mode of that native image - CGImageAlphaInfo in the Core Graphics backend. For
-    // ImageBitmaps created from ImageBitmaps, this information is not accurate, and callers must be
-    // told to ignore the alpha mode, and forcibly premultiply the alpha channel.
-    bool forciblyPremultiplyAlpha() const { return m_forciblyPremultiplyAlpha; }
-
     std::unique_ptr<ImageBuffer> transferOwnershipAndClose();
 
-    static Vector<std::pair<std::unique_ptr<ImageBuffer>, ImageBuffer::SerializationState>> detachBitmaps(Vector<RefPtr<ImageBitmap>>&&);
+    static Vector<std::pair<std::unique_ptr<ImageBuffer>, bool>> detachBitmaps(Vector<RefPtr<ImageBitmap>>&&);
 
 private:
     friend class ImageBitmapImageObserver;
@@ -115,8 +107,6 @@ private:
 
     static Ref<ImageBitmap> create(std::unique_ptr<ImageBuffer>&&);
     ImageBitmap(std::unique_ptr<ImageBuffer>&&);
-
-    static void resolveWithBlankImageBuffer(bool originClean, Promise&&);
 
     static void createPromise(ScriptExecutionContext&, RefPtr<HTMLImageElement>&, ImageBitmapOptions&&, Optional<IntRect>, Promise&&);
 #if ENABLE(VIDEO)
@@ -136,8 +126,6 @@ private:
     std::unique_ptr<ImageBuffer> m_bitmapData;
     bool m_detached { false };
     bool m_originClean { true };
-    bool m_premultiplyAlpha { false };
-    bool m_forciblyPremultiplyAlpha { false };
 };
 
 }

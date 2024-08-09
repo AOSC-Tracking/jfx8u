@@ -29,6 +29,7 @@
 #include "FrameTracers.h"
 #include "JSCInlines.h"
 #include "JSTypedArrays.h"
+#include "ObjectPrototype.h"
 #include "ReleaseHeapAccessScope.h"
 #include "TypedArrayController.h"
 

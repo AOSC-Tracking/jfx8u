@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2013-2015 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -29,241 +29,294 @@
 
 namespace WebCore {
 
-template<typename> class DoubleElementDescendantIterator;
-template<typename> class DoubleElementDescendantRange;
-template<typename> class ElementDescendantRange;
-template<typename ElementType, bool(const ElementType&)> class FilteredElementDescendantRange;
+template<typename ElementType> class DoubleTypedElementDescendantIterator;
 
-// Range for iterating through descendant elements.
-template<typename ElementType> ElementDescendantRange<ElementType> descendantsOfType(ContainerNode&);
-template<typename ElementType> ElementDescendantRange<const ElementType> descendantsOfType(const ContainerNode&);
-
-// Range that skips elements where the filter returns false.
-template<typename ElementType, bool filter(const ElementType&)> FilteredElementDescendantRange<const ElementType, filter> filteredDescendants(const ContainerNode&);
-
-// Range for use when both sets of descendants are known to be the same length.
-// If they are different lengths, this will stop when the shorter one reaches the end, but also an assertion will fail.
-template<typename ElementType> DoubleElementDescendantRange<ElementType> descendantsOfType(ContainerNode& firstRoot, ContainerNode& secondRoot);
-
-template<typename ElementType> class ElementDescendantIterator : public ElementIterator<ElementType> {
+template <typename ElementType>
+class TypedElementDescendantIterator : public ElementIterator<ElementType> {
 public:
-    ElementDescendantIterator() = default;
-    ElementDescendantIterator(const ContainerNode& root, ElementType* current);
-    ElementDescendantIterator& operator++();
-    ElementDescendantIterator& operator--();
+    TypedElementDescendantIterator(const ContainerNode& root);
+    TypedElementDescendantIterator(const ContainerNode& root, ElementType* current);
+    TypedElementDescendantIterator& operator++();
 };
 
-template<typename ElementType> class ElementDescendantRange {
+template <typename ElementType>
+class TypedElementDescendantConstIterator : public ElementConstIterator<ElementType>  {
 public:
-    ElementDescendantRange(const ContainerNode& root);
-    ElementDescendantIterator<ElementType> begin() const;
-    static constexpr std::nullptr_t end() { return nullptr; }
-    ElementDescendantIterator<ElementType> beginAt(ElementType&) const;
-    ElementDescendantIterator<ElementType> from(Element&) const;
+    TypedElementDescendantConstIterator(const ContainerNode& root);
+    TypedElementDescendantConstIterator(const ContainerNode& root, const ElementType* current);
+    TypedElementDescendantConstIterator& operator++();
+};
 
-    ElementType* first() const;
-    ElementType* last() const;
+template <typename ElementType>
+class TypedElementDescendantIteratorAdapter {
+public:
+    TypedElementDescendantIteratorAdapter(ContainerNode& root);
+    TypedElementDescendantIterator<ElementType> begin();
+    TypedElementDescendantIterator<ElementType> end();
+    TypedElementDescendantIterator<ElementType> beginAt(ElementType&);
+    TypedElementDescendantIterator<ElementType> from(Element&);
+
+    ElementType* first();
+    ElementType* last();
+
+private:
+    ContainerNode& m_root;
+};
+
+template <typename ElementType>
+class TypedElementDescendantConstIteratorAdapter {
+public:
+    TypedElementDescendantConstIteratorAdapter(const ContainerNode& root);
+    TypedElementDescendantConstIterator<ElementType> begin() const;
+    TypedElementDescendantConstIterator<ElementType> end() const;
+    TypedElementDescendantConstIterator<ElementType> beginAt(const ElementType&) const;
+    TypedElementDescendantConstIterator<ElementType> from(const Element&) const;
+
+    const ElementType* first() const;
+    const ElementType* last() const;
 
 private:
     const ContainerNode& m_root;
 };
 
-template<typename ElementType> class DoubleElementDescendantRange {
+template<typename ElementType> class DoubleTypedElementDescendantIteratorAdapter {
 public:
-    typedef ElementDescendantRange<ElementType> SingleAdapter;
-    typedef DoubleElementDescendantIterator<ElementType> Iterator;
+    typedef TypedElementDescendantIteratorAdapter<ElementType> SingleAdapter;
+    typedef DoubleTypedElementDescendantIterator<ElementType> Iterator;
 
-    DoubleElementDescendantRange(SingleAdapter&&, SingleAdapter&&);
-    Iterator begin() const;
-    static constexpr std::nullptr_t end() { return nullptr; }
+    DoubleTypedElementDescendantIteratorAdapter(SingleAdapter&&, SingleAdapter&&);
+    Iterator begin();
+    Iterator end();
 
 private:
     std::pair<SingleAdapter, SingleAdapter> m_pair;
 };
 
-template<typename ElementType> class DoubleElementDescendantIterator {
+template<typename ElementType> class DoubleTypedElementDescendantIterator {
 public:
-    typedef ElementDescendantIterator<ElementType> SingleIterator;
+    typedef TypedElementDescendantIterator<ElementType> SingleIterator;
     typedef std::pair<ElementType&, ElementType&> ReferenceProxy;
 
-    DoubleElementDescendantIterator(SingleIterator&&, SingleIterator&&);
+    DoubleTypedElementDescendantIterator(SingleIterator&&, SingleIterator&&);
     ReferenceProxy operator*() const;
-    constexpr bool operator!=(std::nullptr_t) const;
-    DoubleElementDescendantIterator& operator++();
+    bool operator==(const DoubleTypedElementDescendantIterator&) const;
+    bool operator!=(const DoubleTypedElementDescendantIterator&) const;
+    DoubleTypedElementDescendantIterator& operator++();
 
 private:
     std::pair<SingleIterator, SingleIterator> m_pair;
 };
 
-template<typename ElementType, bool filter(const ElementType&)> class FilteredElementDescendantIterator : public ElementIterator<ElementType> {
-public:
-    FilteredElementDescendantIterator(const ContainerNode&, ElementType* = nullptr);
-    FilteredElementDescendantIterator& operator++();
-};
+template <typename ElementType> TypedElementDescendantIteratorAdapter<ElementType> descendantsOfType(ContainerNode&);
+template <typename ElementType> TypedElementDescendantConstIteratorAdapter<ElementType> descendantsOfType(const ContainerNode&);
 
-template<typename ElementType, bool filter(const ElementType&)> class FilteredElementDescendantRange {
-public:
-    using Iterator = FilteredElementDescendantIterator<ElementType, filter>;
+// This must only be used when both sets of descendants are known to be the same length.
+// If they are different lengths, this will stop when the shorter one reaches the end, but also an assertion will fail.
+template<typename ElementType> DoubleTypedElementDescendantIteratorAdapter<ElementType> descendantsOfType(ContainerNode& firstRoot, ContainerNode& secondRoot);
 
-    FilteredElementDescendantRange(const ContainerNode&);
-    Iterator begin() const;
-    static constexpr std::nullptr_t end() { return nullptr; }
+// TypedElementDescendantIterator
 
-    ElementType* first() const;
+template <typename ElementType>
+inline TypedElementDescendantIterator<ElementType>::TypedElementDescendantIterator(const ContainerNode& root)
+    : ElementIterator<ElementType>(&root)
+{
+}
 
-private:
-    const ContainerNode& m_root;
-};
-
-// ElementDescendantIterator
-
-template<typename ElementType> ElementDescendantIterator<ElementType>::ElementDescendantIterator(const ContainerNode& root, ElementType* current)
+template <typename ElementType>
+inline TypedElementDescendantIterator<ElementType>::TypedElementDescendantIterator(const ContainerNode& root, ElementType* current)
     : ElementIterator<ElementType>(&root, current)
 {
 }
 
-template<typename ElementType> ElementDescendantIterator<ElementType>& ElementDescendantIterator<ElementType>::operator++()
+template <typename ElementType>
+inline TypedElementDescendantIterator<ElementType>& TypedElementDescendantIterator<ElementType>::operator++()
 {
-    ElementIterator<ElementType>::traverseNext();
-    return *this;
+    return static_cast<TypedElementDescendantIterator<ElementType>&>(ElementIterator<ElementType>::traverseNext());
 }
 
-template<typename ElementType> ElementDescendantIterator<ElementType>& ElementDescendantIterator<ElementType>::operator--()
+// TypedElementDescendantConstIterator
+
+template <typename ElementType>
+inline TypedElementDescendantConstIterator<ElementType>::TypedElementDescendantConstIterator(const ContainerNode& root)
+    : ElementConstIterator<ElementType>(&root)
+
 {
-    ElementIterator<ElementType>::traversePrevious();
-    return *this;
 }
 
-// ElementDescendantRange
+template <typename ElementType>
+inline TypedElementDescendantConstIterator<ElementType>::TypedElementDescendantConstIterator(const ContainerNode& root, const ElementType* current)
+    : ElementConstIterator<ElementType>(&root, current)
+{
+}
 
-template<typename ElementType> ElementDescendantRange<ElementType>::ElementDescendantRange(const ContainerNode& root)
+template <typename ElementType>
+inline TypedElementDescendantConstIterator<ElementType>& TypedElementDescendantConstIterator<ElementType>::operator++()
+{
+    return static_cast<TypedElementDescendantConstIterator<ElementType>&>(ElementConstIterator<ElementType>::traverseNext());
+}
+
+// TypedElementDescendantIteratorAdapter
+
+template <typename ElementType>
+inline TypedElementDescendantIteratorAdapter<ElementType>::TypedElementDescendantIteratorAdapter(ContainerNode& root)
     : m_root(root)
 {
 }
 
-template<typename ElementType> ElementDescendantIterator<ElementType> ElementDescendantRange<ElementType>::begin() const
+template <typename ElementType>
+inline TypedElementDescendantIterator<ElementType> TypedElementDescendantIteratorAdapter<ElementType>::begin()
 {
-    return ElementDescendantIterator<ElementType>(m_root, Traversal<ElementType>::firstWithin(m_root));
+    return TypedElementDescendantIterator<ElementType>(m_root, Traversal<ElementType>::firstWithin(m_root));
 }
 
-template<typename ElementType> ElementDescendantIterator<ElementType> ElementDescendantRange<ElementType>::beginAt(ElementType& descendant) const
+template <typename ElementType>
+inline TypedElementDescendantIterator<ElementType> TypedElementDescendantIteratorAdapter<ElementType>::end()
+{
+    return TypedElementDescendantIterator<ElementType>(m_root);
+}
+
+template <typename ElementType>
+inline TypedElementDescendantIterator<ElementType> TypedElementDescendantIteratorAdapter<ElementType>::beginAt(ElementType& descendant)
 {
     ASSERT(descendant.isDescendantOf(m_root));
-    return ElementDescendantIterator<ElementType>(m_root, &descendant);
+    return TypedElementDescendantIterator<ElementType>(m_root, &descendant);
 }
 
-template<typename ElementType> ElementDescendantIterator<ElementType> ElementDescendantRange<ElementType>::from(Element& descendant) const
+template <typename ElementType>
+inline TypedElementDescendantIterator<ElementType> TypedElementDescendantIteratorAdapter<ElementType>::from(Element& descendant)
 {
     ASSERT(descendant.isDescendantOf(m_root));
     if (is<ElementType>(descendant))
-        return ElementDescendantIterator<ElementType>(m_root, downcast<ElementType>(&descendant));
+        return TypedElementDescendantIterator<ElementType>(m_root, downcast<ElementType>(&descendant));
     ElementType* next = Traversal<ElementType>::next(descendant, &m_root);
-    return ElementDescendantIterator<ElementType>(m_root, next);
+    return TypedElementDescendantIterator<ElementType>(m_root, next);
 }
 
-template<typename ElementType> ElementType* ElementDescendantRange<ElementType>::first() const
+template <typename ElementType>
+inline ElementType* TypedElementDescendantIteratorAdapter<ElementType>::first()
 {
     return Traversal<ElementType>::firstWithin(m_root);
 }
 
-template<typename ElementType> ElementType* ElementDescendantRange<ElementType>::last() const
+template <typename ElementType>
+inline ElementType* TypedElementDescendantIteratorAdapter<ElementType>::last()
 {
     return Traversal<ElementType>::lastWithin(m_root);
 }
 
-// DoubleElementDescendantRange
+// TypedElementDescendantConstIteratorAdapter
 
-template<typename ElementType> DoubleElementDescendantRange<ElementType>::DoubleElementDescendantRange(SingleAdapter&& first, SingleAdapter&& second)
+template <typename ElementType>
+inline TypedElementDescendantConstIteratorAdapter<ElementType>::TypedElementDescendantConstIteratorAdapter(const ContainerNode& root)
+    : m_root(root)
+{
+}
+
+template <typename ElementType>
+inline TypedElementDescendantConstIterator<ElementType> TypedElementDescendantConstIteratorAdapter<ElementType>::begin() const
+{
+    return TypedElementDescendantConstIterator<ElementType>(m_root, Traversal<ElementType>::firstWithin(m_root));
+}
+
+template <typename ElementType>
+inline TypedElementDescendantConstIterator<ElementType> TypedElementDescendantConstIteratorAdapter<ElementType>::end() const
+{
+    return TypedElementDescendantConstIterator<ElementType>(m_root);
+}
+
+template <typename ElementType>
+inline TypedElementDescendantConstIterator<ElementType> TypedElementDescendantConstIteratorAdapter<ElementType>::beginAt(const ElementType& descendant) const
+{
+    ASSERT(descendant.isDescendantOf(m_root));
+    return TypedElementDescendantConstIterator<ElementType>(m_root, &descendant);
+}
+
+template <typename ElementType>
+inline TypedElementDescendantConstIterator<ElementType> TypedElementDescendantConstIteratorAdapter<ElementType>::from(const Element& descendant) const
+{
+    ASSERT(descendant.isDescendantOf(m_root));
+    if (is<ElementType>(descendant))
+        return TypedElementDescendantConstIterator<ElementType>(m_root, downcast<ElementType>(&descendant));
+    const ElementType* next = Traversal<ElementType>::next(descendant, &m_root);
+    return TypedElementDescendantConstIterator<ElementType>(m_root, next);
+}
+
+template <typename ElementType>
+inline const ElementType* TypedElementDescendantConstIteratorAdapter<ElementType>::first() const
+{
+    return Traversal<ElementType>::firstWithin(m_root);
+}
+
+template <typename ElementType>
+inline const ElementType* TypedElementDescendantConstIteratorAdapter<ElementType>::last() const
+{
+    return Traversal<ElementType>::lastWithin(m_root);
+}
+
+// DoubleTypedElementDescendantIteratorAdapter
+
+template<typename ElementType> inline DoubleTypedElementDescendantIteratorAdapter<ElementType>::DoubleTypedElementDescendantIteratorAdapter(SingleAdapter&& first, SingleAdapter&& second)
     : m_pair(WTFMove(first), WTFMove(second))
 {
 }
 
-template<typename ElementType> auto DoubleElementDescendantRange<ElementType>::begin() const -> Iterator
+template<typename ElementType> inline auto DoubleTypedElementDescendantIteratorAdapter<ElementType>::begin() -> Iterator
 {
     return Iterator(m_pair.first.begin(), m_pair.second.begin());
 }
 
-// DoubleElementDescendantIterator
+template<typename ElementType> inline auto DoubleTypedElementDescendantIteratorAdapter<ElementType>::end() -> Iterator
+{
+    return Iterator(m_pair.first.end(), m_pair.second.end());
+}
 
-template<typename ElementType> DoubleElementDescendantIterator<ElementType>::DoubleElementDescendantIterator(SingleIterator&& first, SingleIterator&& second)
+// DoubleTypedElementDescendantIterator
+
+template<typename ElementType> inline DoubleTypedElementDescendantIterator<ElementType>::DoubleTypedElementDescendantIterator(SingleIterator&& first, SingleIterator&& second)
     : m_pair(WTFMove(first), WTFMove(second))
 {
 }
 
-template<typename ElementType> auto DoubleElementDescendantIterator<ElementType>::operator*() const -> ReferenceProxy
+template<typename ElementType> inline auto DoubleTypedElementDescendantIterator<ElementType>::operator*() const -> ReferenceProxy
 {
     return { *m_pair.first, *m_pair.second };
 }
 
-template<typename ElementType> constexpr bool DoubleElementDescendantIterator<ElementType>::operator!=(std::nullptr_t) const
+template<typename ElementType> inline bool DoubleTypedElementDescendantIterator<ElementType>::operator==(const DoubleTypedElementDescendantIterator& other) const
 {
-    ASSERT(!m_pair.first == !m_pair.second);
-    return m_pair.first;
+    ASSERT((m_pair.first == other.m_pair.first) == (m_pair.second == other.m_pair.second));
+    return m_pair.first == other.m_pair.first || m_pair.second == other.m_pair.second;
 }
 
-template<typename ElementType> DoubleElementDescendantIterator<ElementType>& DoubleElementDescendantIterator<ElementType>::operator++()
+template<typename ElementType> inline bool DoubleTypedElementDescendantIterator<ElementType>::operator!=(const DoubleTypedElementDescendantIterator& other) const
+{
+    return !(*this == other);
+}
+
+template<typename ElementType> inline DoubleTypedElementDescendantIterator<ElementType>& DoubleTypedElementDescendantIterator<ElementType>::operator++()
 {
     ++m_pair.first;
     ++m_pair.second;
     return *this;
 }
 
-// FilteredElementDescendantIterator
-
-template<typename ElementType, bool filter(const ElementType&)> FilteredElementDescendantIterator<ElementType, filter>::FilteredElementDescendantIterator(const ContainerNode& root, ElementType* element)
-    : ElementIterator<const ElementType> { &root, element }
-{
-}
-
-template<typename ElementType, bool filter(const ElementType&)> FilteredElementDescendantIterator<ElementType, filter>& FilteredElementDescendantIterator<ElementType, filter>::operator++()
-{
-    do {
-        ElementIterator<ElementType>::traverseNext();
-    } while (*this && !filter(**this));
-    return *this;
-}
-
-// FilteredElementDescendantRange
-
-template<typename ElementType, bool filter(const ElementType&)> FilteredElementDescendantRange<ElementType, filter>::FilteredElementDescendantRange(const ContainerNode& root)
-    : m_root { root }
-{
-}
-
-template<typename ElementType, bool filter(const ElementType&)> auto FilteredElementDescendantRange<ElementType, filter>::begin() const -> Iterator
-{
-    return { m_root, first() };
-}
-
-template<typename ElementType, bool filter(const ElementType&)> ElementType* FilteredElementDescendantRange<ElementType, filter>::first() const
-{
-    for (auto* element = Traversal<ElementType>::firstWithin(m_root); element; element = Traversal<ElementType>::next(*element, &m_root)) {
-        if (filter(*element))
-            return element;
-    }
-    return nullptr;
-}
-
 // Standalone functions
 
-template<typename ElementType> ElementDescendantRange<ElementType> descendantsOfType(ContainerNode& root)
+template <typename ElementType>
+inline TypedElementDescendantIteratorAdapter<ElementType> descendantsOfType(ContainerNode& root)
 {
-    return ElementDescendantRange<ElementType>(root);
+    return TypedElementDescendantIteratorAdapter<ElementType>(root);
 }
 
-template<typename ElementType> ElementDescendantRange<const ElementType> descendantsOfType(const ContainerNode& root)
+template <typename ElementType>
+inline TypedElementDescendantConstIteratorAdapter<ElementType> descendantsOfType(const ContainerNode& root)
 {
-    return ElementDescendantRange<const ElementType>(root);
+    return TypedElementDescendantConstIteratorAdapter<ElementType>(root);
 }
 
-template<typename ElementType> DoubleElementDescendantRange<ElementType> descendantsOfType(ContainerNode& firstRoot, ContainerNode& secondRoot)
+template<typename ElementType> inline DoubleTypedElementDescendantIteratorAdapter<ElementType> descendantsOfType(ContainerNode& firstRoot, ContainerNode& secondRoot)
 {
     return { descendantsOfType<ElementType>(firstRoot), descendantsOfType<ElementType>(secondRoot) };
-}
-
-template<typename ElementType, bool filter(const ElementType&)> FilteredElementDescendantRange<const ElementType, filter> filteredDescendants(const ContainerNode& root)
-{
-    return { root };
 }
 
 } // namespace WebCore

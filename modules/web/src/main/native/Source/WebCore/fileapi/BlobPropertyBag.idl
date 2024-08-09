@@ -26,5 +26,6 @@
 dictionary BlobPropertyBag {
     DOMString type = "";
 
-    EndingType endings = "transparent";
+    // FIXME: This is no longer in the FileAPI spec.
+    BlobLineEndings endings = "transparent";
 };

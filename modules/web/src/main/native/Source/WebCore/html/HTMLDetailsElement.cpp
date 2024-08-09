@@ -51,7 +51,7 @@ static DetailEventSender& detailToggleEventSender()
 
 static const AtomString& summarySlotName()
 {
-    static MainThreadNeverDestroyed<const AtomString> summarySlot("summarySlot");
+    static NeverDestroyed<AtomString> summarySlot("summarySlot");
     return summarySlot;
 }
 

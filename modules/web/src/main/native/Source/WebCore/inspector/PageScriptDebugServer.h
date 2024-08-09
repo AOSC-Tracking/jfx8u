@@ -58,8 +58,6 @@ private:
     void setJavaScriptPaused(const PageGroup&, bool paused);
     void setJavaScriptPaused(Frame&, bool paused);
 
-    bool platformShouldContinueRunningEventLoopWhilePaused();
-
     Page& m_page;
 };
 

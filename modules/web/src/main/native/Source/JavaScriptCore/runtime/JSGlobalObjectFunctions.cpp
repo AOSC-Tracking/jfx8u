@@ -27,21 +27,34 @@
 
 #include "CallFrame.h"
 #include "CatchScope.h"
+#include "EvalExecutable.h"
+#include "Exception.h"
 #include "IndirectEvalExecutable.h"
 #include "Interpreter.h"
 #include "IntlDateTimeFormat.h"
+#include "IntlObject.h"
 #include "JSCInlines.h"
+#include "JSFunction.h"
+#include "JSGlobalObject.h"
 #include "JSInternalPromise.h"
 #include "JSModuleLoader.h"
 #include "JSPromise.h"
+#include "JSString.h"
 #include "Lexer.h"
 #include "LiteralParser.h"
+#include "Nodes.h"
 #include "ObjectConstructor.h"
+#include "JSCInlines.h"
 #include "ParseInt.h"
+#include "Parser.h"
+#include "StackVisitor.h"
 #include <stdio.h>
+#include <stdlib.h>
+#include <unicode/utf8.h>
 #include <wtf/ASCIICType.h>
 #include <wtf/Assertions.h>
 #include <wtf/HexNumber.h>
+#include <wtf/MathExtras.h>
 #include <wtf/dtoa.h>
 #include <wtf/text/StringBuilder.h>
 
@@ -170,7 +183,12 @@ static JSValue decode(JSGlobalObject* globalObject, const CharType* characters, 
                 const int sequenceLen = 1 + U8_COUNT_TRAIL_BYTES(b0);
                 if (k <= length - sequenceLen * 3) {
                     charLen = sequenceLen * 3;
+#if U_ICU_VERSION_MAJOR_NUM >= 60
                     uint8_t sequence[U8_MAX_LENGTH];
+#else
+                    // In pre-60 ICU, U8_COUNT_TRAIL_BYTES returns 0..5
+                    uint8_t sequence[6];
+#endif
                     sequence[0] = b0;
                     for (int i = 1; i < sequenceLen; ++i) {
                         const CharType* q = p + i * 3;
@@ -489,7 +507,7 @@ EncodedJSValue JSC_HOST_CALL globalFuncEval(JSGlobalObject* globalObject, CallFr
         return JSValue::encode(parsedObject);
 
     SourceOrigin sourceOrigin = callFrame->callerSourceOrigin(vm);
-    EvalExecutable* eval = IndirectEvalExecutable::create(globalObject, makeSource(s, sourceOrigin), DerivedContextType::None, false, EvalContextType::None);
+    EvalExecutable* eval = IndirectEvalExecutable::create(globalObject, makeSource(s, sourceOrigin), false, DerivedContextType::None, false, EvalContextType::None);
     EXCEPTION_ASSERT(!!scope.exception() == !eval);
     if (!eval)
         return encodedJSValue();
@@ -527,13 +545,7 @@ EncodedJSValue JSC_HOST_CALL globalFuncParseInt(JSGlobalObject* globalObject, Ca
 
 EncodedJSValue JSC_HOST_CALL globalFuncParseFloat(JSGlobalObject* globalObject, CallFrame* callFrame)
 {
-    VM& vm = globalObject->vm();
-    auto scope = DECLARE_THROW_SCOPE(vm);
-
-    auto* jsString = callFrame->argument(0).toString(globalObject);
-    RETURN_IF_EXCEPTION(scope, { });
-    auto viewWithString = jsString->viewWithUnderlyingString(globalObject);
-    RETURN_IF_EXCEPTION(scope, { });
+    auto viewWithString = callFrame->argument(0).toString(globalObject)->viewWithUnderlyingString(globalObject);
     return JSValue::encode(jsNumber(parseFloat(viewWithString.view)));
 }
 
@@ -699,8 +711,23 @@ EncodedJSValue JSC_HOST_CALL globalFuncMakeTypeError(JSGlobalObject* globalObjec
 
 EncodedJSValue JSC_HOST_CALL globalFuncProtoGetter(JSGlobalObject* globalObject, CallFrame* callFrame)
 {
-    JSValue thisValue = callFrame->thisValue().toThis(globalObject, ECMAMode::strict());
-    return JSValue::encode(thisValue.getPrototype(globalObject));
+    VM& vm = globalObject->vm();
+    auto scope = DECLARE_THROW_SCOPE(vm);
+
+    JSValue thisValue = callFrame->thisValue().toThis(globalObject, StrictMode);
+    if (thisValue.isUndefinedOrNull())
+        return throwVMError(globalObject, scope, createNotAnObjectError(globalObject, thisValue));
+
+    JSObject* thisObject = jsDynamicCast<JSObject*>(vm, thisValue);
+    if (!thisObject) {
+        JSObject* prototype = thisValue.synthesizePrototype(globalObject);
+        EXCEPTION_ASSERT(!!scope.exception() == !prototype);
+        if (UNLIKELY(!prototype))
+            return JSValue::encode(JSValue());
+        return JSValue::encode(prototype);
+    }
+
+    RELEASE_AND_RETURN(scope, JSValue::encode(thisObject->getPrototype(vm, globalObject)));
 }
 
 EncodedJSValue JSC_HOST_CALL globalFuncProtoSetter(JSGlobalObject* globalObject, CallFrame* callFrame)
@@ -708,7 +735,7 @@ EncodedJSValue JSC_HOST_CALL globalFuncProtoSetter(JSGlobalObject* globalObject,
     VM& vm = globalObject->vm();
     auto scope = DECLARE_THROW_SCOPE(vm);
 
-    JSValue thisValue = callFrame->thisValue().toThis(globalObject, ECMAMode::strict());
+    JSValue thisValue = callFrame->thisValue().toThis(globalObject, StrictMode);
     if (thisValue.isUndefinedOrNull())
         return throwVMTypeError(globalObject, scope, ObjectProtoCalledOnNullOrUndefinedError);
 
@@ -833,6 +860,7 @@ EncodedJSValue JSC_HOST_CALL globalFuncOwnKeys(JSGlobalObject* globalObject, Cal
     RELEASE_AND_RETURN(scope, JSValue::encode(ownPropertyKeys(globalObject, object, PropertyNameMode::StringsAndSymbols, DontEnumPropertiesMode::Include)));
 }
 
+#if ENABLE(INTL)
 EncodedJSValue JSC_HOST_CALL globalFuncDateTimeFormat(JSGlobalObject* globalObject, CallFrame* callFrame)
 {
     VM& vm = globalObject->vm();
@@ -845,5 +873,6 @@ EncodedJSValue JSC_HOST_CALL globalFuncDateTimeFormat(JSGlobalObject* globalObje
     RETURN_IF_EXCEPTION(scope, encodedJSValue());
     RELEASE_AND_RETURN(scope, JSValue::encode(dateTimeFormat->format(globalObject, value)));
 }
+#endif
 
 } // namespace JSC

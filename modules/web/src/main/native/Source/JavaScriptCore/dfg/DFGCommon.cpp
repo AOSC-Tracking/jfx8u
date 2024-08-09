@@ -26,7 +26,8 @@
 #include "config.h"
 #include "DFGCommon.h"
 
-#include <wtf/Lock.h>
+#include "DFGNode.h"
+#include "JSCInlines.h"
 #include <wtf/PrintStream.h>
 
 #if ENABLE(DFG_JIT)

@@ -28,11 +28,12 @@
 
 #if ENABLE(DFG_JIT)
 
-#include "ButterflyInlines.h"
+#include "CodeBlockWithJITType.h"
 #include "DFGClobberize.h"
 #include "DFGClobbersExitState.h"
 #include "DFGDominators.h"
 #include "DFGMayExit.h"
+#include "JSCInlines.h"
 #include <wtf/Assertions.h>
 
 namespace JSC { namespace DFG {
@@ -70,8 +71,6 @@ public:
             dataLogF(") == (%s = ", #right); \
             dataLog(right); \
             dataLogF(") (%s:%d).\n", __FILE__, __LINE__); \
-            dataLog("\n\n\n"); \
-            m_graph.baselineCodeBlockFor(nullptr)->dumpBytecode(); \
             dumpGraphIfAppropriate(); \
             WTFReportAssertionFailure(__FILE__, __LINE__, WTF_PRETTY_FUNCTION, #left " == " #right); \
             CRASH(); \
@@ -310,12 +309,6 @@ public:
                         if (variant.kind() != PutByIdVariant::Transition)
                             continue;
                         VALIDATE((node), !variant.oldStructureForTransition()->dfgShouldWatch());
-                    }
-                    break;
-                case MultiDeleteByOffset:
-                    for (unsigned i = node->multiDeleteByOffsetData().variants.size(); i--;) {
-                        const DeleteByIdVariant& variant = node->multiDeleteByOffsetData().variants[i];
-                        VALIDATE((node), !variant.newStructure() || !variant.oldStructure()->dfgShouldWatch());
                     }
                     break;
                 case MaterializeNewObject:
@@ -569,14 +562,6 @@ private:
             Operands<size_t> getLocalPositions(OperandsLike, block->variablesAtHead);
             Operands<size_t> setLocalPositions(OperandsLike, block->variablesAtHead);
 
-            for (size_t i = 0; i < block->variablesAtHead.numberOfTmps(); ++i) {
-                VALIDATE((Operand::tmp(i), block), !block->variablesAtHead.tmp(i) || block->variablesAtHead.tmp(i)->accessesStack(m_graph));
-                if (m_graph.m_form == ThreadedCPS)
-                    VALIDATE((Operand::tmp(i), block), !block->variablesAtTail.tmp(i) || block->variablesAtTail.tmp(i)->accessesStack(m_graph));
-
-                getLocalPositions.tmp(i) = notSet;
-                setLocalPositions.tmp(i) = notSet;
-            }
             for (size_t i = 0; i < block->variablesAtHead.numberOfArguments(); ++i) {
                 VALIDATE((virtualRegisterForArgumentIncludingThis(i), block), !block->variablesAtHead.argument(i) || block->variablesAtHead.argument(i)->accessesStack(m_graph));
                 if (m_graph.m_form == ThreadedCPS)
@@ -724,11 +709,6 @@ private:
 
             if (m_graph.m_form == LoadStore)
                 continue;
-
-            for (size_t i = 0; i < block->variablesAtHead.numberOfTmps(); ++i) {
-                checkOperand(
-                    block, getLocalPositions, setLocalPositions, Operand::tmp(i));
-            }
 
             for (size_t i = 0; i < block->variablesAtHead.numberOfArguments(); ++i) {
                 checkOperand(
@@ -958,7 +938,7 @@ private:
 
     void checkOperand(
         BasicBlock* block, Operands<size_t>& getLocalPositions,
-        Operands<size_t>& setLocalPositions, Operand operand)
+        Operands<size_t>& setLocalPositions, VirtualRegister operand)
     {
         if (getLocalPositions.operand(operand) == notSet)
             return;

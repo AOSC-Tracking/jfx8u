@@ -31,18 +31,16 @@
 #include "PaymentCoordinator.h"
 #include <wtf/text/StringConcatenateNumbers.h>
 
-namespace WebCore {
-
-static bool requiresSupportedNetworks(unsigned version, const ApplePayRequestBase& request)
-{
-#if ENABLE(APPLE_PAY_INSTALLMENTS)
-    return version < 8 || !request.installmentConfiguration;
+#if USE(APPLE_INTERNAL_SDK)
+#include <WebKitAdditions/ApplePayRequestBaseAdditions.cpp>
 #else
-    UNUSED_PARAM(version);
-    UNUSED_PARAM(request);
-    return true;
-#endif
+namespace WebCore {
+static void finishConverting(ApplePaySessionPaymentRequest&, ApplePayRequestBase&) { }
+static bool requiresSupportedNetworks(unsigned, const ApplePayRequestBase&) { return true; }
 }
+#endif
+
+namespace WebCore {
 
 static ExceptionOr<Vector<String>> convertAndValidate(Document& document, unsigned version, const Vector<String>& supportedNetworks, const PaymentCoordinator& paymentCoordinator)
 {
@@ -105,14 +103,7 @@ ExceptionOr<ApplePaySessionPaymentRequest> convertAndValidate(Document& document
     if (version >= 3)
         result.setSupportedCountries(WTFMove(request.supportedCountries));
 
-#if ENABLE(APPLE_PAY_INSTALLMENTS)
-    if (request.installmentConfiguration) {
-        auto installmentConfiguration = PaymentInstallmentConfiguration::create(*request.installmentConfiguration);
-        if (installmentConfiguration.hasException())
-            return installmentConfiguration.releaseException();
-        result.setInstallmentConfiguration(installmentConfiguration.releaseReturnValue());
-    }
-#endif
+    finishConverting(result, request);
 
     return WTFMove(result);
 }

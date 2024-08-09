@@ -28,7 +28,6 @@
 #if ENABLE(SERVICE_WORKER)
 
 #include "DocumentIdentifier.h"
-#include "ExceptionOr.h"
 #include "ServiceWorkerJob.h"
 #include "ServiceWorkerTypes.h"
 #include <wtf/CompletionHandler.h>
@@ -69,7 +68,6 @@ public:
 
     virtual void addServiceWorkerRegistrationInServer(ServiceWorkerRegistrationIdentifier) = 0;
     virtual void removeServiceWorkerRegistrationInServer(ServiceWorkerRegistrationIdentifier) = 0;
-    virtual void scheduleUnregisterJobInServer(ServiceWorkerRegistrationIdentifier, DocumentOrWorkerIdentifier, CompletionHandler<void(ExceptionOr<bool>&&)>&&) = 0;
 
     WEBCORE_EXPORT virtual void scheduleJob(DocumentOrWorkerIdentifier, const ServiceWorkerJobData&);
 
@@ -79,6 +77,7 @@ public:
 
     virtual SWServerConnectionIdentifier serverConnectionIdentifier() const = 0;
     virtual bool mayHaveServiceWorkerRegisteredForOrigin(const SecurityOriginData&) const = 0;
+    virtual void syncTerminateWorker(ServiceWorkerIdentifier) = 0;
 
     virtual void registerServiceWorkerClient(const SecurityOrigin& topOrigin, const ServiceWorkerClientData&, const Optional<ServiceWorkerRegistrationIdentifier>&, const String& userAgent) = 0;
     virtual void unregisterServiceWorkerClient(DocumentIdentifier) = 0;
@@ -86,9 +85,7 @@ public:
     virtual void finishFetchingScriptInServer(const ServiceWorkerFetchResult&) = 0;
 
     virtual void storeRegistrationsOnDiskForTesting(CompletionHandler<void()>&& callback) { callback(); }
-    virtual void whenServiceWorkerIsTerminatedForTesting(ServiceWorkerIdentifier, CompletionHandler<void()>&& callback) { callback(); }
-
-    WEBCORE_EXPORT void registerServiceWorkerClients();
+    virtual void isServiceWorkerRunning(ServiceWorkerIdentifier, CompletionHandler<void(bool)>&& callback) { callback(false); }
 
     WEBCORE_EXPORT void registerServiceWorkerClients();
 
@@ -97,6 +94,7 @@ protected:
 
     WEBCORE_EXPORT void jobRejectedInServer(ServiceWorkerJobIdentifier, const ExceptionData&);
     WEBCORE_EXPORT void registrationJobResolvedInServer(ServiceWorkerJobIdentifier, ServiceWorkerRegistrationData&&, ShouldNotifyWhenResolved);
+    WEBCORE_EXPORT void unregistrationJobResolvedInServer(ServiceWorkerJobIdentifier, bool unregistrationResult);
     WEBCORE_EXPORT void startScriptFetchForServer(ServiceWorkerJobIdentifier, const ServiceWorkerRegistrationKey&, FetchOptions::Cache);
     WEBCORE_EXPORT void postMessageToServiceWorkerClient(DocumentIdentifier destinationContextIdentifier, MessageWithMessagePorts&&, ServiceWorkerData&& source, String&& sourceOrigin);
     WEBCORE_EXPORT void updateRegistrationState(ServiceWorkerRegistrationIdentifier, ServiceWorkerRegistrationState, const Optional<ServiceWorkerData>&);

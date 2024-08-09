@@ -92,41 +92,31 @@ Ref<SharedBuffer> PasteboardCustomData::createSharedBuffer() const
     return SharedBuffer::create(encoder.buffer(), encoder.bufferSize());
 }
 
-PasteboardCustomData PasteboardCustomData::fromPersistenceDecoder(WTF::Persistence::Decoder&& decoder)
+PasteboardCustomData PasteboardCustomData::fromSharedBuffer(const SharedBuffer& buffer)
 {
     constexpr unsigned maxSupportedDataSerializationVersionNumber = 1;
 
     PasteboardCustomData result;
-    Optional<unsigned> version;
-    decoder >> version;
-    if (!version || *version > maxSupportedDataSerializationVersionNumber)
+    auto decoder = buffer.decoder();
+    unsigned version;
+    if (!decoder.decode(version) || version > maxSupportedDataSerializationVersionNumber)
         return { };
 
-    Optional<String> origin;
-    decoder >> origin;
-    if (!origin)
-        return { };
-    result.m_origin = WTFMove(*origin);
-
-    Optional<HashMap<String, String>> sameOriginCustomStringData;
-    decoder >> sameOriginCustomStringData;
-    if (!sameOriginCustomStringData)
+    if (!decoder.decode(result.m_origin))
         return { };
 
-    Optional<Vector<String>> orderedTypes;
-    decoder >> orderedTypes;
-    if (!orderedTypes)
+    HashMap<String, String> sameOriginCustomStringData;
+    if (!decoder.decode(sameOriginCustomStringData))
         return { };
 
-    for (auto& type : *orderedTypes)
-        result.writeStringInCustomData(type, sameOriginCustomStringData->get(type));
+    Vector<String> orderedTypes;
+    if (!decoder.decode(orderedTypes))
+        return { };
+
+    for (auto& type : orderedTypes)
+        result.writeStringInCustomData(type, sameOriginCustomStringData.get(type));
 
     return result;
-}
-
-PasteboardCustomData PasteboardCustomData::fromSharedBuffer(const SharedBuffer& buffer)
-{
-    return fromPersistenceDecoder(buffer.decoder());
 }
 
 void PasteboardCustomData::writeString(const String& type, const String& value)

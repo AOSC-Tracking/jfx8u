@@ -26,10 +26,11 @@
 #include "config.h"
 #include "ProfilerDatabase.h"
 
+#include "CatchScope.h"
 #include "CodeBlock.h"
-#include "JSCInlines.h"
 #include "JSONObject.h"
 #include "ObjectConstructor.h"
+#include "JSCInlines.h"
 #include <wtf/FilePrintStream.h>
 
 namespace JSC { namespace Profiler {
@@ -44,7 +45,7 @@ Database::Database(VM& vm)
     : m_databaseID(++databaseCounter)
     , m_vm(vm)
     , m_shouldSaveAtExit(false)
-    , m_nextRegisteredDatabase(nullptr)
+    , m_nextRegisteredDatabase(0)
 {
 }
 
@@ -101,7 +102,7 @@ JSValue Database::toJS(JSGlobalObject* globalObject) const
     auto scope = DECLARE_THROW_SCOPE(vm);
     JSObject* result = constructEmptyObject(globalObject);
 
-    JSArray* bytecodes = constructEmptyArray(globalObject, nullptr);
+    JSArray* bytecodes = constructEmptyArray(globalObject, 0);
     RETURN_IF_EXCEPTION(scope, { });
     for (unsigned i = 0; i < m_bytecodes.size(); ++i) {
         auto value = m_bytecodes[i].toJS(globalObject);
@@ -111,7 +112,7 @@ JSValue Database::toJS(JSGlobalObject* globalObject) const
     }
     result->putDirect(vm, vm.propertyNames->bytecodes, bytecodes);
 
-    JSArray* compilations = constructEmptyArray(globalObject, nullptr);
+    JSArray* compilations = constructEmptyArray(globalObject, 0);
     RETURN_IF_EXCEPTION(scope, { });
     for (unsigned i = 0; i < m_compilations.size(); ++i) {
         auto value = m_compilations[i]->toJS(globalObject);
@@ -121,7 +122,7 @@ JSValue Database::toJS(JSGlobalObject* globalObject) const
     }
     result->putDirect(vm, vm.propertyNames->compilations, compilations);
 
-    JSArray* events = constructEmptyArray(globalObject, nullptr);
+    JSArray* events = constructEmptyArray(globalObject, 0);
     RETURN_IF_EXCEPTION(scope, { });
     for (unsigned i = 0; i < m_events.size(); ++i) {
         auto value = m_events[i].toJS(globalObject);
@@ -198,7 +199,7 @@ void Database::removeDatabaseFromAtExit()
         if (*current != this)
             continue;
         *current = m_nextRegisteredDatabase;
-        m_nextRegisteredDatabase = nullptr;
+        m_nextRegisteredDatabase = 0;
         m_shouldSaveAtExit = false;
         break;
     }
@@ -216,7 +217,7 @@ Database* Database::removeFirstAtExitDatabase()
     Database* result = firstDatabase;
     if (result) {
         firstDatabase = result->m_nextRegisteredDatabase;
-        result->m_nextRegisteredDatabase = nullptr;
+        result->m_nextRegisteredDatabase = 0;
         result->m_shouldSaveAtExit = false;
     }
     return result;

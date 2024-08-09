@@ -26,17 +26,26 @@
 #include "config.h"
 #include "DFGDriver.h"
 
+#include "JSObject.h"
+#include "JSString.h"
+
 #include "CodeBlock.h"
 #include "DFGJITCode.h"
 #include "DFGPlan.h"
 #include "DFGThunks.h"
 #include "DFGWorklist.h"
-#include "FunctionAllowlist.h"
+#include "FunctionWhitelist.h"
 #include "JITCode.h"
+#include "JSCInlines.h"
 #include "Options.h"
 #include "ThunkGenerators.h"
 #include "TypeProfilerLog.h"
+#include <wtf/Atomics.h>
 #include <wtf/NeverDestroyed.h>
+
+#if ENABLE(FTL_JIT)
+#include "FTLThunks.h"
+#endif
 
 namespace JSC { namespace DFG {
 
@@ -48,15 +57,15 @@ unsigned getNumCompilations()
 }
 
 #if ENABLE(DFG_JIT)
-static FunctionAllowlist& ensureGlobalDFGAllowlist()
+static FunctionWhitelist& ensureGlobalDFGWhitelist()
 {
-    static LazyNeverDestroyed<FunctionAllowlist> dfgAllowlist;
-    static std::once_flag initializeAllowlistFlag;
-    std::call_once(initializeAllowlistFlag, [] {
-        const char* functionAllowlistFile = Options::dfgAllowlist();
-        dfgAllowlist.construct(functionAllowlistFile);
+    static LazyNeverDestroyed<FunctionWhitelist> dfgWhitelist;
+    static std::once_flag initializeWhitelistFlag;
+    std::call_once(initializeWhitelistFlag, [] {
+        const char* functionWhitelistFile = Options::dfgWhitelist();
+        dfgWhitelist.construct(functionWhitelistFile);
     });
-    return dfgAllowlist;
+    return dfgWhitelist;
 }
 
 static CompilationResult compileImpl(
@@ -65,7 +74,7 @@ static CompilationResult compileImpl(
     Ref<DeferredCompilationCallback>&& callback)
 {
     if (!Options::bytecodeRangeToDFGCompile().isInRange(codeBlock->instructionsSize())
-        || !ensureGlobalDFGAllowlist().contains(codeBlock))
+        || !ensureGlobalDFGWhitelist().contains(codeBlock))
         return CompilationFailed;
 
     numCompilations++;

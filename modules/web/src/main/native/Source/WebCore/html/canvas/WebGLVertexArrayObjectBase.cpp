@@ -82,7 +82,6 @@ void WebGLVertexArrayObjectBase::unbindBuffer(WebGLBuffer& buffer)
         if (state.bufferBinding == &buffer) {
             buffer.onDetached(context()->graphicsContextGL());
 
-#if !USE(ANGLE)
             if (!i && !context()->isGLES2Compliant()) {
                 state.bufferBinding = context()->m_vertexAttrib0Buffer;
                 state.bufferBinding->onAttached();
@@ -94,7 +93,6 @@ void WebGLVertexArrayObjectBase::unbindBuffer(WebGLBuffer& buffer)
                 state.originalStride = 0;
                 state.offset = 0;
             } else
-#endif
                 state.bufferBinding = nullptr;
         }
     }

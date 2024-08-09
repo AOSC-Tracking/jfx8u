@@ -41,6 +41,7 @@ enum class GPUTextureDimension {
 
 struct GPUTextureDescriptor {
     GPUExtent3D size;
+    unsigned arrayLayerCount;
     unsigned mipLevelCount;
     unsigned sampleCount;
     GPUTextureDimension dimension;

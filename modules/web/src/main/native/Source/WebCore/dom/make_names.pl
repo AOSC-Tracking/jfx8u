@@ -115,7 +115,7 @@ if (length($fontNamesIn)) {
 #include <wtf/text/AtomString.h>
 END
 
-    printMacros($F, "extern MainThreadLazyNeverDestroyed<const WTF::AtomString>", "", \%parameters);
+    printMacros($F, "extern LazyNeverDestroyed<const WTF::AtomString>", "", \%parameters);
     print F "#endif\n\n";
 
     printInit($F, 1);
@@ -129,7 +129,7 @@ END
 
     print F StaticString::GenerateStrings(\%parameters);
 
-    printMacros($F, "MainThreadLazyNeverDestroyed<const WTF::AtomString>", "", \%parameters);
+    printMacros($F, "LazyNeverDestroyed<const WTF::AtomString>", "", \%parameters);
 
     printInit($F, 0);
 
@@ -542,7 +542,9 @@ sub printHeaderHead
     my ($F, $prefix, $namespace, $includes, $definitions) = @_;
 
     print F<<END
-#pragma once
+#ifndef ${prefix}_${namespace}Names_h
+
+#define ${prefix}_${namespace}Names_h
 
 $includes
 
@@ -581,6 +583,7 @@ sub printInit
     if ($isDefinition) {
         print F "\nWEBCORE_EXPORT void init();\n\n";
         print F "} }\n\n";
+        print F "#endif\n\n";
         return;
     }
 
@@ -692,10 +695,13 @@ sub printTypeHelpersHeaderFile
     open F, ">$headerPath";
     printLicenseHeader($F);
 
-    print F "#pragma once\n\n";
+    print F "#ifndef ".$parameters{namespace}."ElementTypeHelpers_h\n";
+    print F "#define ".$parameters{namespace}."ElementTypeHelpers_h\n\n";
     print F "#include \"".$parameters{namespace}."Names.h\"\n\n";
 
     printTypeHelpers($F, \%allTags);
+
+    print F "#endif\n";
 
     close F;
 }
@@ -716,7 +722,7 @@ END
     my $lowercaseNamespacePrefix = lc($parameters{namespacePrefix});
 
     print F "// Namespace\n";
-    print F "WEBCORE_EXPORT extern MainThreadLazyNeverDestroyed<const WTF::AtomString> ${lowercaseNamespacePrefix}NamespaceURI;\n\n";
+    print F "WEBCORE_EXPORT extern LazyNeverDestroyed<const WTF::AtomString> ${lowercaseNamespacePrefix}NamespaceURI;\n\n";
 
     if (keys %allTags) {
         print F "// Tags\n";
@@ -754,7 +760,7 @@ sub printNamesCppFile
     
     my $lowercaseNamespacePrefix = lc($parameters{namespacePrefix});
 
-    print F "MainThreadLazyNeverDestroyed<const AtomString> ${lowercaseNamespacePrefix}NamespaceURI;\n\n";
+    print F "LazyNeverDestroyed<const AtomString> ${lowercaseNamespacePrefix}NamespaceURI;\n\n";
 
     print F StaticString::GenerateStrings(\%allStrings);
 
@@ -961,7 +967,7 @@ END
 
 namespace WebCore {
 
-using $parameters{namespace}ConstructorFunction = Ref<$parameters{namespace}Element> (*)(const QualifiedName&, Document&$formElementArgumentForDeclaration, bool createdByParser);
+typedef Ref<$parameters{namespace}Element> (*$parameters{namespace}ConstructorFunction)(const QualifiedName&, Document&$formElementArgumentForDeclaration, bool createdByParser);
 
 END
     ;
@@ -1081,7 +1087,8 @@ sub printFactoryHeaderFile
     printLicenseHeader($F);
 
     print F<<END
-#pragma once
+#ifndef $parameters{namespace}ElementFactory_h
+#define $parameters{namespace}ElementFactory_h
 
 #include <wtf/Forward.h>
 
@@ -1118,6 +1125,8 @@ printf F<<END
 };
 
 }
+
+#endif // $parameters{namespace}ElementFactory_h
 
 END
 ;
@@ -1238,7 +1247,7 @@ using namespace JSC;
 
 namespace WebCore {
 
-using Create$parameters{namespace}ElementWrapperFunction = JSDOMObject* (*)(JSDOMGlobalObject*, Ref<$parameters{namespace}Element>&&);
+typedef JSDOMObject* (*Create$parameters{namespace}ElementWrapperFunction)(JSDOMGlobalObject*, Ref<$parameters{namespace}Element>&&);
 
 END
 ;
@@ -1329,7 +1338,10 @@ sub printWrapperFactoryHeaderFile
 
     printLicenseHeader($F);
 
-    print F "#pragma once\n\n";
+    print F "#ifndef JS$parameters{namespace}ElementWrapperFactory_h\n";
+    print F "#define JS$parameters{namespace}ElementWrapperFactory_h\n\n";
+
+    print F "#if $parameters{guardFactoryWith}\n" if $parameters{guardFactoryWith};
 
     print F <<END
 #include <wtf/Forward.h>
@@ -1346,6 +1358,10 @@ namespace WebCore {
  
 END
     ;
+
+    print F "#endif // $parameters{guardFactoryWith}\n\n" if $parameters{guardFactoryWith};
+
+    print F "#endif // JS$parameters{namespace}ElementWrapperFactory_h\n";
 
     close F;
 }

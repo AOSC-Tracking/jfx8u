@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2013-2019 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -67,17 +67,9 @@ public:
         object.ref();
     }
 
-    Ref(const Ref& other)
-        : m_ptr(other.ptr())
-    {
-        m_ptr->ref();
-    }
-
-    template<typename X, typename Y> Ref(const Ref<X, Y>& other)
-        : m_ptr(other.ptr())
-    {
-        m_ptr->ref();
-    }
+    // Use copyRef() instead.
+    Ref(const Ref& other) = delete;
+    template<typename X, typename Y> Ref(const Ref<X, Y>& other) = delete;
 
     Ref(Ref&& other)
         : m_ptr(&other.leakRef())
@@ -96,8 +88,9 @@ public:
     Ref& operator=(Ref&&);
     template<typename X, typename Y> Ref& operator=(Ref<X, Y>&&);
 
-    Ref& operator=(const Ref&);
-    template<typename X, typename Y> Ref& operator=(const Ref<X, Y>&);
+    // Use copyRef() and the move assignment operators instead.
+    Ref& operator=(const Ref&) = delete;
+    template<typename X, typename Y> Ref& operator=(const Ref<X, Y>&) = delete;
 
     template<typename X, typename Y> void swap(Ref<X, Y>&);
 
@@ -131,7 +124,6 @@ public:
 
     template<typename X, typename Y> Ref<T, PtrTraits> replace(Ref<X, Y>&&) WARN_UNUSED_RETURN;
 
-    // The following function is deprecated.
     Ref copyRef() && = delete;
     Ref copyRef() const & WARN_UNUSED_RETURN { return Ref(*m_ptr); }
 
@@ -192,31 +184,6 @@ inline Ref<T, U>& Ref<T, U>::operator=(Ref<X, Y>&& reference)
 #endif
     Ref movedReference = WTFMove(reference);
     swap(movedReference);
-    return *this;
-}
-
-template<typename T, typename U>
-inline Ref<T, U>& Ref<T, U>::operator=(const Ref& reference)
-{
-#if ASAN_ENABLED
-    if (__asan_address_is_poisoned(this))
-        __asan_unpoison_memory_region(this, sizeof(*this));
-#endif
-    Ref copiedReference = reference;
-    swap(copiedReference);
-    return *this;
-}
-
-template<typename T, typename U>
-template<typename X, typename Y>
-inline Ref<T, U>& Ref<T, U>::operator=(const Ref<X, Y>& reference)
-{
-#if ASAN_ENABLED
-    if (__asan_address_is_poisoned(this))
-        __asan_unpoison_memory_region(this, sizeof(*this));
-#endif
-    Ref copiedReference = reference;
-    swap(copiedReference);
     return *this;
 }
 

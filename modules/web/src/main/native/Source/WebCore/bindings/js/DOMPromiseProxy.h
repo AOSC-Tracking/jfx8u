@@ -51,7 +51,7 @@ public:
 
     void resolve(typename IDLType::ParameterType);
     void resolveWithNewlyCreated(typename IDLType::ParameterType);
-    void reject(Exception, RejectAsHandled = RejectAsHandled::No);
+    void reject(Exception);
 
 private:
     Optional<ExceptionOr<Value>> m_valueOrException;
@@ -72,7 +72,7 @@ public:
     bool isFulfilled() const;
 
     void resolve();
-    void reject(Exception, RejectAsHandled = RejectAsHandled::No);
+    void reject(Exception);
 
 private:
     Optional<ExceptionOr<void>> m_valueOrException;
@@ -102,7 +102,7 @@ public:
 
     void resolve(typename IDLType::ParameterType);
     void resolveWithNewlyCreated(typename IDLType::ParameterType);
-    void reject(Exception, RejectAsHandled = RejectAsHandled::No);
+    void reject(Exception);
 
 private:
     ResolveCallback m_resolveCallback;
@@ -173,13 +173,13 @@ inline void DOMPromiseProxy<IDLType>::resolveWithNewlyCreated(typename IDLType::
 }
 
 template<typename IDLType>
-inline void DOMPromiseProxy<IDLType>::reject(Exception exception, RejectAsHandled rejectAsHandled)
+inline void DOMPromiseProxy<IDLType>::reject(Exception exception)
 {
     ASSERT(!m_valueOrException);
 
     m_valueOrException = ExceptionOr<Value> { WTFMove(exception) };
     for (auto& deferredPromise : m_deferredPromises)
-        deferredPromise->reject(m_valueOrException->exception(), rejectAsHandled);
+        deferredPromise->reject(m_valueOrException->exception());
 }
 
 
@@ -229,12 +229,12 @@ inline void DOMPromiseProxy<IDLVoid>::resolve()
         deferredPromise->resolve();
 }
 
-inline void DOMPromiseProxy<IDLVoid>::reject(Exception exception, RejectAsHandled rejectAsHandled)
+inline void DOMPromiseProxy<IDLVoid>::reject(Exception exception)
 {
     ASSERT(!m_valueOrException);
     m_valueOrException = ExceptionOr<void> { WTFMove(exception) };
     for (auto& deferredPromise : m_deferredPromises)
-        deferredPromise->reject(m_valueOrException->exception(), rejectAsHandled);
+        deferredPromise->reject(m_valueOrException->exception());
 }
 
 // MARK: - DOMPromiseProxyWithResolveCallback<IDLType> implementation
@@ -312,13 +312,13 @@ inline void DOMPromiseProxyWithResolveCallback<IDLType>::resolveWithNewlyCreated
 }
 
 template<typename IDLType>
-inline void DOMPromiseProxyWithResolveCallback<IDLType>::reject(Exception exception, RejectAsHandled rejectAsHandled)
+inline void DOMPromiseProxyWithResolveCallback<IDLType>::reject(Exception exception)
 {
     ASSERT(!m_valueOrException);
 
     m_valueOrException = ExceptionOr<void> { WTFMove(exception) };
     for (auto& deferredPromise : m_deferredPromises)
-        deferredPromise->reject(m_valueOrException->exception(), rejectAsHandled);
+        deferredPromise->reject(m_valueOrException->exception());
 }
 
 }

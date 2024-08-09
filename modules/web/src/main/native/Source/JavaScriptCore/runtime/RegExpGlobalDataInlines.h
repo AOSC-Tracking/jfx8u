@@ -39,13 +39,9 @@ inline void RegExpGlobalData::setInput(JSGlobalObject* globalObject, JSString* s
    expression matching through the performMatch function. We use cached results to calculate,
    e.g., RegExp.lastMatch and RegExp.leftParen.
 */
-ALWAYS_INLINE MatchResult RegExpGlobalData::performMatch(JSGlobalObject* owner, RegExp* regExp, JSString* string, const String& input, int startOffset, int** ovector)
+ALWAYS_INLINE MatchResult RegExpGlobalData::performMatch(VM& vm, JSGlobalObject* owner, RegExp* regExp, JSString* string, const String& input, int startOffset, int** ovector)
 {
-    ASSERT(owner);
-    VM& vm = owner->vm();
-    auto scope = DECLARE_THROW_SCOPE(vm);
-    int position = regExp->match(owner, input, startOffset, m_ovector);
-    RETURN_IF_EXCEPTION(scope, MatchResult::failed());
+    int position = regExp->match(vm, input, startOffset, m_ovector);
 
     if (ovector)
         *ovector = m_ovector.data();
@@ -63,13 +59,9 @@ ALWAYS_INLINE MatchResult RegExpGlobalData::performMatch(JSGlobalObject* owner, 
     return MatchResult(position, end);
 }
 
-ALWAYS_INLINE MatchResult RegExpGlobalData::performMatch(JSGlobalObject* owner, RegExp* regExp, JSString* string, const String& input, int startOffset)
+ALWAYS_INLINE MatchResult RegExpGlobalData::performMatch(VM& vm, JSGlobalObject* owner, RegExp* regExp, JSString* string, const String& input, int startOffset)
 {
-    ASSERT(owner);
-    VM& vm = owner->vm();
-    auto scope = DECLARE_THROW_SCOPE(vm);
-    MatchResult result = regExp->match(owner, input, startOffset);
-    RETURN_IF_EXCEPTION(scope, MatchResult::failed());
+    MatchResult result = regExp->match(vm, input, startOffset);
     if (result)
         m_cachedResult.record(vm, owner, regExp, string, result);
     return result;

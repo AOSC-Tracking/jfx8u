@@ -189,12 +189,12 @@ void HTMLLabelElement::focus(bool restorePreviousSelection, FocusDirection direc
         element->focus(true, direction);
 }
 
-bool HTMLLabelElement::accessKeyAction(bool sendMouseEvents)
+void HTMLLabelElement::accessKeyAction(bool sendMouseEvents)
 {
     if (auto element = control())
-        return element->accessKeyAction(sendMouseEvents);
-
-    return HTMLElement::accessKeyAction(sendMouseEvents);
+        element->accessKeyAction(sendMouseEvents);
+    else
+        HTMLElement::accessKeyAction(sendMouseEvents);
 }
 
 } // namespace

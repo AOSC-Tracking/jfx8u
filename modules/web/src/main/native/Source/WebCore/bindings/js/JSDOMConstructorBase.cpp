@@ -38,12 +38,23 @@ static EncodedJSValue JSC_HOST_CALL callThrowTypeError(JSGlobalObject* globalObj
     return JSValue::encode(jsNull());
 }
 
-CallData JSDOMConstructorBase::getCallData(JSCell*)
+CallType JSDOMConstructorBase::getCallData(JSCell*, CallData& callData)
 {
-    CallData callData;
-    callData.type = CallData::Type::Native;
     callData.native.function = callThrowTypeError;
-    return callData;
+    return CallType::Host;
+}
+
+String JSDOMConstructorBase::className(const JSObject*, JSC::VM&)
+{
+    return "Function"_s;
+}
+
+String JSDOMConstructorBase::toStringName(const JSObject* object, JSC::JSGlobalObject* lexicalGlobalObject)
+{
+    VM& vm = lexicalGlobalObject->vm();
+    const ClassInfo* info = object->classInfo(vm);
+    ASSERT(info);
+    return info->methodTable.className(object, vm);
 }
 
 JSC::IsoSubspace* JSDOMConstructorBase::subspaceForImpl(JSC::VM& vm)

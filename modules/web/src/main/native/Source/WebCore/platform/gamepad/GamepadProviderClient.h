@@ -33,18 +33,14 @@ namespace WebCore {
 
 class PlatformGamepad;
 
-enum class EventMakesGamepadsVisible : bool {
-    No,
-    Yes,
-};
-
 class GamepadProviderClient {
 public:
     virtual ~GamepadProviderClient() = default;
 
-    virtual void platformGamepadConnected(PlatformGamepad&, EventMakesGamepadsVisible) = 0;
+    virtual void setInitialConnectedGamepads(const Vector<PlatformGamepad*>&) { }
+    virtual void platformGamepadConnected(PlatformGamepad&) = 0;
     virtual void platformGamepadDisconnected(PlatformGamepad&) = 0;
-    virtual void platformGamepadInputActivity(EventMakesGamepadsVisible) = 0;
+    virtual void platformGamepadInputActivity(bool shouldMakeGamepadVisible) = 0;
 };
 
 } // namespace WebCore

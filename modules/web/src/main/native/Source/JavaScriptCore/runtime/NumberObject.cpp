@@ -22,6 +22,8 @@
 #include "config.h"
 #include "NumberObject.h"
 
+#include "JSGlobalObject.h"
+#include "NumberPrototype.h"
 #include "JSCInlines.h"
 
 namespace JSC {
@@ -40,11 +42,6 @@ void NumberObject::finishCreation(VM& vm)
     Base::finishCreation(vm);
     ASSERT(inherits(vm, info()));
     ASSERT(type() == NumberObjectType);
-}
-
-String NumberObject::toStringName(const JSObject*, JSGlobalObject*)
-{
-    return "Number"_s;
 }
 
 NumberObject* constructNumber(JSGlobalObject* globalObject, JSValue number)

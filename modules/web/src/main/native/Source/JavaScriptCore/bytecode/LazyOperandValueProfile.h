@@ -107,7 +107,9 @@ struct LazyOperandValueProfileKeyHash {
 namespace WTF {
 
 template<typename T> struct DefaultHash;
-template<> struct DefaultHash<JSC::LazyOperandValueProfileKey> : JSC::LazyOperandValueProfileKeyHash { };
+template<> struct DefaultHash<JSC::LazyOperandValueProfileKey> {
+    typedef JSC::LazyOperandValueProfileKeyHash Hash;
+};
 
 template<typename T> struct HashTraits;
 template<> struct HashTraits<JSC::LazyOperandValueProfileKey> : public GenericHashTraits<JSC::LazyOperandValueProfileKey> {

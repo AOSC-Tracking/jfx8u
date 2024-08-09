@@ -26,8 +26,13 @@
 #include "config.h"
 #include "JSAsyncFunction.h"
 
-#include "JSCellInlines.h"
+#include "Error.h"
+#include "JSCInlines.h"
+#include "JSCJSValue.h"
+#include "JSFunction.h"
 #include "JSFunctionInlines.h"
+#include "JSObject.h"
+#include "PropertySlot.h"
 #include "VM.h"
 
 namespace JSC {

@@ -30,6 +30,10 @@
 #include "ApplePaySessionPaymentRequest.h"
 #include <wtf/RetainPtr.h>
 
+#if USE(APPLE_INTERNAL_SDK)
+#include <WebKitAdditions/PaymentMethodUpdateAdditions.h>
+#endif
+
 OBJC_CLASS PKPaymentRequestPaymentMethodUpdate;
 
 namespace WebCore {
@@ -46,8 +50,9 @@ public:
     const TotalAndLineItems& totalAndLineItems() const;
     PKPaymentRequestPaymentMethodUpdate *platformUpdate() const;
 
-#if HAVE(PASSKIT_INSTALLMENTS)
-    void setInstallmentGroupIdentifier(const String&);
+#if defined(PAYMENTMETHODUPDATE_PUBLIC_ADDITIONS)
+PAYMENTMETHODUPDATE_PUBLIC_ADDITIONS
+#undef PAYMENTMETHODUPDATE_PUBLIC_ADDITIONS
 #endif
 
 private:

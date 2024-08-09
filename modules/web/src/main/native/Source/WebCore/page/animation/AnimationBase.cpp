@@ -120,9 +120,7 @@ static const char* nameForState(AnimationBase::AnimationState state)
     }
     return "";
 }
-#endif
 
-#if !ERROR_DISABLED
 static const char* nameForStateInput(AnimationBase::AnimationStateInput input)
 {
     switch (input) {
@@ -333,7 +331,7 @@ void AnimationBase::updateStateMachine(AnimationStateInput input, double param)
             }
             break;
         case AnimationState::Ending:
-#if !ERROR_DISABLED
+#if !LOG_DISABLED
             if (input != AnimationStateInput::EndTimerFired && input != AnimationStateInput::PlayStatePaused)
                 LOG_ERROR("State is AnimationState::Ending, but input is not AnimationStateInput::EndTimerFired or AnimationStateInput::PlayStatePaused. It is %s.", nameForStateInput(input));
 #endif
@@ -733,8 +731,10 @@ bool AnimationBase::computeTransformedExtentViaTransformList(const FloatRect& re
 
     bool applyTransformOrigin = containsRotation(style.transform().operations()) || style.transform().affectedByTransformOrigin();
     if (applyTransformOrigin) {
-        transformOrigin = rendererBox.location() + floatPointForLengthPoint(style.transformOriginXY(), rendererBox.size());
+        transformOrigin.setX(rendererBox.x() + floatValueForLength(style.transformOriginX(), rendererBox.width()));
+        transformOrigin.setY(rendererBox.y() + floatValueForLength(style.transformOriginY(), rendererBox.height()));
         // Ignore transformOriginZ because we'll bail if we encounter any 3D transforms.
+
         floatBounds.moveBy(-transformOrigin);
     }
 

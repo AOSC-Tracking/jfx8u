@@ -49,14 +49,4 @@ struct FourCC {
     uint32_t value { 0 };
 };
 
-} // namespace WebCore
-
-namespace WTF {
-
-template<typename> struct LogArgument;
-
-template<> struct LogArgument<WebCore::FourCC> {
-    static String toString(const WebCore::FourCC& code) { return code.toString(); }
-};
-
-} // namespace WTF
+}

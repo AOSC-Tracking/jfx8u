@@ -27,6 +27,7 @@
 #include "ObjectToStringAdaptiveStructureWatchpoint.h"
 
 #include "JSCellInlines.h"
+#include "ObjectPropertyConditionSet.h"
 #include "StructureRareData.h"
 
 namespace JSC {

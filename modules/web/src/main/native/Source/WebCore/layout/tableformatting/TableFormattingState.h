@@ -30,7 +30,6 @@
 #include "FormattingState.h"
 #include "TableGrid.h"
 #include <wtf/IsoMalloc.h>
-#include <wtf/UniqueRef.h>
 
 namespace WebCore {
 namespace Layout {
@@ -39,14 +38,13 @@ namespace Layout {
 class TableFormattingState : public FormattingState {
     WTF_MAKE_ISO_ALLOCATED(TableFormattingState);
 public:
-    TableFormattingState(Ref<FloatingState>&&, LayoutState&, const ContainerBox& tableBox);
+    TableFormattingState(Ref<FloatingState>&&, LayoutState&);
     ~TableFormattingState();
 
     TableGrid& tableGrid() { return m_tableGrid; }
-    const TableGrid& tableGrid() const { return m_tableGrid; }
 
 private:
-    UniqueRef<TableGrid> m_tableGrid;
+    TableGrid m_tableGrid;
 };
 
 }

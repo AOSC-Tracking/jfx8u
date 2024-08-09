@@ -61,13 +61,7 @@
 #include "QuickLook.h"
 #endif
 
-#undef RELEASE_LOG_IF_ALLOWED
-#undef RELEASE_LOG_ALWAYS
-#define PAGE_ID(frame) (frame.pageID().valueOr(PageIdentifier()).toUInt64())
-#define FRAME_ID(frame) (frame.frameID().valueOr(FrameIdentifier()).toUInt64())
 #define RELEASE_LOG_IF_ALLOWED(fmt, ...) RELEASE_LOG_IF(cachedResourceLoader.isAlwaysOnLoggingAllowed(), Network, "%p - CachedResource::" fmt, this, ##__VA_ARGS__)
-#define RELEASE_LOG_IF_ALLOWED_WITH_FRAME(fmt, frame, ...) RELEASE_LOG_IF(cachedResourceLoader.isAlwaysOnLoggingAllowed(), Network, "%p - [pageID=%" PRIu64 ", frameID=%" PRIu64 "] CachedResource::" fmt, this, PAGE_ID(frame), FRAME_ID(frame), ##__VA_ARGS__)
-#define RELEASE_LOG_ALWAYS(fmt, ...) RELEASE_LOG(Network, "%p - CachedResource::" fmt, this, ##__VA_ARGS__)
 
 namespace WebCore {
 
@@ -102,7 +96,7 @@ ResourceLoadPriority CachedResource::defaultPriorityForResourceType(Type type)
         return ResourceLoadPriority::VeryLow;
     case Type::LinkPrefetch:
         return ResourceLoadPriority::VeryLow;
-#if ENABLE(VIDEO)
+#if ENABLE(VIDEO_TRACK)
     case Type::TextTrackResource:
         return ResourceLoadPriority::Low;
 #endif
@@ -230,27 +224,27 @@ void CachedResource::load(CachedResourceLoader& cachedResourceLoader)
             break;
         case Document::AboutToEnterBackForwardCache:
             // Beacons are allowed to go through in 'pagehide' event handlers.
-            if (m_options.keepAlive || shouldUsePingLoad(type()))
+            if (shouldUsePingLoad(type()))
                 break;
-            RELEASE_LOG_IF_ALLOWED_WITH_FRAME("load: About to enter back/forward cache", frame);
+            RELEASE_LOG_IF_ALLOWED("load: About to enter back/forward cache (frame = %p)", &frame);
             failBeforeStarting();
             return;
         case Document::InBackForwardCache:
-            RELEASE_LOG_IF_ALLOWED_WITH_FRAME("load: Already in back/forward cache", frame);
+            RELEASE_LOG_IF_ALLOWED("load: Already in back/forward cache (frame = %p)", &frame);
             failBeforeStarting();
             return;
         }
     }
 
     FrameLoader& frameLoader = frame.loader();
-    if (m_options.securityCheck == SecurityCheckPolicy::DoSecurityCheck && !m_options.keepAlive && !shouldUsePingLoad(type())) {
+    if (m_options.securityCheck == SecurityCheckPolicy::DoSecurityCheck && !shouldUsePingLoad(type())) {
         while (true) {
             if (frameLoader.state() == FrameStateProvisional)
-                RELEASE_LOG_IF_ALLOWED_WITH_FRAME("load: Failed security check -- state is provisional", frame);
+                RELEASE_LOG_IF_ALLOWED("load: Failed security check -- state is provisional (frame = %p)", &frame);
             else if (!frameLoader.activeDocumentLoader())
-                RELEASE_LOG_IF_ALLOWED_WITH_FRAME("load: Failed security check -- not active document", frame);
+                RELEASE_LOG_IF_ALLOWED("load: Failed security check -- not active document (frame = %p)", &frame);
             else if (frameLoader.activeDocumentLoader()->isStopping())
-                RELEASE_LOG_IF_ALLOWED_WITH_FRAME("load: Failed security check -- active loader is stopping", frame);
+                RELEASE_LOG_IF_ALLOWED("load: Failed security check -- active loader is stopping (frame = %p)", &frame);
             else
                 break;
             failBeforeStarting();
@@ -284,7 +278,8 @@ void CachedResource::load(CachedResourceLoader& cachedResourceLoader)
     // Navigation algorithm is setting up the request before sending it to CachedResourceLoader?CachedResource.
     // So no need for extra fields for MainResource.
     if (type() != Type::MainResource)
-        frameLoader.addExtraFieldsToRequest(m_resourceRequest, IsMainResource::No);
+        frameLoader.addExtraFieldsToSubresourceRequest(m_resourceRequest);
+
 
     // FIXME: It's unfortunate that the cache layer and below get to know anything about fragment identifiers.
     // We should look into removing the expectation of that knowledge from the platform network stacks.
@@ -319,17 +314,17 @@ void CachedResource::load(CachedResourceLoader& cachedResourceLoader)
                 InspectorInstrumentation::didFailLoading(protectedFrame.ptr(), protectedFrame->loader().activeDocumentLoader(), identifier, error);
                 return;
             }
-            finishLoading(nullptr, { });
+            finishLoading(nullptr);
             NetworkLoadMetrics emptyMetrics;
             InspectorInstrumentation::didFinishLoading(protectedFrame.ptr(), protectedFrame->loader().activeDocumentLoader(), identifier, emptyMetrics, nullptr);
         });
         return;
     }
 
-    platformStrategies()->loaderStrategy()->loadResource(frame, *this, WTFMove(request), m_options, [this, protectedThis = CachedResourceHandle<CachedResource>(this), frameRef = makeRef(frame), loggingAllowed = cachedResourceLoader.isAlwaysOnLoggingAllowed()] (RefPtr<SubresourceLoader>&& loader) {
+    platformStrategies()->loaderStrategy()->loadResource(frame, *this, WTFMove(request), m_options, [this, protectedThis = CachedResourceHandle<CachedResource>(this), frame = makeRef(frame), loggingAllowed = cachedResourceLoader.isAlwaysOnLoggingAllowed()] (RefPtr<SubresourceLoader>&& loader) {
         m_loader = WTFMove(loader);
         if (!m_loader) {
-            RELEASE_LOG_IF(loggingAllowed, Network, "%p - [pageID=%" PRIu64 ", frameID=%" PRIu64 "] CachedResource::load: Unable to create SubresourceLoader", this, PAGE_ID(frameRef.get()), FRAME_ID(frameRef.get()));
+            RELEASE_LOG_IF(loggingAllowed, Network, "%p - CachedResource::load: Unable to create SubresourceLoader (frame = %p)", this, frame.ptr());
             failBeforeStarting();
             return;
         }
@@ -345,9 +340,9 @@ void CachedResource::loadFrom(const CachedResource& resource)
 
     if (isCrossOrigin() && m_options.mode == FetchOptions::Mode::Cors) {
         ASSERT(m_origin);
-        auto accessControlCheckResult = WebCore::passesAccessControlCheck(resource.response(), m_options.storedCredentialsPolicy, *m_origin, &CrossOriginAccessControlCheckDisabler::singleton());
-        if (!accessControlCheckResult) {
-            setResourceError(ResourceError(String(), 0, url(), accessControlCheckResult.error(), ResourceError::Type::AccessControl));
+        String errorMessage;
+        if (!WebCore::passesAccessControlCheck(resource.response(), m_options.storedCredentialsPolicy, *m_origin, errorMessage)) {
+            setResourceError(ResourceError(String(), 0, url(), errorMessage, ResourceError::Type::AccessControl));
             return;
         }
     }
@@ -366,14 +361,14 @@ void CachedResource::setBodyDataFrom(const CachedResource& resource)
     setEncodedSize(resource.encodedSize());
 }
 
-void CachedResource::checkNotify(const NetworkLoadMetrics& metrics)
+void CachedResource::checkNotify()
 {
     if (isLoading() || stillNeedsLoad())
         return;
 
     CachedResourceClientWalker<CachedResourceClient> walker(m_clients);
     while (CachedResourceClient* client = walker.next())
-        client->notifyFinished(*this, metrics);
+        client->notifyFinished(*this);
 }
 
 void CachedResource::updateBuffer(SharedBuffer&)
@@ -386,10 +381,10 @@ void CachedResource::updateData(const char*, unsigned)
     ASSERT(dataBufferingPolicy() == DataBufferingPolicy::DoNotBufferData);
 }
 
-void CachedResource::finishLoading(SharedBuffer*, const NetworkLoadMetrics& metrics)
+void CachedResource::finishLoading(SharedBuffer*)
 {
     setLoading(false);
-    checkNotify(metrics);
+    checkNotify();
 }
 
 void CachedResource::error(CachedResource::Status status)
@@ -399,7 +394,7 @@ void CachedResource::error(CachedResource::Status status)
     m_data = nullptr;
 
     setLoading(false);
-    checkNotify({ });
+    checkNotify();
 }
 
 void CachedResource::cancelLoad()
@@ -414,7 +409,7 @@ void CachedResource::cancelLoad()
         setStatus(LoadError);
 
     setLoading(false);
-    checkNotify({ });
+    checkNotify();
 }
 
 void CachedResource::finish()
@@ -490,12 +485,11 @@ Seconds CachedResource::freshnessLifetime(const ResourceResponse& response) cons
 
 void CachedResource::redirectReceived(ResourceRequest&& request, const ResourceResponse& response, CompletionHandler<void(ResourceRequest&&)>&& completionHandler)
 {
-    RELEASE_LOG_ALWAYS("redirectReceived:");
-
     m_requestedFromNetworkingLayer = true;
-    if (!response.isNull())
-    updateRedirectChainStatus(m_redirectChainCacheStatus, response);
+    if (response.isNull())
+        return completionHandler(WTFMove(request));
 
+    updateRedirectChainStatus(m_redirectChainCacheStatus, response);
     completionHandler(WTFMove(request));
 }
 
@@ -549,7 +543,7 @@ void CachedResource::didAddClient(CachedResourceClient& client)
 
     // FIXME: Make calls to notifyFinished async
     if (!isLoading() && !stillNeedsLoad())
-        client.notifyFinished(*this, { });
+        client.notifyFinished(*this);
 }
 
 bool CachedResource::addClientToSet(CachedResourceClient& client)
@@ -839,9 +833,6 @@ bool CachedResource::canUseCacheValidator() const
 
     if (m_response.cacheControlContainsNoStore())
         return false;
-    // Network process will handle revalidation for s-w-r.
-    if (m_response.cacheControlStaleWhileRevalidate())
-        return false;
     return m_response.hasCacheValidatorFields();
 }
 
@@ -958,9 +949,3 @@ void CachedResource::previewResponseReceived(const ResourceResponse& response)
 #endif
 
 }
-
-#undef PAGE_ID
-#undef FRAME_ID
-#undef RELEASE_LOG_IF_ALLOWED
-#undef RELEASE_LOG_IF_ALLOWED_WITH_FRAME
-#undef RELEASE_LOG_ALWAYS

@@ -30,7 +30,6 @@
 
 #include "DFGSlowPathGenerator.h"
 #include "DFGSpeculativeJIT.h"
-#include "JSCJSValueInlines.h"
 
 namespace JSC { namespace DFG {
 

@@ -28,13 +28,11 @@
 
 namespace WebCore {
 
-#if !PLATFORM(COCOA)
-
+#if (!PLATFORM(IOS_FAMILY) && !PLATFORM(MAC)) || !HAVE(MEDIA_PLAYER)
 std::unique_ptr<RemoteCommandListener> RemoteCommandListener::create(RemoteCommandListenerClient& client)
 {
     return makeUnique<RemoteCommandListener>(client);
 }
-
 #endif
 
 }

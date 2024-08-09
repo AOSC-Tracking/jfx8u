@@ -29,6 +29,7 @@
 
 #if ENABLE(WEBASSEMBLY)
 
+#include "WasmMemory.h"
 #include <wtf/CheckedArithmetic.h>
 #include <wtf/FastMalloc.h>
 

@@ -216,13 +216,13 @@ CString fileSystemRepresentation(const String& s)
     return CString(s.latin1().data());
 }
 
-String openTemporaryFile(const String&, PlatformFileHandle& handle, const String&)
+String openTemporaryFile(const String&, PlatformFileHandle& handle)
 {
     handle = invalidPlatformFileHandle;
     return String();
 }
 
-PlatformFileHandle openFile(const String& path, FileOpenMode mode, FileAccessPermission, bool)
+PlatformFileHandle openFile(const String& path, FileOpenMode mode)
 {
     if (mode != FileOpenMode::Read) {
         return invalidPlatformFileHandle;
@@ -347,7 +347,13 @@ Optional<int32_t> getFileDeviceId(const CString&)
     return {};
 }
 
-bool MappedFileData::mapFileHandle(PlatformFileHandle, FileOpenMode, MappedFileMode)
+MappedFileData::MappedFileData(const String&, MappedFileMode, bool& success)
+{
+    fprintf(stderr, "MappedFileData::MappedFileData(const String&, MappedFileMode, bool&) notImplemented() \n");
+    success = false;
+}
+
+bool MappedFileData::mapFileHandle(PlatformFileHandle, MappedFileMode)
 {
     fprintf(stderr, "MappedFileData::mapFileHandle(PlatformFileHandle handle, MappedFileMode) notImplemented()\n");
     return false;

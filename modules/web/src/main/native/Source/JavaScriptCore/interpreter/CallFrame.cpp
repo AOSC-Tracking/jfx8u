@@ -29,10 +29,11 @@
 #include "CodeBlock.h"
 #include "ExecutableAllocator.h"
 #include "InlineCallFrame.h"
+#include "Interpreter.h"
 #include "JSCInlines.h"
 #include "JSWebAssemblyInstance.h"
 #include "LLIntPCRanges.h"
-#include "VMEntryRecord.h"
+#include "VMEntryScope.h"
 #include "WasmContextInlines.h"
 #include "WasmInstance.h"
 #include <wtf/StringPrintStream.h>
@@ -43,7 +44,7 @@ void CallFrame::initDeprecatedCallFrameForDebugger(CallFrame* globalExec, JSCall
 {
     globalExec->setCodeBlock(nullptr);
     globalExec->setCallerFrame(noCaller());
-    globalExec->setReturnPC(nullptr);
+    globalExec->setReturnPC(0);
     globalExec->setArgumentCountIncludingThis(0);
     globalExec->setCallee(globalCallee);
     ASSERT(globalExec->isDeprecatedCallFrameForDebugger());
@@ -127,7 +128,7 @@ unsigned CallFrame::callSiteBitsAsBytecodeOffset() const
     return callSiteIndex().bits();
 }
 
-BytecodeIndex CallFrame::bytecodeIndex() const
+BytecodeIndex CallFrame::bytecodeIndex()
 {
     ASSERT(!callee().isWasm());
     if (!codeBlock())
@@ -147,7 +148,7 @@ BytecodeIndex CallFrame::bytecodeIndex() const
     return callSiteIndex().bytecodeIndex();
 }
 
-CodeOrigin CallFrame::codeOrigin() const
+CodeOrigin CallFrame::codeOrigin()
 {
     if (!codeBlock())
         return CodeOrigin(BytecodeIndex(0));
@@ -267,7 +268,7 @@ String CallFrame::friendlyFunctionName()
     return emptyString();
 }
 
-void CallFrame::dump(PrintStream& out) const
+void CallFrame::dump(PrintStream& out)
 {
     if (CodeBlock* codeBlock = this->codeBlock()) {
         out.print(codeBlock->inferredName(), "#", codeBlock->hashAsStringIfPossible(), " [", codeBlock->jitType(), " ", bytecodeIndex(), "]");
@@ -291,12 +292,8 @@ void CallFrame::dump(PrintStream& out) const
 
 const char* CallFrame::describeFrame()
 {
-    constexpr size_t bufferSize = 200;
-    static char* buffer = nullptr;
-    static std::once_flag onceKey;
-    std::call_once(onceKey, [&] {
-        buffer = static_cast<char*>(fastZeroedMalloc(bufferSize + 1));
-    });
+    const size_t bufferSize = 200;
+    static char buffer[bufferSize + 1];
 
     WTF::StringPrintStream stringStream;
 

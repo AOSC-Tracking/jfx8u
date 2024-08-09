@@ -23,6 +23,7 @@
 #include "config.h"
 #include "HTMLCollection.h"
 
+#include "CachedHTMLCollection.h"
 #include "HTMLNames.h"
 #include "NodeRareData.h"
 #include <wtf/IsoMallocInlines.h>

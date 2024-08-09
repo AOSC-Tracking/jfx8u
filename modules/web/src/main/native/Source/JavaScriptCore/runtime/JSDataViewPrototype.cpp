@@ -26,9 +26,11 @@
 #include "config.h"
 #include "JSDataViewPrototype.h"
 
+#include "Error.h"
 #include "JSArrayBuffer.h"
-#include "JSCInlines.h"
 #include "JSDataView.h"
+#include "Lookup.h"
+#include "JSCInlines.h"
 #include "ToNativeFromValue.h"
 #include "TypedArrayAdaptors.h"
 #include <wtf/FlipBytes.h>
@@ -86,7 +88,7 @@ EncodedJSValue JSC_HOST_CALL dataViewProtoGetterByteOffset(JSGlobalObject*, Call
 namespace JSC {
 
 const ClassInfo JSDataViewPrototype::s_info = {
-    "DataView", &Base::s_info, &dataViewTable, nullptr,
+    "DataViewPrototype", &Base::s_info, &dataViewTable, nullptr,
     CREATE_METHOD_TABLE(JSDataViewPrototype)
 };
 
@@ -107,8 +109,7 @@ JSDataViewPrototype* JSDataViewPrototype::create(VM& vm, Structure* structure)
 void JSDataViewPrototype::finishCreation(JSC::VM& vm)
 {
     Base::finishCreation(vm);
-    ASSERT(inherits(vm, info()));
-    JSC_TO_STRING_TAG_WITHOUT_TRANSITION();
+    putDirectWithoutTransition(vm, vm.propertyNames->toStringTagSymbol, jsNontrivialString(vm, "DataView"_s), PropertyAttribute::DontEnum | PropertyAttribute::ReadOnly);
 }
 
 Structure* JSDataViewPrototype::createStructure(
@@ -218,7 +219,7 @@ EncodedJSValue JSC_HOST_CALL dataViewProtoGetterBuffer(JSGlobalObject* globalObj
     if (!view)
         return throwVMTypeError(globalObject, scope, "DataView.prototype.buffer expects |this| to be a DataView object");
 
-    RELEASE_AND_RETURN(scope, JSValue::encode(view->possiblySharedJSBuffer(globalObject)));
+    return JSValue::encode(view->possiblySharedJSBuffer(globalObject));
 }
 
 EncodedJSValue JSC_HOST_CALL dataViewProtoGetterByteLength(JSGlobalObject* globalObject, CallFrame* callFrame)

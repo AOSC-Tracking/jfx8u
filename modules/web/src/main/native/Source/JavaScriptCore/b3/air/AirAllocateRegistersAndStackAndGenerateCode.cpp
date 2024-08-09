@@ -787,7 +787,12 @@ void GenerateAndAllocateRegisters::generate(CCallHelpers& jit)
 
                     // We currently don't represent the full epilogue in Air, so we need to
                     // have this override.
-                    m_code.emitEpilogue(*m_jit);
+                    if (m_code.frameSize()) {
+                        m_jit->emitRestore(m_code.calleeSaveRegisterAtOffsetList());
+                        m_jit->emitFunctionEpilogue();
+                    } else
+                        m_jit->emitFunctionEpilogueWithEmptyFrame();
+                    m_jit->ret();
                 }
 
                 if (needsToGenerate) {

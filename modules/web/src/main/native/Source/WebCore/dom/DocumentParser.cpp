@@ -32,7 +32,7 @@
 namespace WebCore {
 
 DocumentParser::DocumentParser(Document& document)
-    : m_state(ParserState::Parsing)
+    : m_state(ParsingState)
     , m_documentWasLoadedAsPartOfNavigation(false)
     , m_document(makeWeakPtr(document))
 {
@@ -48,23 +48,23 @@ DocumentParser::~DocumentParser()
 
 void DocumentParser::startParsing()
 {
-    m_state = ParserState::Parsing;
+    m_state = ParsingState;
 }
 
 void DocumentParser::prepareToStopParsing()
 {
-    ASSERT(m_state == ParserState::Parsing);
-    m_state = ParserState::Stopping;
+    ASSERT(m_state == ParsingState);
+    m_state = StoppingState;
 }
 
 void DocumentParser::stopParsing()
 {
-    m_state = ParserState::Stopped;
+    m_state = StoppedState;
 }
 
 void DocumentParser::detach()
 {
-    m_state = ParserState::Detached;
+    m_state = DetachedState;
     m_document = nullptr;
 }
 

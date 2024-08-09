@@ -143,7 +143,6 @@ private:
 
     bool m_endWasDelayed { false };
     unsigned m_pumpSessionNestingLevel { 0 };
-    bool m_shouldEmitTracePoints { false };
 };
 
 inline HTMLTokenizer& HTMLDocumentParser::tokenizer()

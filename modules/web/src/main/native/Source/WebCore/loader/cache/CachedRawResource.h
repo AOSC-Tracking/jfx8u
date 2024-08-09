@@ -53,7 +53,7 @@ private:
     void didAddClient(CachedResourceClient&) final;
     void updateBuffer(SharedBuffer&) final;
     void updateData(const char* data, unsigned length) final;
-    void finishLoading(SharedBuffer*, const NetworkLoadMetrics&) final;
+    void finishLoading(SharedBuffer*) final;
 
     bool shouldIgnoreHTTPStatusCodeErrors() const override { return true; }
     void allClientsRemoved() override;

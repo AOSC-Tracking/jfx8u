@@ -27,7 +27,6 @@
 
 #pragma once
 
-#include "UserStyleSheet.h"
 #include <memory>
 #include <wtf/FastMalloc.h>
 #include <wtf/HashMap.h>
@@ -73,9 +72,6 @@ public:
     void maybeAddContentExtensionSheet(const String& identifier, StyleSheetContents&);
 #endif
 
-    void injectPageSpecificUserStyleSheet(const UserStyleSheet&);
-    void removePageSpecificUserStyleSheet(const UserStyleSheet&);
-
     String contentForInjectedStyleSheet(const RefPtr<CSSStyleSheet>&) const;
 
     void detachFromDocument();
@@ -92,7 +88,6 @@ private:
 
     Vector<RefPtr<CSSStyleSheet>> m_userStyleSheets;
     Vector<RefPtr<CSSStyleSheet>> m_authorStyleSheetsForTesting;
-    Vector<UserStyleSheet> m_pageSpecificStyleSheets;
 
 #if ENABLE(CONTENT_EXTENSIONS)
     HashMap<String, RefPtr<CSSStyleSheet>> m_contentExtensionSheets;

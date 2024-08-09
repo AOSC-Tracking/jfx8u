@@ -34,21 +34,20 @@ namespace Layout {
 
 class InlineSoftLineBreakItem : public InlineItem {
 public:
-    static InlineSoftLineBreakItem createSoftLineBreakItem(const InlineTextBox&, unsigned position);
+    static InlineSoftLineBreakItem createSoftLineBreakItem(const Box&, unsigned position);
 
     unsigned position() const { return m_startOrPosition; }
-    const InlineTextBox& inlineTextBox() const { return downcast<InlineTextBox>(layoutBox()); }
 
-    InlineSoftLineBreakItem(const InlineTextBox&, unsigned position);
+    InlineSoftLineBreakItem(const Box&, unsigned position);
 };
 
-inline InlineSoftLineBreakItem InlineSoftLineBreakItem::createSoftLineBreakItem(const InlineTextBox& inlineTextBox, unsigned position)
+inline InlineSoftLineBreakItem InlineSoftLineBreakItem::createSoftLineBreakItem(const Box& inlineBox, unsigned position)
 {
-    return { inlineTextBox, position };
+    return { inlineBox, position };
 }
 
-inline InlineSoftLineBreakItem::InlineSoftLineBreakItem(const InlineTextBox& inlineTextBox, unsigned position)
-    : InlineItem(inlineTextBox, Type::SoftLineBreak)
+inline InlineSoftLineBreakItem::InlineSoftLineBreakItem(const Box& inlineBox, unsigned position)
+    : InlineItem(inlineBox, Type::SoftLineBreak)
 {
     m_startOrPosition = position;
 }

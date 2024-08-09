@@ -25,7 +25,7 @@
 
 #include "config.h"
 
-#if ENABLE(VIDEO)
+#if ENABLE(VIDEO_TRACK)
 
 #include "TrackListBase.h"
 
@@ -40,7 +40,7 @@ namespace WebCore {
 WTF_MAKE_ISO_ALLOCATED_IMPL(TrackListBase);
 
 TrackListBase::TrackListBase(WeakPtr<HTMLMediaElement> element, ScriptExecutionContext* context)
-    : ActiveDOMObject(context)
+    : ContextDestructionObserver(context)
     , m_element(element)
     , m_asyncEventQueue(MainThreadGenericEventQueue::create(*this))
 {
@@ -175,11 +175,6 @@ bool TrackListBase::isAnyTrackEnabled() const
             return true;
     }
     return false;
-}
-
-bool TrackListBase::virtualHasPendingActivity() const
-{
-    return m_asyncEventQueue->hasPendingActivity();
 }
 
 } // namespace WebCore

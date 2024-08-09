@@ -40,6 +40,7 @@
 #include "URLRegistry.h"
 #include <wtf/HashMap.h>
 #include <wtf/LoggerHelper.h>
+#include <wtf/RefCounted.h>
 #include <wtf/RefPtr.h>
 
 namespace WebCore {
@@ -49,6 +50,7 @@ class Document;
 class MediaStream final
     : public EventTargetWithInlineData
     , public ActiveDOMObject
+    , public MediaStreamTrack::Observer
     , public MediaStreamPrivate::Observer
     , private MediaCanStartListener
 #if !RELEASE_LOG_DISABLED
@@ -57,6 +59,12 @@ class MediaStream final
     , public RefCounted<MediaStream> {
     WTF_MAKE_ISO_ALLOCATED(MediaStream);
 public:
+    class Observer {
+    public:
+        virtual ~Observer() = default;
+        virtual void didAddOrRemoveTrack() = 0;
+    };
+
     static Ref<MediaStream> create(Document&);
     static Ref<MediaStream> create(Document&, MediaStream&);
     static Ref<MediaStream> create(Document&, const MediaStreamTrackVector&);
@@ -90,9 +98,19 @@ public:
     using RefCounted<MediaStream>::ref;
     using RefCounted<MediaStream>::deref;
 
+    void addObserver(Observer*);
+    void removeObserver(Observer*);
+
     void addTrackFromPlatform(Ref<MediaStreamTrack>&&);
 
     Document* document() const;
+
+    // ActiveDOMObject API.
+    bool hasPendingActivity() const final;
+
+    enum class StreamModifier { DomAPI, Platform };
+    bool internalAddTrack(Ref<MediaStreamTrack>&&, StreamModifier);
+    WEBCORE_EXPORT bool internalRemoveTrack(const String&, StreamModifier);
 
 protected:
     MediaStream(Document&, const MediaStreamTrackVector&);
@@ -106,12 +124,13 @@ protected:
 #endif
 
 private:
-    void internalAddTrack(Ref<MediaStreamTrack>&&);
-    WEBCORE_EXPORT RefPtr<MediaStreamTrack> internalTakeTrack(const String&);
 
     // EventTarget
     void refEventTarget() final { ref(); }
     void derefEventTarget() final { deref(); }
+
+    // MediaStreamTrack::Observer
+    void trackDidEnd() final;
 
     // MediaStreamPrivate::Observer
     void activeStatusChanged() final;
@@ -127,7 +146,6 @@ private:
     // ActiveDOMObject API.
     void stop() final;
     const char* activeDOMObjectName() const final;
-    bool virtualHasPendingActivity() const final;
 
     void updateActiveState();
     void activityEventTimerFired();
@@ -139,6 +157,8 @@ private:
     Ref<MediaStreamPrivate> m_private;
 
     HashMap<String, RefPtr<MediaStreamTrack>> m_trackSet;
+
+    Vector<Observer*> m_observers;
 
     MediaProducer::MediaStateFlags m_state { MediaProducer::IsNotPlaying };
 

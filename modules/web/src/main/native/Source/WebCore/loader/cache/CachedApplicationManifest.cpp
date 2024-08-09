@@ -40,13 +40,13 @@ CachedApplicationManifest::CachedApplicationManifest(CachedResourceRequest&& req
 {
 }
 
-void CachedApplicationManifest::finishLoading(SharedBuffer* data, const NetworkLoadMetrics& metrics)
+void CachedApplicationManifest::finishLoading(SharedBuffer* data)
 {
     m_data = data;
     setEncodedSize(data ? data->size() : 0);
     if (data)
         m_text = m_decoder->decodeAndFlush(data->data(), data->size());
-    CachedResource::finishLoading(data, metrics);
+    CachedResource::finishLoading(data);
 }
 
 void CachedApplicationManifest::setEncoding(const String& chs)

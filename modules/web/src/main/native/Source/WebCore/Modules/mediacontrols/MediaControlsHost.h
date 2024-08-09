@@ -25,10 +25,12 @@
 
 #pragma once
 
+#if ENABLE(MEDIA_CONTROLS_SCRIPT)
+
 #include <wtf/RefCounted.h>
-#include <wtf/RefPtr.h>
 #include <wtf/Variant.h>
-#include <wtf/WeakPtr.h>
+#include <wtf/Vector.h>
+#include <wtf/text/WTFString.h>
 
 namespace WebCore {
 
@@ -41,13 +43,14 @@ class TextTrack;
 class TextTrackList;
 
 class MediaControlsHost : public RefCounted<MediaControlsHost> {
-    WTF_MAKE_FAST_ALLOCATED(MediaControlsHost);
 public:
-    static Ref<MediaControlsHost> create(HTMLMediaElement&);
+    static Ref<MediaControlsHost> create(HTMLMediaElement*);
     ~MediaControlsHost();
 
     static const AtomString& automaticKeyword();
     static const AtomString& forcedOnlyKeyword();
+    static const AtomString& alwaysOnKeyword();
+    static const AtomString& manualKeyword();
 
     Vector<RefPtr<TextTrack>> sortedTrackListForMenu(TextTrackList&);
     Vector<RefPtr<AudioTrack>> sortedTrackListForMenu(AudioTrackList&);
@@ -55,8 +58,8 @@ public:
     using TextOrAudioTrack = WTF::Variant<RefPtr<TextTrack>, RefPtr<AudioTrack>>;
     String displayNameForTrack(const Optional<TextOrAudioTrack>&);
 
-    static TextTrack& captionMenuOffItem();
-    static TextTrack& captionMenuAutomaticItem();
+    TextTrack* captionMenuOffItem();
+    TextTrack* captionMenuAutomaticItem();
     AtomString captionDisplayMode() const;
     void setSelectedTextTrack(TextTrack*);
     Element* textTrackContainer();
@@ -67,10 +70,10 @@ public:
     bool isInMediaDocument() const;
     bool userGestureRequired() const;
     bool shouldForceControlsDisplay() const;
+    void setPreparedToReturnVideoLayerToInline(bool);
 
     enum class ForceUpdate { Yes, No };
-    void updateCaptionDisplaySizes(ForceUpdate = ForceUpdate::No);
-    void updateTextTrackRepresentationImageIfNeeded();
+    void updateCaptionDisplaySizes(ForceUpdate force = ForceUpdate::No);
     void enteredFullscreen();
     void exitedFullscreen();
 
@@ -85,19 +88,20 @@ public:
     bool controlsDependOnPageScaleFactor() const;
     void setControlsDependOnPageScaleFactor(bool v);
 
-    static String generateUUID();
+    String generateUUID() const;
 
-    static String shadowRootCSSText();
-    static String base64StringForIconNameAndType(const String& iconName, const String& iconType);
-    static String formattedStringForDuration(double);
+    String shadowRootCSSText() const;
+    String base64StringForIconNameAndType(const String& iconName, const String& iconType) const;
+    String formattedStringForDuration(double) const;
 
 private:
-    explicit MediaControlsHost(HTMLMediaElement&);
+    MediaControlsHost(HTMLMediaElement*);
 
-    WeakPtr<HTMLMediaElement> m_mediaElement;
+    HTMLMediaElement* m_mediaElement;
     RefPtr<MediaControlTextTrackContainerElement> m_textTrackContainer;
     bool m_simulateCompactMode { false };
 };
 
 }
 
+#endif

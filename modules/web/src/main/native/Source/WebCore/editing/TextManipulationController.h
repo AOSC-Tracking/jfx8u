@@ -26,7 +26,6 @@
 #pragma once
 
 #include "Position.h"
-#include "QualifiedName.h"
 #include <wtf/CompletionHandler.h>
 #include <wtf/EnumTraits.h>
 #include <wtf/ObjectIdentifier.h>
@@ -48,19 +47,9 @@ public:
     enum TokenIdentifierType { };
     using TokenIdentifier = ObjectIdentifier<TokenIdentifierType>;
 
-    struct ManipulationTokenInfo {
-        String tagName;
-        String roleAttribute;
-        URL documentURL;
-
-        template<class Encoder> void encode(Encoder&) const;
-        template<class Decoder> static Optional<ManipulationTokenInfo> decode(Decoder&);
-    };
-
     struct ManipulationToken {
         TokenIdentifier identifier;
         String content;
-        Optional<ManipulationTokenInfo> info;
         bool isExcluded { false };
 
         template<class Encoder> void encode(Encoder&) const;
@@ -69,14 +58,6 @@ public:
 
     enum ItemIdentifierType { };
     using ItemIdentifier = ObjectIdentifier<ItemIdentifierType>;
-
-    struct ManipulationItem {
-        ItemIdentifier identifier;
-        Vector<ManipulationToken> tokens;
-
-        template<class Encoder> void encode(Encoder&) const;
-        template<class Decoder> static Optional<ManipulationItem> decode(Decoder&);
-    };
 
     struct ExclusionRule {
         enum class Type : uint8_t { Exclude, Include };
@@ -112,118 +93,47 @@ public:
         template<class Decoder> static Optional<ExclusionRule> decode(Decoder&);
     };
 
-    using ManipulationItemCallback = WTF::Function<void(Document&, const Vector<ManipulationItem>&)>;
+    using ManipulationItemCallback = WTF::Function<void(Document&, ItemIdentifier, const Vector<ManipulationToken>&)>;
     WEBCORE_EXPORT void startObservingParagraphs(ManipulationItemCallback&&, Vector<ExclusionRule>&& = { });
 
     void didCreateRendererForElement(Element&);
-    void didCreateRendererForTextNode(Text&);
-    void didUpdateContentForText(Text&);
-    void removeNode(Node*);
 
-    enum class ManipulationFailureType : uint8_t {
+    enum class ManipulationResult : uint8_t {
+        Success,
         ContentChanged,
         InvalidItem,
         InvalidToken,
         ExclusionViolation,
     };
-
-    struct ManipulationFailure {
-        ItemIdentifier identifier;
-        uint64_t index;
-        ManipulationFailureType type;
-
-        template<class Encoder> void encode(Encoder&) const;
-        template<class Decoder> static Optional<ManipulationFailure> decode(Decoder&);
-    };
-
-    WEBCORE_EXPORT Vector<ManipulationFailure> completeManipulation(const Vector<ManipulationItem>&);
+    WEBCORE_EXPORT ManipulationResult completeManipulation(ItemIdentifier, const Vector<ManipulationToken>&);
 
 private:
-    void observeParagraphs(const Position& start, const Position& end);
-    void scheduleObservationUpdate();
+    void observeParagraphs(VisiblePosition& start, VisiblePosition& end);
+    void scheduleObservartionUpdate();
 
-    struct ManipulationItemData {
+    struct ManipulationItem {
         Position start;
         Position end;
-
-        WeakPtr<Element> element;
-        QualifiedName attributeName { nullQName() };
-
         Vector<ManipulationToken> tokens;
     };
 
-    struct ManipulationUnit {
-        Ref<Node> node;
-        Vector<ManipulationToken> tokens;
-        bool areAllTokensExcluded { true };
-        bool firstTokenContainsDelimiter { false };
-        bool lastTokenContainsDelimiter { false };
-    };
-    ManipulationUnit createUnit(const Vector<String>&, Node&);
-    void parse(ManipulationUnit&, const String&, Node&);
-
-    bool shouldExcludeNodeBasedOnStyle(const Node&);
-
-    void addItem(ManipulationItemData&&);
-    void addItemIfPossible(Vector<ManipulationUnit>&&);
-    void flushPendingItemsForCallback();
-
-    enum class IsNodeManipulated : bool { No, Yes };
-    struct NodeInsertion {
-        RefPtr<Node> parentIfDifferentFromCommonAncestor;
-        Ref<Node> child;
-        IsNodeManipulated isChildManipulated { IsNodeManipulated::Yes };
-    };
-    using NodeEntry = std::pair<Ref<Node>, Ref<Node>>;
-    Vector<Ref<Node>> getPath(Node*, Node*);
-    void updateInsertions(Vector<NodeEntry>&, const Vector<Ref<Node>>&, Node*, HashSet<Ref<Node>>&, Vector<NodeInsertion>&);
-    Optional<ManipulationFailureType> replace(const ManipulationItemData&, const Vector<ManipulationToken>&, HashSet<Ref<Node>>& containersWithoutVisualOverflowBeforeReplacement);
+    void addItem(const Position& startOfParagraph, const Position& endOfParagraph, Vector<ManipulationToken>&&);
+    ManipulationResult replace(const ManipulationItem&, const Vector<ManipulationToken>&);
 
     WeakPtr<Document> m_document;
-    WeakHashSet<Element> m_elementsWithNewRenderer;
-    HashSet<Text*> m_manipulatedTextsWithNewContent;
-    HashSet<Node*> m_textNodesWithNewRenderer;
-    HashSet<Node*> m_manipulatedNodes;
-
-    HashMap<String, bool> m_cachedFontFamilyExclusionResults;
-
+    WeakHashSet<Element> m_mutatedElements;
+    WeakHashSet<Element> m_recentlyInsertedElements;
     ManipulationItemCallback m_callback;
-    Vector<ManipulationItem> m_pendingItemsForCallback;
-
     Vector<ExclusionRule> m_exclusionRules;
-    HashMap<ItemIdentifier, ManipulationItemData> m_items;
+    HashMap<ItemIdentifier, ManipulationItem> m_items;
     ItemIdentifier m_itemIdentifier;
     TokenIdentifier m_tokenIdentifier;
 };
 
 template<class Encoder>
-void TextManipulationController::ManipulationTokenInfo::encode(Encoder& encoder) const
-{
-    encoder << tagName;
-    encoder << roleAttribute;
-    encoder << documentURL;
-}
-
-template<class Decoder>
-Optional<TextManipulationController::ManipulationTokenInfo> TextManipulationController::ManipulationTokenInfo::decode(Decoder& decoder)
-{
-    ManipulationTokenInfo result;
-    if (!decoder.decode(result.tagName))
-        return WTF::nullopt;
-
-    if (!decoder.decode(result.roleAttribute))
-        return WTF::nullopt;
-
-    if (!decoder.decode(result.documentURL))
-        return WTF::nullopt;
-
-    return result;
-}
-
-template<class Encoder>
 void TextManipulationController::ManipulationToken::encode(Encoder& encoder) const
 {
-    encoder << identifier << content << info << isExcluded;
+    encoder << identifier << content << isExcluded;
 }
 
 template<class Decoder>
@@ -234,26 +144,7 @@ Optional<TextManipulationController::ManipulationToken> TextManipulationControll
         return WTF::nullopt;
     if (!decoder.decode(result.content))
         return WTF::nullopt;
-    if (!decoder.decode(result.info))
-        return WTF::nullopt;
     if (!decoder.decode(result.isExcluded))
-        return WTF::nullopt;
-    return result;
-}
-
-template<class Encoder>
-void TextManipulationController::ManipulationItem::encode(Encoder& encoder) const
-{
-    encoder << identifier << tokens;
-}
-
-template<class Decoder>
-Optional<TextManipulationController::ManipulationItem> TextManipulationController::ManipulationItem::decode(Decoder& decoder)
-{
-    ManipulationItem result;
-    if (!decoder.decode(result.identifier))
-        return WTF::nullopt;
-    if (!decoder.decode(result.tokens))
         return WTF::nullopt;
     return result;
 }
@@ -322,25 +213,6 @@ Optional<TextManipulationController::ExclusionRule::ClassRule> TextManipulationC
     return result;
 }
 
-template<class Encoder>
-void TextManipulationController::ManipulationFailure::encode(Encoder& encoder) const
-{
-    encoder << identifier << index << type;
-}
-
-template<class Decoder>
-Optional<TextManipulationController::ManipulationFailure> TextManipulationController::ManipulationFailure::decode(Decoder& decoder)
-{
-    ManipulationFailure result;
-    if (!decoder.decode(result.identifier))
-        return WTF::nullopt;
-    if (!decoder.decode(result.index))
-        return WTF::nullopt;
-    if (!decoder.decode(result.type))
-        return WTF::nullopt;
-    return result;
-}
-
 } // namespace WebCore
 
 namespace WTF {
@@ -354,14 +226,15 @@ template<> struct EnumTraits<WebCore::TextManipulationController::ExclusionRule:
     >;
 };
 
-template<> struct EnumTraits<WebCore::TextManipulationController::ManipulationFailureType> {
-    using ManipulationFailureType = WebCore::TextManipulationController::ManipulationFailureType;
+template<> struct EnumTraits<WebCore::TextManipulationController::ManipulationResult> {
+    using ManipulationResult = WebCore::TextManipulationController::ManipulationResult;
     using values = EnumValues<
-        ManipulationFailureType,
-        ManipulationFailureType::ContentChanged,
-        ManipulationFailureType::InvalidItem,
-        ManipulationFailureType::InvalidToken,
-        ManipulationFailureType::ExclusionViolation
+        ManipulationResult,
+        ManipulationResult::Success,
+        ManipulationResult::ContentChanged,
+        ManipulationResult::InvalidItem,
+        ManipulationResult::InvalidToken,
+        ManipulationResult::ExclusionViolation
     >;
 };
 

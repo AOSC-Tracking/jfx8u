@@ -29,7 +29,7 @@
 #if ENABLE(JIT)
 
 #include "Interpreter.h"
-#include "JSCJSValueInlines.h"
+#include "JSCInlines.h"
 #include "StackAlignment.h"
 
 namespace JSC {

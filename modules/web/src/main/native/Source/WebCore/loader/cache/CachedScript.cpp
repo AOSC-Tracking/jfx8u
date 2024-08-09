@@ -57,7 +57,7 @@ String CachedScript::encoding() const
 StringView CachedScript::script()
 {
     if (!m_data)
-        return emptyString();
+        return { };
 
     if (m_decodingState == NeverDecoded
         && TextEncoding(encoding()).isByteBasedEncoding()
@@ -96,11 +96,11 @@ unsigned CachedScript::scriptHash()
     return m_scriptHash;
 }
 
-void CachedScript::finishLoading(SharedBuffer* data, const NetworkLoadMetrics& metrics)
+void CachedScript::finishLoading(SharedBuffer* data)
 {
     m_data = data;
     setEncodedSize(data ? data->size() : 0);
-    CachedResource::finishLoading(data, metrics);
+    CachedResource::finishLoading(data);
 }
 
 void CachedScript::destroyDecodedData()

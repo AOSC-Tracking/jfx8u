@@ -26,7 +26,6 @@
 #pragma once
 
 #include "RenderTreePosition.h"
-#include "RenderWidget.h"
 
 namespace WebCore {
 
@@ -43,6 +42,7 @@ public:
     // FIXME: Remove.
     static RenderTreeBuilder* current() { return s_current; }
 
+    void attach(RenderTreePosition&, RenderPtr<RenderObject>);
     void attach(RenderElement& parent, RenderPtr<RenderObject>, RenderObject* beforeChild = nullptr);
 
     enum class CanCollapseAnonymousBlock { No, Yes };
@@ -63,8 +63,6 @@ public:
 #endif
 
 private:
-    void attachInternal(RenderElement& parent, RenderPtr<RenderObject>, RenderObject* beforeChild);
-
     void childFlowStateChangesAndAffectsParentBlock(RenderElement& child);
     void childFlowStateChangesAndNoLongerAffectsParentBlock(RenderElement& child);
     void attachIgnoringContinuation(RenderElement& parent, RenderPtr<RenderObject>, RenderObject* beforeChild = nullptr);
@@ -72,8 +70,7 @@ private:
     void attachToRenderElement(RenderElement& parent, RenderPtr<RenderObject> child, RenderObject* beforeChild = nullptr);
     void attachToRenderElementInternal(RenderElement& parent, RenderPtr<RenderObject> child, RenderObject* beforeChild = nullptr);
 
-    enum class WillBeDestroyed { No, Yes };
-    RenderPtr<RenderObject> detachFromRenderElement(RenderElement& parent, RenderObject& child, WillBeDestroyed = WillBeDestroyed::Yes) WARN_UNUSED_RETURN;
+    RenderPtr<RenderObject> detachFromRenderElement(RenderElement& parent, RenderObject& child) WARN_UNUSED_RETURN;
     RenderPtr<RenderObject> detachFromRenderGrid(RenderGrid& parent, RenderObject& child) WARN_UNUSED_RETURN;
 
     void move(RenderBoxModelObject& from, RenderBoxModelObject& to, RenderObject& child, RenderObject* beforeChild, NormalizeAfterInsertion);
@@ -88,8 +85,6 @@ private:
     RenderObject* splitAnonymousBoxesAroundChild(RenderBox& parent, RenderObject& originalBeforeChild);
     void makeChildrenNonInline(RenderBlock& parent, RenderObject* insertionPoint = nullptr);
     void removeAnonymousWrappersForInlineChildrenIfNeeded(RenderElement& parent);
-
-    void reportVisuallyNonEmptyContent(const RenderElement& parent, const RenderObject& child);
 
     class FirstLetter;
     class List;
@@ -127,7 +122,6 @@ private:
     FullScreen& fullScreenBuilder() { return *m_fullScreenBuilder; }
 #endif
 
-    WidgetHierarchyUpdatesSuspensionScope m_widgetHierarchyUpdatesSuspensionScope;
     RenderView& m_view;
     RenderTreeBuilder* m_previous { nullptr };
     static RenderTreeBuilder* s_current;

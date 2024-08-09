@@ -29,6 +29,7 @@
 #include "config.h"
 #include "NetscapePlugInStreamLoader.h"
 
+#include "CustomHeaderFields.h"
 #include "DocumentLoader.h"
 #include "FrameLoader.h"
 #include "FrameLoaderClient.h"
@@ -69,7 +70,7 @@ NetscapePlugInStreamLoader::~NetscapePlugInStreamLoader() = default;
 void NetscapePlugInStreamLoader::create(Frame& frame, NetscapePlugInStreamLoaderClient& client, ResourceRequest&& request, CompletionHandler<void(RefPtr<NetscapePlugInStreamLoader>&&)>&& completionHandler)
 {
     auto loader(adoptRef(*new NetscapePlugInStreamLoader(frame, client)));
-    loader->init(WTFMove(request), [loader, completionHandler = WTFMove(completionHandler)] (bool initialized) mutable {
+    loader->init(WTFMove(request), [loader = loader.copyRef(), completionHandler = WTFMove(completionHandler)] (bool initialized) mutable {
         if (!initialized)
             return completionHandler(nullptr);
         completionHandler(WTFMove(loader));
@@ -125,7 +126,7 @@ void NetscapePlugInStreamLoader::didReceiveResponse(const ResourceResponse& resp
         if (!m_client)
             return;
 
-        if (!response.isInHTTPFamily())
+        if (!response.isHTTP())
             return;
 
         if (m_client->wantsAllStreams())

@@ -67,7 +67,6 @@ class Metadata
         WTF_MAKE_NONCOPYABLE(Metadata);
 
     public:
-        #{op.opcodeID}
         Metadata(const #{op.capitalized_name}&#{" __op" if inits})#{inits} { }
 
 #{fields}

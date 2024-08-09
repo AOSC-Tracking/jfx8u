@@ -35,10 +35,9 @@
 
 namespace WebCore {
 
-IDBDatabaseIdentifier::IDBDatabaseIdentifier(const String& databaseName, SecurityOriginData&& openingOrigin, SecurityOriginData&& mainFrameOrigin, bool isTransient)
+IDBDatabaseIdentifier::IDBDatabaseIdentifier(const String& databaseName, SecurityOriginData&& openingOrigin, SecurityOriginData&& mainFrameOrigin)
     : m_databaseName(databaseName)
     , m_origin { WTFMove(openingOrigin), WTFMove(mainFrameOrigin) }
-    , m_isTransient(isTransient)
 {
     // The empty string is a valid database name, but a null string is not.
     ASSERT(!databaseName.isNull());
@@ -50,7 +49,6 @@ IDBDatabaseIdentifier IDBDatabaseIdentifier::isolatedCopy() const
 
     identifier.m_databaseName = m_databaseName.isolatedCopy();
     identifier.m_origin = m_origin.isolatedCopy();
-    identifier.m_isTransient = m_isTransient;
 
     return identifier;
 }
@@ -75,7 +73,7 @@ String IDBDatabaseIdentifier::databaseDirectoryRelativeToRoot(const SecurityOrig
 #if !LOG_DISABLED
 String IDBDatabaseIdentifier::loggingString() const
 {
-    return makeString(m_databaseName, "@", m_origin.topOrigin.debugString(), ":", m_origin.clientOrigin.debugString(), m_isTransient ? ", transient" : "");
+    return makeString(m_databaseName, "@", m_origin.topOrigin.debugString(), ":", m_origin.clientOrigin.debugString());
 }
 #endif
 

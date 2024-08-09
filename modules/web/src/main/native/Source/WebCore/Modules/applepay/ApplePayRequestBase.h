@@ -28,9 +28,12 @@
 #if ENABLE(APPLE_PAY)
 
 #include "ApplePayContactField.h"
-#include "ApplePayInstallmentConfigurationWebCore.h"
 #include "ApplePayMerchantCapability.h"
 #include "ApplePayPaymentContact.h"
+
+#if USE(APPLE_INTERNAL_SDK)
+#include <WebKitAdditions/ApplePayRequestBaseAdditions.h>
+#endif
 
 namespace WebCore {
 
@@ -51,8 +54,9 @@ struct ApplePayRequestBase {
     String applicationData;
     Vector<String> supportedCountries;
 
-#if ENABLE(APPLE_PAY_INSTALLMENTS)
-    Optional<ApplePayInstallmentConfiguration> installmentConfiguration;
+#if defined(APPLEPAYREQUESTBASE_ADDITIONS)
+APPLEPAYREQUESTBASE_ADDITIONS
+#undef APPLEPAYREQUESTBASE_ADDITIONS
 #endif
 };
 

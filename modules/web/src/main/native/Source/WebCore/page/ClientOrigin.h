@@ -106,6 +106,8 @@ template<> struct HashTraits<WebCore::ClientOrigin> : GenericHashTraits<WebCore:
     static bool isDeletedValue(const WebCore::ClientOrigin& slot) { return slot.topOrigin.isHashTableDeletedValue(); }
 };
 
-template<> struct DefaultHash<WebCore::ClientOrigin> : ClientOriginKeyHash { };
+template<> struct DefaultHash<WebCore::ClientOrigin> {
+    typedef ClientOriginKeyHash Hash;
+};
 
 } // namespace WTF

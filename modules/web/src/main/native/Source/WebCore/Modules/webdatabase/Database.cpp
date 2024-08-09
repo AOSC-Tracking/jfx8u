@@ -206,7 +206,7 @@ Database::Database(DatabaseContext& context, const String& name, const String& e
     , m_databaseAuthorizer(DatabaseAuthorizer::create(unqualifiedInfoTableName))
 {
     {
-        auto locker = holdLock(guidMutex);
+        std::lock_guard<Lock> locker(guidMutex);
 
         m_guid = guidForOriginAndName(securityOrigin().securityOrigin()->toString(), name);
         guidToDatabaseMap().ensure(m_guid, [] {
@@ -353,7 +353,7 @@ ExceptionOr<void> Database::performOpenAndVerify(bool shouldSetVersionInNewDatab
 
     String currentVersion;
     {
-        auto locker = holdLock(guidMutex);
+        std::lock_guard<Lock> locker(guidMutex);
 
         auto entry = guidToVersionMap().find(m_guid);
         if (entry != guidToVersionMap().end()) {
@@ -442,7 +442,7 @@ void Database::closeDatabase()
     DatabaseTracker::singleton().removeOpenDatabase(*this);
 
     {
-        auto locker = holdLock(guidMutex);
+        std::lock_guard<Lock> locker(guidMutex);
 
         auto it = guidToDatabaseMap().find(m_guid);
         ASSERT(it != guidToDatabaseMap().end());
@@ -500,14 +500,14 @@ void Database::setExpectedVersion(const String& version)
 
 String Database::getCachedVersion() const
 {
-    auto locker = holdLock(guidMutex);
+    std::lock_guard<Lock> locker(guidMutex);
 
     return guidToVersionMap().get(m_guid).isolatedCopy();
 }
 
 void Database::setCachedVersion(const String& actualVersion)
 {
-    auto locker = holdLock(guidMutex);
+    std::lock_guard<Lock> locker(guidMutex);
 
     updateGUIDVersionMap(m_guid, actualVersion);
 }
@@ -703,8 +703,8 @@ void Database::runTransaction(RefPtr<SQLTransactionCallback>&& callback, RefPtr<
 
 void Database::scheduleTransactionCallback(SQLTransaction* transaction)
 {
-    callOnMainThread([this, protectedThis = makeRef(*this), transaction = makeRefPtr(transaction)]() mutable {
-        m_document->eventLoop().queueTask(TaskSource::Networking, [transaction = WTFMove(transaction)] {
+    callOnMainThread([this, protectedThis = makeRef(*this), transaction = makeRefPtr(transaction)] {
+        m_document->eventLoop().queueTask(TaskSource::Networking, [transaction = transaction.copyRef()] {
             transaction->performPendingCallback();
         });
     });

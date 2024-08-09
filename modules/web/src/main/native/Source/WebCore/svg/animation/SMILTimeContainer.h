@@ -71,11 +71,12 @@ private:
     void startTimer(SMILTime elapsed, SMILTime fireTime, SMILTime minimumDelay = 0);
     void updateAnimations(SMILTime elapsed, bool seekToTime = false);
 
-    using ElementAttributePair = std::pair<SVGElement*, QualifiedName>;
-    using AnimationsVector = Vector<SVGSMILElement*>;
-    using GroupedAnimationsMap = HashMap<ElementAttributePair, AnimationsVector>;
+    typedef std::pair<SVGElement*, QualifiedName> ElementAttributePair;
+    typedef Vector<SVGSMILElement*> AnimationsVector;
+    typedef HashMap<ElementAttributePair, std::unique_ptr<AnimationsVector>> GroupedAnimationsMap;
 
-    void processScheduledAnimations(const Function<void(SVGSMILElement&)>&);
+    void processAnimations(const AnimationsVector&, Function<void(SVGSMILElement*)>&&);
+    void processScheduledAnimations(Function<void(SVGSMILElement*)>&&);
     void updateDocumentOrderIndexes();
     void sortByPriority(AnimationsVector& smilElements, SMILTime elapsed);
 

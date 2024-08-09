@@ -47,10 +47,10 @@ struct MethodTable {
     using VisitChildrenFunctionPtr = void (*)(JSCell*, SlotVisitor&);
     VisitChildrenFunctionPtr METHOD_TABLE_ENTRY(visitChildren);
 
-    using GetCallDataFunctionPtr = CallData (*)(JSCell*);
+    using GetCallDataFunctionPtr = CallType (*)(JSCell*, CallData&);
     GetCallDataFunctionPtr METHOD_TABLE_ENTRY(getCallData);
 
-    using GetConstructDataFunctionPtr = CallData (*)(JSCell*);
+    using GetConstructDataFunctionPtr = ConstructType (*)(JSCell*, ConstructData&);
     GetConstructDataFunctionPtr METHOD_TABLE_ENTRY(getConstructData);
 
     using PutFunctionPtr = bool (*)(JSCell*, JSGlobalObject*, PropertyName propertyName, JSValue, PutPropertySlot&);
@@ -59,7 +59,7 @@ struct MethodTable {
     using PutByIndexFunctionPtr = bool (*)(JSCell*, JSGlobalObject*, unsigned propertyName, JSValue, bool shouldThrow);
     PutByIndexFunctionPtr METHOD_TABLE_ENTRY(putByIndex);
 
-    using DeletePropertyFunctionPtr = bool (*)(JSCell*, JSGlobalObject*, PropertyName, DeletePropertySlot&);
+    using DeletePropertyFunctionPtr = bool (*)(JSCell*, JSGlobalObject*, PropertyName);
     DeletePropertyFunctionPtr METHOD_TABLE_ENTRY(deleteProperty);
 
     using DeletePropertyByIndexFunctionPtr = bool (*)(JSCell*, JSGlobalObject*, unsigned);
@@ -151,9 +151,7 @@ struct MethodTable {
 
 #define HAS_MEMBER_NAMED(klass, name) (MemberCheck##name<klass>::has)
 
-#define CREATE_METHOD_TABLE(ClassName) \
-    JSCastingHelpers::InheritsTraits<ClassName>::typeRange, \
-    { \
+#define CREATE_METHOD_TABLE(ClassName) { \
         &ClassName::destroy, \
         &ClassName::visitChildren, \
         &ClassName::getCallData, \
@@ -187,10 +185,10 @@ struct MethodTable {
         &ClassName::visitOutputConstraints, \
     }, \
     ClassName::TypedArrayStorageType, \
-    sizeof(ClassName),
+    sizeof(ClassName)
 
 struct ClassInfo {
-    using CheckJSCastSnippetFunctionPtr = Ref<Snippet> (*)(void);
+    using CheckSubClassSnippetFunctionPtr = Ref<Snippet> (*)(void);
 
     // A string denoting the class name. Example: "Window".
     const char* className;
@@ -198,11 +196,10 @@ struct ClassInfo {
     // nullptrif there is none.
     const ClassInfo* parentClass;
     const HashTable* staticPropHashTable;
-    CheckJSCastSnippetFunctionPtr checkSubClassSnippet;
-    const Optional<JSTypeRange> inheritsJSTypeRange; // This is range of JSTypes for doing inheritance checking. Has the form: [firstJSType, lastJSType] (inclusive).
+    CheckSubClassSnippetFunctionPtr checkSubClassSnippet;
     MethodTable methodTable;
-    const TypedArrayType typedArrayStorageType;
-    const unsigned staticClassSize;
+    TypedArrayType typedArrayStorageType;
+    unsigned staticClassSize;
 
     static ptrdiff_t offsetOfParentClass()
     {

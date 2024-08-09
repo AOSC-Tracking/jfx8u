@@ -52,7 +52,6 @@ BEGIN {
         &changeLogEmailAddress
         &changeLogName
         &chdirReturningRelativePath
-        &commitForDirectory
         &decodeGitBinaryChunk
         &decodeGitBinaryPatch
         &determineSVNRoot
@@ -62,7 +61,6 @@ BEGIN {
         &fixChangeLogPatch
         &fixSVNPatchForAdditionWithHistory
         &gitBranch
-        &gitBranchForDirectory
         &gitCommitForSVNRevision
         &gitDirectory
         &gitHashForDirectory
@@ -109,6 +107,7 @@ BEGIN {
 
 our @EXPORT_OK;
 
+my $gitBranch;
 my $gitRoot;
 my $isGit;
 my $isGitSVN;
@@ -287,10 +286,9 @@ sub gitTreeDirectory()
     return $result;
 }
 
-sub gitBisectStartBranchForDirectory($)
+sub gitBisectStartBranch()
 {
-    my ($directory) = @_;
-    my $bisectStartFile = File::Spec->catfile($directory, "BISECT_START");
+    my $bisectStartFile = File::Spec->catfile(gitDirectory(), "BISECT_START");
     if (!-f $bisectStartFile) {
         return "";
     }
@@ -300,26 +298,20 @@ sub gitBisectStartBranchForDirectory($)
     return $result;
 }
 
-sub gitBranchForDirectory($)
-{
-    my ($directory) = @_;
-
-    my $gitBranch;
-    chomp($gitBranch = `git -C \"$directory\" symbolic-ref -q HEAD`);
-    my $hasDetachedHead = exitStatus($?);
-    if ($hasDetachedHead) {
-        # We may be in a git bisect session.
-        $gitBranch = gitBisectStartBranchForDirectory($directory);
-    }
-    $gitBranch =~ s#^refs/heads/##;
-    $gitBranch = "" if $gitBranch eq "master";
-
-    return $gitBranch;
-}
-
 sub gitBranch()
 {
-    return gitBranchForDirectory(gitDirectory());
+    unless (defined $gitBranch) {
+        chomp($gitBranch = `git symbolic-ref -q HEAD`);
+        my $hasDetachedHead = exitStatus($?);
+        if ($hasDetachedHead) {
+            # We may be in a git bisect session.
+            $gitBranch = gitBisectStartBranch();
+        }
+        $gitBranch =~ s#^refs/heads/##;
+        $gitBranch = "" if $gitBranch eq "master";
+    }
+
+    return $gitBranch;
 }
 
 sub isGitBranchBuild()
@@ -377,29 +369,6 @@ sub chdirReturningRelativePath($)
     my $newDirectory = Cwd::getcwd();
     return "." if $newDirectory eq $previousDirectory;
     return File::Spec->abs2rel($previousDirectory, $newDirectory);
-}
-
-sub commitForDirectory($$)
-{
-    my ($directory, $repository) = @_;
-
-    my $result = {
-        repository_id => $repository,
-    };
-    if (isSVNDirectory($directory)) {
-        $result->{id} = svnRevisionForDirectory($directory);
-        my $info = svnInfoForPath($directory);
-        $info =~ /.*Relative URL: \^\/([a-z]+)\n.*/;
-        my $branch = $1;
-        $result->{branch} = $branch if ($branch ne 'trunk');
-    } elsif (isGitDirectory($directory)) {
-        $result->{id} = gitHashForDirectory($directory);
-        my $branch = gitBranchForDirectory($directory);
-        $result->{branch} = $branch if ($branch ne '');
-    } else {
-        die "$directory is not a recognized SCM";
-    }
-    return $result;
 }
 
 sub determineSVNRoot()

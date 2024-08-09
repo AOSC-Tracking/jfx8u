@@ -26,6 +26,7 @@
 #include "config.h"
 #include "StrictEvalActivation.h"
 
+#include "JSGlobalObject.h"
 #include "JSCInlines.h"
 
 namespace JSC {
@@ -39,7 +40,7 @@ StrictEvalActivation::StrictEvalActivation(VM& vm, Structure* structure, JSScope
 {
 }
 
-bool StrictEvalActivation::deleteProperty(JSCell*, JSGlobalObject*, PropertyName, DeletePropertySlot&)
+bool StrictEvalActivation::deleteProperty(JSCell*, JSGlobalObject*, PropertyName)
 {
     return false;
 }

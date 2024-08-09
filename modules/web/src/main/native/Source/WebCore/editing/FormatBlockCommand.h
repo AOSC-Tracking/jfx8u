@@ -46,7 +46,7 @@ public:
 
     bool preservesTypingStyle() const override { return true; }
 
-    static Element* elementForFormatBlockCommand(const Optional<SimpleRange>&);
+    static Element* elementForFormatBlockCommand(Range*);
     bool didApply() const { return m_didApply; }
 
 private:

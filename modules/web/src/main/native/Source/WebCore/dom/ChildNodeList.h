@@ -72,6 +72,7 @@ public:
     // For CollectionIndexCache
     Node* collectionBegin() const;
     Node* collectionLast() const;
+    Node* collectionEnd() const { return nullptr; }
     void collectionTraverseForward(Node*&, unsigned count, unsigned& traversedCount) const;
     void collectionTraverseBackward(Node*&, unsigned count) const;
     bool collectionCanTraverseBackward() const { return true; }

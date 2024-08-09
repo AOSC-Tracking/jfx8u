@@ -28,8 +28,11 @@
 
 #include "APICallbackFunction.h"
 #include "APICast.h"
-#include "JSCInlines.h"
+#include "Error.h"
+#include "JSGlobalObject.h"
 #include "JSLock.h"
+#include "ObjectPrototype.h"
+#include "JSCInlines.h"
 
 namespace JSC {
 
@@ -61,12 +64,10 @@ void JSCallbackConstructor::destroy(JSCell* cell)
     static_cast<JSCallbackConstructor*>(cell)->JSCallbackConstructor::~JSCallbackConstructor();
 }
 
-CallData JSCallbackConstructor::getConstructData(JSCell*)
+ConstructType JSCallbackConstructor::getConstructData(JSCell*, ConstructData& constructData)
 {
-    CallData constructData;
-    constructData.type = CallData::Type::Native;
     constructData.native.function = APICallbackFunction::construct<JSCallbackConstructor>;
-    return constructData;
+    return ConstructType::Host;
 }
 
 } // namespace JSC

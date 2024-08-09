@@ -46,17 +46,16 @@ Ref<File> File::createWithRelativePath(const String& path, const String& relativ
     return file;
 }
 
-Ref<File> File::create(const String& path, const String& replacementPath, const String& nameOverride)
+Ref<File> File::create(const String& path, const String& nameOverride)
 {
     String name;
     String type;
-    String effectivePath = !replacementPath.isNull() ? replacementPath : path;
-    computeNameAndContentType(effectivePath, nameOverride, name, type);
+    computeNameAndContentType(path, nameOverride, name, type);
 
     auto internalURL = BlobURL::createInternalURL();
-    ThreadableBlobRegistry::registerFileBlobURL(internalURL, path, replacementPath, type);
+    ThreadableBlobRegistry::registerFileBlobURL(internalURL, path, type);
 
-    return adoptRef(*new File(WTFMove(internalURL), WTFMove(type), WTFMove(effectivePath), WTFMove(name)));
+    return adoptRef(*new File(WTFMove(internalURL), WTFMove(type), String { path }, WTFMove(name)));
 }
 
 File::File(URL&& url, String&& type, String&& path, String&& name)
@@ -136,7 +135,7 @@ void File::computeNameAndContentType(const String& path, const String& nameOverr
     size_t index = effectiveName.reverseFind('.');
     if (index != notFound) {
         callOnMainThreadAndWait([&effectiveContentType, &effectiveName, index] {
-            effectiveContentType = MIMETypeRegistry::mimeTypeForExtension(effectiveName.substring(index + 1)).isolatedCopy();
+            effectiveContentType = MIMETypeRegistry::getMIMETypeForExtension(effectiveName.substring(index + 1)).isolatedCopy();
         });
     }
 }

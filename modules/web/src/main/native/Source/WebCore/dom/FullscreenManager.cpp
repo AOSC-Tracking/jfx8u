@@ -369,6 +369,11 @@ void FullscreenManager::willEnterFullscreen(Element& element)
     m_pendingFullscreenElement = nullptr;
     m_fullscreenElement = &element;
 
+#if USE(NATIVE_FULLSCREEN_VIDEO)
+    if (is<HTMLMediaElement>(element))
+        return;
+#endif
+
     // Create a placeholder block for a the full-screen element, to keep the page from reflowing
     // when the element is removed from the normal flow. Only do this for a RenderBox, as only
     // a box will have a frameRect. The placeholder will be created in setFullscreenRenderer()
@@ -421,9 +426,6 @@ void FullscreenManager::didExitFullscreen()
     if (!hasLivingRenderTree() || backForwardCacheState() != Document::NotInBackForwardCache)
         return;
     fullscreenElement->setContainsFullScreenElementOnAncestorsCrossingFrameBoundaries(false);
-
-    if (m_fullscreenElement)
-        m_fullscreenElement->didStopBeingFullscreenElement();
 
     m_areKeysEnabledInFullscreen = false;
 

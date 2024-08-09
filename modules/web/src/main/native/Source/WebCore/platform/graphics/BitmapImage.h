@@ -135,9 +135,6 @@ public:
 
 #if PLATFORM(GTK)
     GdkPixbuf* getGdkPixbuf() override;
-#if USE(GTK4)
-    GdkTexture* gdkTexture() override;
-#endif
 #endif
 
     WEBCORE_EXPORT NativeImagePtr nativeImage(const GraphicsContext* = nullptr) override;
@@ -151,7 +148,7 @@ public:
     void imageFrameAvailableAtIndex(size_t);
     void decode(Function<void()>&&);
 
-private:
+protected:
     WEBCORE_EXPORT BitmapImage(NativeImagePtr&&, ImageObserver* = nullptr);
     WEBCORE_EXPORT BitmapImage(ImageObserver* = nullptr);
 
@@ -203,6 +200,7 @@ private:
     RetainPtr<CFDataRef> tiffRepresentation(const Vector<NativeImagePtr>&);
 #endif
 
+private:
     void clearTimer();
     void startTimer(Seconds delay);
     SubsamplingLevel subsamplingLevelForScaleFactor(GraphicsContext&, const FloatSize& scaleFactor);

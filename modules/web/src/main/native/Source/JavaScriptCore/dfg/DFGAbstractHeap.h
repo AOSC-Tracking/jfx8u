@@ -352,7 +352,9 @@ namespace WTF {
 void printInternal(PrintStream&, JSC::DFG::AbstractHeapKind);
 
 template<typename T> struct DefaultHash;
-template<> struct DefaultHash<JSC::DFG::AbstractHeap> : JSC::DFG::AbstractHeapHash { };
+template<> struct DefaultHash<JSC::DFG::AbstractHeap> {
+    typedef JSC::DFG::AbstractHeapHash Hash;
+};
 
 template<typename T> struct HashTraits;
 template<> struct HashTraits<JSC::DFG::AbstractHeap> : SimpleClassHashTraits<JSC::DFG::AbstractHeap> { };

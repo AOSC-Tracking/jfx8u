@@ -79,7 +79,7 @@ public:
     }
 
 private:
-    static const char* const m_deletedValueRaceName;
+    static const char* m_deletedValueRaceName;
 
     JSCell* m_cell { nullptr };
     const char* m_raceName { nullptr };
@@ -96,7 +96,9 @@ struct VisitRaceKeyHash {
 namespace WTF {
 
 template<typename T> struct DefaultHash;
-template<> struct DefaultHash<JSC::VisitRaceKey> : JSC::VisitRaceKeyHash { };
+template<> struct DefaultHash<JSC::VisitRaceKey> {
+    typedef JSC::VisitRaceKeyHash Hash;
+};
 
 template<typename T> struct HashTraits;
 template<> struct HashTraits<JSC::VisitRaceKey> : SimpleClassHashTraits<JSC::VisitRaceKey> { };

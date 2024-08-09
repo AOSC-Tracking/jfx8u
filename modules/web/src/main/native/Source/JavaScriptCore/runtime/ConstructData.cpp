@@ -27,8 +27,9 @@
 #include "ConstructData.h"
 
 #include "Interpreter.h"
+#include "JSCInlines.h"
+#include "JSFunction.h"
 #include "JSGlobalObject.h"
-#include "JSObjectInlines.h"
 #include "ScriptProfilingScope.h"
 
 namespace JSC {
@@ -43,27 +44,28 @@ JSObject* construct(JSGlobalObject* globalObject, JSValue constructorObject, JSV
     VM& vm = globalObject->vm();
     auto scope = DECLARE_THROW_SCOPE(vm);
 
-    auto constructData = getConstructData(vm, constructorObject);
-    if (UNLIKELY(constructData.type == CallData::Type::None)) {
+    ConstructData constructData;
+    ConstructType constructType = getConstructData(vm, constructorObject, constructData);
+    if (UNLIKELY(constructType == ConstructType::None)) {
         throwTypeError(globalObject, scope, errorMessage);
         return nullptr;
     }
 
-    RELEASE_AND_RETURN(scope, construct(globalObject, constructorObject, constructData, args, newTarget));
+    RELEASE_AND_RETURN(scope, construct(globalObject, constructorObject, constructType, constructData, args, newTarget));
 }
 
-JSObject* construct(JSGlobalObject* globalObject, JSValue constructorObject, const CallData& constructData, const ArgList& args, JSValue newTarget)
+JSObject* construct(JSGlobalObject* globalObject, JSValue constructorObject, ConstructType constructType, const ConstructData& constructData, const ArgList& args, JSValue newTarget)
 {
     VM& vm = globalObject->vm();
-    ASSERT(constructData.type == CallData::Type::JS || constructData.type == CallData::Type::Native);
-    return vm.interpreter->executeConstruct(globalObject, asObject(constructorObject), constructData, args, newTarget);
+    ASSERT(constructType == ConstructType::JS || constructType == ConstructType::Host);
+    return vm.interpreter->executeConstruct(globalObject, asObject(constructorObject), constructType, constructData, args, newTarget);
 }
 
-JSObject* profiledConstruct(JSGlobalObject* globalObject, ProfilingReason reason, JSValue constructorObject, const CallData& constructData, const ArgList& args, JSValue newTarget)
+JSObject* profiledConstruct(JSGlobalObject* globalObject, ProfilingReason reason, JSValue constructorObject, ConstructType constructType, const ConstructData& constructData, const ArgList& args, JSValue newTarget)
 {
     VM& vm = globalObject->vm();
     ScriptProfilingScope profilingScope(vm.deprecatedVMEntryGlobalObject(globalObject), reason);
-    return construct(globalObject, constructorObject, constructData, args, newTarget);
+    return construct(globalObject, constructorObject, constructType, constructData, args, newTarget);
 }
 
 } // namespace JSC

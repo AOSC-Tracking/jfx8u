@@ -25,7 +25,6 @@
 #pragma once
 
 #include "AudioNode.h"
-#include "ChannelSplitterOptions.h"
 
 namespace WebCore {
 
@@ -34,21 +33,17 @@ class AudioContext;
 class ChannelSplitterNode final : public AudioNode {
     WTF_MAKE_ISO_ALLOCATED(ChannelSplitterNode);
 public:
-    static ExceptionOr<Ref<ChannelSplitterNode>> create(BaseAudioContext&, const ChannelSplitterOptions& = { });
+    static RefPtr<ChannelSplitterNode> create(AudioContext&, float sampleRate, unsigned numberOfOutputs);
 
     // AudioNode
     void process(size_t framesToProcess) override;
     void reset() override;
 
-    ExceptionOr<void> setChannelCount(unsigned) final;
-    ExceptionOr<void> setChannelCountMode(ChannelCountMode) final;
-    ExceptionOr<void> setChannelInterpretation(ChannelInterpretation) final;
-
 private:
     double tailTime() const override { return 0; }
     double latencyTime() const override { return 0; }
 
-    ChannelSplitterNode(BaseAudioContext&, unsigned numberOfOutputs);
+    ChannelSplitterNode(AudioContext&, float sampleRate, unsigned numberOfOutputs);
 };
 
 } // namespace WebCore

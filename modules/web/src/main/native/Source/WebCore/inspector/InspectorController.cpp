@@ -175,7 +175,7 @@ void InspectorController::createLazyAgents()
 #endif
 
     auto scriptProfilerAgentPtr = makeUnique<InspectorScriptProfilerAgent>(pageContext);
-    m_instrumentingAgents->setPersistentScriptProfilerAgent(scriptProfilerAgentPtr.get());
+    m_instrumentingAgents->setInspectorScriptProfilerAgent(scriptProfilerAgentPtr.get());
     m_agents.append(WTFMove(scriptProfilerAgentPtr));
 
 #if ENABLE(RESOURCE_USAGE)
@@ -361,11 +361,6 @@ void InspectorController::getHighlight(Highlight& highlight, InspectorOverlay::C
     m_overlay->getHighlight(highlight, coordinateSystem);
 }
 
-bool InspectorController::shouldShowOverlay() const
-{
-    return m_overlay->shouldShowOverlay();
-}
-
 void InspectorController::inspect(Node* node)
 {
     if (!enabled())
@@ -420,7 +415,7 @@ InspectorAgent& InspectorController::ensureInspectorAgent()
         auto pageContext = pageAgentContext();
         auto inspectorAgent = makeUnique<InspectorAgent>(pageContext);
         m_inspectorAgent = inspectorAgent.get();
-        m_instrumentingAgents->setPersistentInspectorAgent(m_inspectorAgent);
+        m_instrumentingAgents->setInspectorAgent(m_inspectorAgent);
         m_agents.append(WTFMove(inspectorAgent));
     }
     return *m_inspectorAgent;
@@ -428,24 +423,24 @@ InspectorAgent& InspectorController::ensureInspectorAgent()
 
 InspectorDOMAgent& InspectorController::ensureDOMAgent()
 {
-    if (!m_domAgent) {
+    if (!m_inspectorDOMAgent) {
         auto pageContext = pageAgentContext();
         auto domAgent = makeUnique<InspectorDOMAgent>(pageContext, m_overlay.get());
-        m_domAgent = domAgent.get();
+        m_inspectorDOMAgent = domAgent.get();
         m_agents.append(WTFMove(domAgent));
     }
-    return *m_domAgent;
+    return *m_inspectorDOMAgent;
 }
 
 InspectorPageAgent& InspectorController::ensurePageAgent()
 {
-    if (!m_pageAgent) {
+    if (!m_inspectorPageAgent) {
         auto pageContext = pageAgentContext();
         auto pageAgent = makeUnique<InspectorPageAgent>(pageContext, m_inspectorClient, m_overlay.get());
-        m_pageAgent = pageAgent.get();
+        m_inspectorPageAgent = pageAgent.get();
         m_agents.append(WTFMove(pageAgent));
     }
-    return *m_pageAgent;
+    return *m_inspectorPageAgent;
 }
 
 bool InspectorController::developerExtrasEnabled() const
@@ -478,7 +473,7 @@ void InspectorController::frontendInitialized()
 {
     if (m_pauseAfterInitialization) {
         m_pauseAfterInitialization = false;
-        if (auto* debuggerAgent = m_instrumentingAgents->enabledPageDebuggerAgent()) {
+        if (PageDebuggerAgent* debuggerAgent = m_instrumentingAgents->pageDebuggerAgent()) {
             ErrorString ignored;
             debuggerAgent->pause(ignored);
         }
@@ -490,9 +485,9 @@ void InspectorController::frontendInitialized()
 #endif
 }
 
-Stopwatch& InspectorController::executionStopwatch() const
+Ref<Stopwatch> InspectorController::executionStopwatch()
 {
-    return m_executionStopwatch;
+    return m_executionStopwatch.copyRef();
 }
 
 PageScriptDebugServer& InspectorController::scriptDebugServer()

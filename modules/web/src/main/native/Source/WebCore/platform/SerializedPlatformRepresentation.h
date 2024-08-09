@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2014 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -25,29 +25,30 @@
 
 #pragma once
 
-#include <wtf/Forward.h>
+#if ENABLE(VIDEO)
+
+#include <JavaScriptCore/JSCInlines.h>
+#include <wtf/RefCounted.h>
 
 namespace WebCore {
 
-class AudioDestination;
-class AudioIOCallback;
-class CDMFactory;
-struct NowPlayingInfo;
-
-class WEBCORE_EXPORT MediaStrategy {
+class SerializedPlatformRepresentation : public RefCounted<SerializedPlatformRepresentation> {
 public:
-#if ENABLE(WEB_AUDIO)
-    virtual std::unique_ptr<AudioDestination> createAudioDestination(
-        AudioIOCallback&, const String& inputDeviceId, unsigned numberOfInputChannels, unsigned numberOfOutputChannels, float sampleRate) = 0;
-#endif
-#if PLATFORM(COCOA)
-    virtual void clearNowPlayingInfo() = 0;
-    virtual void setNowPlayingInfo(bool setAsNowPlayingApplication, const NowPlayingInfo&) = 0;
-#endif
+    virtual ~SerializedPlatformRepresentation() = default;
+
+    virtual JSC::JSValue deserialize(JSC::JSGlobalObject*) const = 0;
+    virtual RefPtr<JSC::ArrayBuffer> data() const = 0;
+    virtual bool isEqual(const SerializedPlatformRepresentation&) const = 0;
+
+    enum PlatformType {
+        ObjC,
+    };
+    virtual PlatformType platformType() const = 0;
 
 protected:
-    MediaStrategy();
-    virtual ~MediaStrategy();
+    SerializedPlatformRepresentation() = default;
 };
 
 } // namespace WebCore
+
+#endif

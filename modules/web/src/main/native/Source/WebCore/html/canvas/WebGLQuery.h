@@ -40,15 +40,12 @@ public:
 
     void makeResultAvailable() { m_isResultAvailable = true; }
 
-    void setTarget(GCGLenum target) { m_target = target; }
-    GCGLenum target() const { return m_target; }
-
-private:
+protected:
     explicit WebGLQuery(WebGLRenderingContextBase&);
     void deleteObjectImpl(GraphicsContextGLOpenGL*, PlatformGLObject) override;
 
+private:
     bool m_isResultAvailable { false };
-    GCGLenum m_target { 0 };
 };
 
 } // namespace WebCore

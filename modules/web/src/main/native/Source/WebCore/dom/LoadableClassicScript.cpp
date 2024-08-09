@@ -35,9 +35,9 @@
 
 namespace WebCore {
 
-Ref<LoadableClassicScript> LoadableClassicScript::create(const String& nonce, const String& integrityMetadata, ReferrerPolicy policy, const String& crossOriginMode, const String& charset, const AtomString& initiatorName, bool isInUserAgentShadowTree, bool isAsync)
+Ref<LoadableClassicScript> LoadableClassicScript::create(const String& nonce, const String& integrityMetadata, ReferrerPolicy policy, const String& crossOriginMode, const String& charset, const AtomString& initiatorName, bool isInUserAgentShadowTree)
 {
-    return adoptRef(*new LoadableClassicScript(nonce, integrityMetadata, policy, crossOriginMode, charset, initiatorName, isInUserAgentShadowTree, isAsync));
+    return adoptRef(*new LoadableClassicScript(nonce, integrityMetadata, policy, crossOriginMode, charset, initiatorName, isInUserAgentShadowTree));
 }
 
 LoadableClassicScript::~LoadableClassicScript()
@@ -70,7 +70,7 @@ bool LoadableClassicScript::wasCanceled() const
     return m_cachedScript->wasCanceled();
 }
 
-void LoadableClassicScript::notifyFinished(CachedResource& resource, const NetworkLoadMetrics&)
+void LoadableClassicScript::notifyFinished(CachedResource& resource)
 {
     ASSERT(m_cachedScript);
     if (resource.resourceError().isAccessControl()) {
@@ -91,7 +91,7 @@ void LoadableClassicScript::notifyFinished(CachedResource& resource, const Netwo
             ConsoleMessage {
                 MessageSource::Security,
                 MessageLevel::Error,
-                makeString("Refused to execute ", m_cachedScript->url().stringCenterEllipsizedToLength(), " as script because \"X-Content-Type-Options: nosniff\" was given and its Content-Type is not a script MIME type.")
+                makeString("Refused to execute ", m_cachedScript->url().stringCenterEllipsizedToLength(), " as script because \"X-Content-Type: nosniff\" was given and its Content-Type is not a script MIME type.")
             }
         };
     }
@@ -126,15 +126,7 @@ void LoadableClassicScript::execute(ScriptElement& scriptElement)
 bool LoadableClassicScript::load(Document& document, const URL& sourceURL)
 {
     ASSERT(!m_cachedScript);
-
-    auto priority = [&]() -> Optional<ResourceLoadPriority> {
-        if (m_isAsync)
-            return ResourceLoadPriority::Low;
-        // Use default.
-        return { };
-    };
-
-    m_cachedScript = requestScriptWithCache(document, sourceURL, crossOriginMode(), String { m_integrity }, priority());
+    m_cachedScript = requestScriptWithCache(document, sourceURL, crossOriginMode(), String { m_integrity });
     if (!m_cachedScript)
         return false;
     m_cachedScript->addClient(*this);

@@ -55,10 +55,11 @@ public:
 
     RenderBox* rendererOwningScrollbar() const;
 
-private:
+protected:
     void styleDidChange(StyleDifference, const RenderStyle* oldStyle) override;
     void imageChanged(WrappedImagePtr, const IntRect* = nullptr) override;
 
+private:
     bool isRenderScrollbarPart() const override { return true; }
     void computePreferredLogicalWidths() override;
 

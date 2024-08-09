@@ -51,10 +51,10 @@ class IDBRequestData;
 class IDBTransactionInfo;
 class StorageQuotaManager;
 
-enum class IDBGetRecordDataType : bool;
+enum class IDBGetRecordDataType;
 
 namespace IndexedDB {
-enum class IndexRecordType : bool;
+enum class IndexRecordType;
 }
 
 namespace IDBServer {
@@ -107,10 +107,9 @@ public:
     void enqueueTransaction(Ref<UniqueIDBDatabaseTransaction>&&);
 
     void handleDelete(IDBConnectionToClient&, const IDBRequestData&);
-    void immediateClose();
+    void immediateCloseForUserDelete();
 
     void abortActiveTransactions();
-    bool tryClose();
 
 private:
     void handleDatabaseOperations();

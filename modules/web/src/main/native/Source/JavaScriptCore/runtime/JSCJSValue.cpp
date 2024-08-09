@@ -1,7 +1,7 @@
 /*
  *  Copyright (C) 1999-2001 Harri Porten (porten@kde.org)
  *  Copyright (C) 2001 Peter Kelly (pmk@post.com)
- *  Copyright (C) 2003-2020 Apple Inc. All rights reserved.
+ *  Copyright (C) 2003-2019 Apple Inc. All rights reserved.
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Library General Public
@@ -23,14 +23,18 @@
 #include "config.h"
 #include "JSCJSValue.h"
 
-#include "BigIntObject.h"
 #include "BooleanConstructor.h"
+#include "BooleanPrototype.h"
 #include "CustomGetterSetter.h"
+#include "Error.h"
+#include "ExceptionHelpers.h"
 #include "GetterSetter.h"
 #include "JSBigInt.h"
 #include "JSCInlines.h"
+#include "JSFunction.h"
+#include "JSGlobalObject.h"
 #include "NumberObject.h"
-#include "TypeError.h"
+#include <wtf/MathExtras.h>
 
 namespace JSC {
 
@@ -64,18 +68,9 @@ double JSValue::toLength(JSGlobalObject* globalObject) const
 
 double JSValue::toNumberSlowCase(JSGlobalObject* globalObject) const
 {
-    VM& vm = globalObject->vm();
-    auto scope = DECLARE_THROW_SCOPE(vm);
-
     ASSERT(!isInt32() && !isDouble());
     if (isCell())
-        RELEASE_AND_RETURN(scope, asCell()->toNumber(globalObject));
-#if USE(BIGINT32)
-    if (isBigInt32()) {
-        throwTypeError(globalObject, scope, "Conversion from 'BigInt' to 'number' is not allowed."_s);
-        return 0.0;
-    }
-#endif
+        return asCell()->toNumber(globalObject);
     if (isTrue())
         return 1.0;
     return isUndefined() ? PNaN : 0; // null and false both convert to 0.
@@ -106,10 +101,6 @@ JSObject* JSValue::toObjectSlowCase(JSGlobalObject* globalObject) const
         return constructNumber(globalObject, asValue());
     if (isTrue() || isFalse())
         return constructBooleanFromImmediateBoolean(globalObject, asValue());
-#if USE(BIGINT32)
-    if (isBigInt32())
-        return BigIntObject::create(vm, globalObject, *this);
-#endif
 
     ASSERT(isUndefinedOrNull());
     throwException(globalObject, scope, createNotAnObjectError(globalObject, *this));
@@ -120,18 +111,13 @@ JSValue JSValue::toThisSlowCase(JSGlobalObject* globalObject, ECMAMode ecmaMode)
 {
     ASSERT(!isCell());
 
-    if (ecmaMode.isStrict())
+    if (ecmaMode == StrictMode)
         return *this;
 
     if (isInt32() || isDouble())
         return constructNumber(globalObject, asValue());
     if (isTrue() || isFalse())
         return constructBooleanFromImmediateBoolean(globalObject, asValue());
-#if USE(BIGINT32)
-    if (isBigInt32())
-        return BigIntObject::create(globalObject->vm(), globalObject, *this);
-#endif
-
     ASSERT(isUndefinedOrNull());
     return globalObject->globalThis();
 }
@@ -144,7 +130,7 @@ JSObject* JSValue::synthesizePrototype(JSGlobalObject* globalObject) const
     if (isCell()) {
         if (isString())
             return globalObject->stringPrototype();
-        if (isHeapBigInt())
+        if (isBigInt())
             return globalObject->bigIntPrototype();
         ASSERT(isSymbol());
         return globalObject->symbolPrototype();
@@ -154,10 +140,6 @@ JSObject* JSValue::synthesizePrototype(JSGlobalObject* globalObject) const
         return globalObject->numberPrototype();
     if (isBoolean())
         return globalObject->booleanPrototype();
-#if USE(BIGINT32)
-    if (isBigInt32())
-        return globalObject->bigIntPrototype();
-#endif
 
     ASSERT(isUndefinedOrNull());
     throwException(globalObject, scope, createNotAnObjectError(globalObject, *this));
@@ -207,7 +189,7 @@ bool JSValue::putToPrimitive(JSGlobalObject* globalObject, PropertyName property
 
             JSValue gs = obj->getDirect(offset);
             if (gs.isGetterSetter())
-                RELEASE_AND_RETURN(scope, callSetter(globalObject, *this, gs, value, slot.isStrictMode() ? ECMAMode::strict() : ECMAMode::sloppy()));
+                RELEASE_AND_RETURN(scope, callSetter(globalObject, *this, gs, value, slot.isStrictMode() ? StrictMode : NotStrictMode));
 
             if (gs.isCustomGetterSetter())
                 return callCustomSetter(globalObject, gs, attributes & PropertyAttribute::CustomAccessor, obj, slot.thisValue(), value);
@@ -251,7 +233,7 @@ bool JSValue::putToPrimitiveByIndex(JSGlobalObject* globalObject, unsigned prope
 
 void JSValue::dump(PrintStream& out) const
 {
-    dumpInContext(out, nullptr);
+    dumpInContext(out, 0);
 }
 
 void JSValue::dumpInContext(PrintStream& out, DumpContext* context) const
@@ -304,8 +286,6 @@ void JSValue::dumpInContextAssumingStructure(
             out.print("Symbol: ", RawPointer(asCell()));
         else if (structure->classInfo()->isSubClassOf(Structure::info()))
             out.print("Structure: ", inContext(*jsCast<Structure*>(asCell()), context));
-        else if (isHeapBigInt())
-            out.print("BigInt[heap-allocated]: addr=", RawPointer(asCell()), ", length=", jsCast<JSBigInt*>(asCell())->length(), ", sign=", jsCast<JSBigInt*>(asCell())->sign());
         else if (structure->classInfo()->isSubClassOf(JSObject::info())) {
             out.print("Object: ", RawPointer(asCell()));
             out.print(" with butterfly ", RawPointer(asObject(asCell())->butterfly()));
@@ -325,10 +305,6 @@ void JSValue::dumpInContextAssumingStructure(
         out.print("Null");
     else if (isUndefined())
         out.print("Undefined");
-#if USE(BIGINT32)
-    else if (isBigInt32())
-        out.printf("BigInt[inline]: %d", bigInt32AsInt32());
-#endif
     else
         out.print("INVALID");
 }
@@ -371,10 +347,6 @@ void JSValue::dumpForBacktrace(PrintStream& out) const
         out.print("Null");
     else if (isUndefined())
         out.print("Undefined");
-#if USE(BIGINT32)
-    else if (isBigInt32())
-        out.printf("BigInt[inline]: %d", bigInt32AsInt32());
-#endif
     else
         out.print("INVALID");
 }
@@ -412,26 +384,17 @@ JSString* JSValue::toStringSlowCase(JSGlobalObject* globalObject, bool returnEmp
         return vm.smallStrings.nullString();
     if (isUndefined())
         return vm.smallStrings.undefinedString();
-#if USE(BIGINT32)
-    if (isBigInt32()) {
-        auto integer = bigInt32AsInt32();
-        if (static_cast<unsigned>(integer) <= 9)
-            return vm.smallStrings.singleCharacterString(integer + '0');
-        return jsNontrivialString(vm, vm.numericStrings.add(integer));
-    }
-#endif
-    if (isHeapBigInt()) {
-        JSBigInt* bigInt = asHeapBigInt();
-        // FIXME: we should rather have two cases here: one-character string vs jsNonTrivialString for everything else.
-        auto string = bigInt->toString(globalObject, 10);
-        RETURN_IF_EXCEPTION(scope, errorValue());
-        JSString* returnString = JSString::create(vm, string.releaseImpl().releaseNonNull());
-        RETURN_IF_EXCEPTION(scope, errorValue());
-        return returnString;
-    }
     if (isSymbol()) {
         throwTypeError(globalObject, scope, "Cannot convert a symbol to a string"_s);
         return errorValue();
+    }
+    if (isBigInt()) {
+        JSBigInt* bigInt = asBigInt(*this);
+        if (auto digit = bigInt->singleDigitValueForString())
+            return vm.smallStrings.singleCharacterString(*digit + '0');
+        JSString* returnString = jsNontrivialString(vm, bigInt->toString(globalObject, 10));
+        RETURN_IF_EXCEPTION(scope, errorValue());
+        return returnString;
     }
 
     ASSERT(isCell());
@@ -463,12 +426,5 @@ String JSValue::toWTFStringSlowCase(JSGlobalObject* globalObject) const
     RETURN_IF_EXCEPTION(scope, { });
     RELEASE_AND_RETURN(scope, string->value(globalObject));
 }
-
-#if !COMPILER(GCC_COMPATIBLE)
-// This makes the argument opaque from the compiler.
-NEVER_INLINE void ensureStillAliveHere(JSValue)
-{
-}
-#endif
 
 } // namespace JSC

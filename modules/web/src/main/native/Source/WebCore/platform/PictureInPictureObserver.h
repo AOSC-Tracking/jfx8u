@@ -27,11 +27,7 @@
 
 #if ENABLE(PICTURE_IN_PICTURE_API)
 
-#include <wtf/WeakPtr.h>
-
 namespace WebCore {
-
-class IntSize;
 
 class PictureInPictureObserver : public CanMakeWeakPtr<PictureInPictureObserver> {
 public:

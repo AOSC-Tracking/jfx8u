@@ -24,7 +24,7 @@
  */
 
 [
-    Conditional=VIDEO,
+    Conditional=VIDEO_TRACK,
     JSGenerateToJSObject,
     JSGenerateToNativeObject,
     NoInterfaceObject,

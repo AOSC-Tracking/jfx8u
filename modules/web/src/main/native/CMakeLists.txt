@@ -31,10 +31,6 @@ if (NOT DEFINED ENABLE_TOOLS AND EXISTS "${CMAKE_SOURCE_DIR}/Tools")
     set(ENABLE_TOOLS ON)
 endif ()
 
-if (NOT DEFINED ENABLE_WEBINSPECTORUI)
-    set(ENABLE_WEBINSPECTORUI ON)
-endif ()
-
 # -----------------------------------------------------------------------------
 # Determine which port will be built
 # -----------------------------------------------------------------------------
@@ -192,8 +188,14 @@ if (ENABLE_TOOLS)
     add_subdirectory(Tools)
 endif ()
 
-if (DEVELOPER_MODE AND NOT PORT STREQUAL Java)
+if ("${PORT}" STREQUAL "GTK" OR "${PORT}" STREQUAL "WPE")
+    if (DEVELOPER_MODE)
+        add_subdirectory(PerformanceTests)
+    endif ()
+else ()
+    if (NOT PORT STREQUAL Java)
     add_subdirectory(PerformanceTests)
+    endif ()
 endif ()
 
 # -----------------------------------------------------------------------------

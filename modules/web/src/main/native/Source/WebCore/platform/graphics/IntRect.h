@@ -123,36 +123,21 @@ public:
         setX(edge);
         setWidth(std::max(0, width() - delta));
     }
-
     void shiftMaxXEdgeTo(int edge)
     {
         int delta = edge - maxX();
         setWidth(std::max(0, width() + delta));
     }
-
     void shiftYEdgeTo(int edge)
     {
         int delta = edge - y();
         setY(edge);
         setHeight(std::max(0, height() - delta));
     }
-
     void shiftMaxYEdgeTo(int edge)
     {
         int delta = edge - maxY();
         setHeight(std::max(0, height() + delta));
-    }
-
-    void shiftXEdgeBy(int delta)
-    {
-        move(delta, 0);
-        setWidth(std::max(0, width() - delta));
-    }
-
-    void shiftYEdgeBy(int delta)
-    {
-        move(0, delta);
-        setHeight(std::max(0, height() - delta));
     }
 
     IntPoint minXMinYCorner() const { return m_location; } // typically topLeft
@@ -191,9 +176,6 @@ public:
     int distanceSquaredToPoint(const IntPoint& p) const { return differenceToPoint(p).diagonalLengthSquared(); }
 
     IntRect transposedRect() const { return IntRect(m_location.transposedPoint(), m_size.transposedSize()); }
-
-    // Return false if x + width or y + height overflows.
-    bool isValid() const;
 
 #if PLATFORM(WIN)
     IntRect(const RECT&);
@@ -268,8 +250,5 @@ WEBCORE_EXPORT IntRect enclosingIntRect(const NSRect&);
 
 WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, const IntRect&);
 
-#ifdef __OBJC__
-WEBCORE_EXPORT id makeNSArrayElement(const IntRect&);
-#endif
-
 } // namespace WebCore
+

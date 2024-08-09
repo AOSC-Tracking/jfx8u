@@ -65,7 +65,6 @@ class Setting
   attr_accessor :name
   attr_accessor :type
   attr_accessor :initial
-  attr_accessor :excludeFromInternalSettings
   attr_accessor :conditional
   attr_accessor :onChange
   attr_accessor :getter
@@ -75,7 +74,6 @@ class Setting
     @name = name
     @type = opts["type"] || "bool"
     @initial = opts["initial"]
-    @excludeFromInternalSettings = opts["excludeFromInternalSettings"] || false
     @conditional = opts["conditional"]
     @onChange = opts["onChange"]
     @getter = opts["getter"]

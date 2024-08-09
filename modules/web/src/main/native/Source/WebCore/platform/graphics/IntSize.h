@@ -29,6 +29,10 @@
 #include <wtf/JSONValues.h>
 #include <wtf/Forward.h>
 
+#if PLATFORM(MAC) && defined __OBJC__
+#import <Foundation/NSGeometry.h>
+#endif
+
 #if USE(CG)
 typedef struct CGSize CGSize;
 #endif
@@ -136,9 +140,9 @@ public:
         return Checked<unsigned, T>(abs(m_width)) * abs(m_height);
     }
 
-    uint64_t unclampedArea() const
+    size_t unclampedArea() const
     {
-        return static_cast<uint64_t>(abs(m_width)) * abs(m_height);
+        return static_cast<size_t>(abs(m_width)) * abs(m_height);
     }
 
     int diagonalLengthSquared() const

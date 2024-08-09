@@ -33,66 +33,56 @@
 namespace WebCore {
 namespace Layout {
 
-struct LineCandidate;
+struct LineCandidateContent;
 
 class LineLayoutContext {
 public:
-    LineLayoutContext(const InlineFormattingContext&, const ContainerBox& formattingContextRoot, const InlineItems&);
+    LineLayoutContext(const InlineFormattingContext&, const Container& formattingContextRoot, const InlineItems&);
 
     struct LineContent {
         struct PartialContent {
-            bool trailingContentHasHyphen { false };
+            bool trailingContentNeedsHyphen { false };
             unsigned overflowContentLength { 0 };
         };
         Optional<unsigned> trailingInlineItemIndex;
         Optional<PartialContent> partialContent;
-        struct Float {
-            enum class Intrusive { No, Yes };
-            Intrusive isIntrusive { Intrusive::Yes };
-            const InlineItem* item { nullptr };
-        };
-        using FloatList = Vector<Float>;
-        FloatList floats;
+        Vector<const InlineItem*> floats;
         const LineBuilder::RunList runList;
         const LineBoxBuilder lineBox;
     };
     struct InlineItemRange {
         bool isEmpty() const { return start == end; }
-        size_t size() const { return end - start; }
         size_t start { 0 };
         size_t end { 0 };
     };
     LineContent layoutLine(LineBuilder&, const InlineItemRange, Optional<unsigned> partialLeadingContentLength);
+    using FloatList = Vector<const InlineItem*>;
 
 private:
-    void nextContentForLine(LineCandidate&, unsigned inlineItemIndex, const InlineItemRange layoutRange, Optional<unsigned> overflowLength, InlineLayoutUnit availableLineWidth, InlineLayoutUnit currentLogicalRight);
+    void nextContentForLine(LineCandidateContent&, unsigned inlineItemIndex, const InlineItemRange layoutRange, Optional<unsigned> overflowLength, InlineLayoutUnit currentLogicalRight);
     struct Result {
         LineBreaker::IsEndOfLine isEndOfLine { LineBreaker::IsEndOfLine::No };
-        struct CommittedContentCount {
-            size_t value { 0 };
-            bool isRevert { false };
-        };
-        CommittedContentCount committedCount { };
+        size_t committedCount { 0 };
         Optional <LineContent::PartialContent> partialContent { };
+        const InlineItem* revertTo { nullptr };
     };
-    enum class CommitIntrusiveFloatsOnly { No, Yes };
-    void commitFloats(LineBuilder&, const LineCandidate&, CommitIntrusiveFloatsOnly = CommitIntrusiveFloatsOnly::No);
-    Result handleFloatsAndInlineContent(LineBreaker&, LineBuilder&, const InlineItemRange& layoutRange, const LineCandidate&);
-    size_t rebuildLine(LineBuilder&, const InlineItemRange& layoutRange);
+    Result tryAddingFloatItems(LineBuilder&, const FloatList&);
+    Result tryAddingInlineItems(LineBreaker&, LineBuilder&, const LineCandidateContent&);
+    void rebuildLineForRevert(LineBuilder&, const InlineItem& revertTo, const InlineItemRange layoutRange);
     void commitPartialContent(LineBuilder&, const LineBreaker::RunList&, const LineBreaker::Result::PartialTrailingContent&);
     LineContent close(LineBuilder&, const InlineItemRange layoutRange, unsigned committedInlineItemCount, Optional<LineContent::PartialContent>);
 
     InlineLayoutUnit inlineItemWidth(const InlineItem&, InlineLayoutUnit contentLogicalLeft) const;
 
     const InlineFormattingContext& formattingContext() const { return m_inlineFormattingContext; }
-    const ContainerBox& root() const { return m_formattingContextRoot; }
+    const Container& root() const { return m_formattingContextRoot; }
 
     const InlineFormattingContext& m_inlineFormattingContext;
-    const ContainerBox& m_formattingContextRoot;
+    const Container& m_formattingContextRoot;
     const InlineItems& m_inlineItems;
-    LineContent::FloatList m_floats;
+    FloatList m_floats;
     Optional<InlineTextItem> m_partialLeadingTextItem;
-    const InlineItem* m_lastWrapOpportunityItem { nullptr };
+    Optional<InlineTextItem> m_partialTrailingTextItem;
     unsigned m_successiveHyphenatedLineCount { 0 };
 };
 

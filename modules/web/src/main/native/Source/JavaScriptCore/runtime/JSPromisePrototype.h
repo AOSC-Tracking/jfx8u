@@ -31,15 +31,8 @@ namespace JSC {
 
 class JSPromisePrototype : public JSNonFinalObject {
 public:
-    using Base = JSNonFinalObject;
+    typedef JSNonFinalObject Base;
     static constexpr unsigned StructureFlags = Base::StructureFlags | HasStaticPropertyTable;
-
-    template<typename CellType, SubspaceAccess>
-    static IsoSubspace* subspaceFor(VM& vm)
-    {
-        STATIC_ASSERT_ISO_SUBSPACE_SHARABLE(JSPromisePrototype, Base);
-        return &vm.plainObjectSpace;
-    }
 
     static JSPromisePrototype* create(VM&, JSGlobalObject*, Structure*);
     static Structure* createStructure(VM&, JSGlobalObject*, JSValue);

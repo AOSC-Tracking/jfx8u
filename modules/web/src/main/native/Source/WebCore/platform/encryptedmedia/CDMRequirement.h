@@ -30,29 +30,14 @@
 
 #if ENABLE(ENCRYPTED_MEDIA)
 
-#include <wtf/Forward.h>
-
 namespace WebCore {
 
-enum class CDMRequirement : uint8_t {
+enum class CDMRequirement {
     Required,
     Optional,
     NotAllowed
 };
 
 } // namespace WebCore
-
-namespace WTF {
-
-template<> struct EnumTraits<WebCore::CDMRequirement> {
-    using values = EnumValues<
-        WebCore::CDMRequirement,
-        WebCore::CDMRequirement::Required,
-        WebCore::CDMRequirement::Optional,
-        WebCore::CDMRequirement::NotAllowed
-    >;
-};
-
-}
 
 #endif // ENABLE(ENCRYPTED_MEDIA)

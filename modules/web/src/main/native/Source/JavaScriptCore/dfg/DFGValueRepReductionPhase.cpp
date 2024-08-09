@@ -32,7 +32,6 @@
 #include "DFGInsertionSet.h"
 #include "DFGPhase.h"
 #include "DFGPhiChildren.h"
-#include "JSCJSValueInlines.h"
 
 namespace JSC { namespace DFG {
 

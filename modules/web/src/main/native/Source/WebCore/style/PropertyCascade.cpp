@@ -98,7 +98,7 @@ static inline bool isValidMarkerStyleProperty(CSSPropertyID id)
     return false;
 }
 
-#if ENABLE(VIDEO)
+#if ENABLE(VIDEO_TRACK)
 static inline bool isValidCueStyleProperty(CSSPropertyID id)
 {
     switch (id) {
@@ -242,7 +242,7 @@ void PropertyCascade::setDeferred(CSSPropertyID id, CSSValue& cssValue, unsigned
 bool PropertyCascade::addMatch(const MatchedProperties& matchedProperties, CascadeLevel cascadeLevel, bool important)
 {
     auto& styleProperties = *matchedProperties.properties;
-    auto propertyAllowlistType = static_cast<PropertyAllowlistType>(matchedProperties.allowlistType);
+    auto propertyWhitelistType = static_cast<PropertyWhitelistType>(matchedProperties.whitelistType);
     bool hasImportantProperties = false;
 
     for (unsigned i = 0, count = styleProperties.propertyCount(); i < count; ++i) {
@@ -261,11 +261,11 @@ bool PropertyCascade::addMatch(const MatchedProperties& matchedProperties, Casca
         }
         CSSPropertyID propertyID = current.id();
 
-#if ENABLE(VIDEO)
-        if (propertyAllowlistType == PropertyAllowlistCue && !isValidCueStyleProperty(propertyID))
+#if ENABLE(VIDEO_TRACK)
+        if (propertyWhitelistType == PropertyWhitelistCue && !isValidCueStyleProperty(propertyID))
             continue;
 #endif
-        if (propertyAllowlistType == PropertyAllowlistMarker && !isValidMarkerStyleProperty(propertyID))
+        if (propertyWhitelistType == PropertyWhitelistMarker && !isValidMarkerStyleProperty(propertyID))
             continue;
 
         if (shouldApplyPropertyInParseOrder(propertyID))

@@ -149,7 +149,8 @@ class BuiltinsInternalsWrapperImplementationGenerator(BuiltinsGenerator):
             lines.append(BuiltinsGenerator.wrap_with_guard(object.annotations.get('conditional'), init))
         lines.append("")
 
-        lines.append(self._generate_initialize_static_globals())
+        guards = set([object.annotations.get('conditional') for object in self.internals if 'conditional' in object.annotations])
+        lines.append(BuiltinsGenerator.wrap_with_guard(" || ".join(guards), self._generate_initialize_static_globals()))
 
         lines.append("}")
         return '\n'.join(lines)

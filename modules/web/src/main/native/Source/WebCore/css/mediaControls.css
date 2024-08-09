@@ -24,6 +24,10 @@
 
 /* media controls */
 
+body:-webkit-full-page-media {
+    background-color: rgb(38, 38, 38);
+}
+
 audio {
     width: 200px;
     height: 16px;

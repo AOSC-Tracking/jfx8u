@@ -239,7 +239,9 @@ struct RegisterSetHash {
 namespace WTF {
 
 template<typename T> struct DefaultHash;
-template<> struct DefaultHash<JSC::RegisterSet> : JSC::RegisterSetHash { };
+template<> struct DefaultHash<JSC::RegisterSet> {
+    typedef JSC::RegisterSetHash Hash;
+};
 
 template<typename T> struct HashTraits;
 template<> struct HashTraits<JSC::RegisterSet> : public CustomHashTraits<JSC::RegisterSet> { };

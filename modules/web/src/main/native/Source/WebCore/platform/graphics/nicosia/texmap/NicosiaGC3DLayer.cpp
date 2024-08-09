@@ -27,7 +27,7 @@
  */
 
 #include "config.h"
-#include "NicosiaGCGLLayer.h"
+#include "NicosiaGC3DLayer.h"
 
 #if USE(NICOSIA) && USE(TEXTURE_MAPPER)
 
@@ -47,13 +47,13 @@ namespace Nicosia {
 
 using namespace WebCore;
 
-GCGLLayer::GCGLLayer(GraphicsContextGLOpenGL& context)
+GC3DLayer::GC3DLayer(GraphicsContextGLOpenGL& context)
     : m_context(context)
     , m_contentLayer(Nicosia::ContentLayer::create(Nicosia::ContentLayerTextureMapperImpl::createFactory(*this)))
 {
 }
 
-GCGLLayer::GCGLLayer(GraphicsContextGLOpenGL& context, GraphicsContextGLOpenGL::Destination destination)
+GC3DLayer::GC3DLayer(GraphicsContextGLOpenGL& context, GraphicsContextGLOpenGL::Destination destination)
     : m_context(context)
     , m_contentLayer(Nicosia::ContentLayer::create(Nicosia::ContentLayerTextureMapperImpl::createFactory(*this)))
 {
@@ -67,24 +67,24 @@ GCGLLayer::GCGLLayer(GraphicsContextGLOpenGL& context, GraphicsContextGLOpenGL::
     }
 }
 
-GCGLLayer::~GCGLLayer()
+GC3DLayer::~GC3DLayer()
 {
     downcast<ContentLayerTextureMapperImpl>(m_contentLayer->impl()).invalidateClient();
 }
 
-bool GCGLLayer::makeContextCurrent()
+bool GC3DLayer::makeContextCurrent()
 {
     ASSERT(m_glContext);
     return m_glContext->makeContextCurrent();
 }
 
-PlatformGraphicsContextGL GCGLLayer::platformContext() const
+PlatformGraphicsContextGL GC3DLayer::platformContext() const
 {
     ASSERT(m_glContext);
     return m_glContext->platformContext();
 }
 
-void GCGLLayer::swapBuffersIfNeeded()
+void GC3DLayer::swapBuffersIfNeeded()
 {
 #if USE(COORDINATED_GRAPHICS)
     if (m_context.layerComposited())
@@ -94,7 +94,7 @@ void GCGLLayer::swapBuffersIfNeeded()
     IntSize textureSize(m_context.m_currentWidth, m_context.m_currentHeight);
     TextureMapperGL::Flags flags = m_context.contextAttributes().alpha ? TextureMapperGL::ShouldBlend : 0;
 #if USE(ANGLE)
-    std::unique_ptr<ImageBuffer> imageBuffer = ImageBuffer::create(textureSize, RenderingMode::Unaccelerated);
+    std::unique_ptr<ImageBuffer> imageBuffer = ImageBuffer::create(textureSize, Unaccelerated);
     if (!imageBuffer)
         return;
 

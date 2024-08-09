@@ -47,16 +47,19 @@ public:
     UChar nextInputChar() const
     {
         if (m_offset >= m_stringLength)
-            return kEndOfFileMarker;
-        return (*m_string)[m_offset];
+            return '\0';
+        UChar result = (*m_string)[m_offset];
+        return result ? result : 0xFFFD;
     }
 
     // Gets the char at lookaheadOffset from the current stream position. Will
     // return NUL (kEndOfFileMarker) if the stream position is at the end.
-    UChar peek(unsigned lookaheadOffset) const
+    // NOTE: This may *also* return NUL if there's one in the input! Never
+    // compare the return value to '\0'.
+    UChar peekWithoutReplacement(unsigned lookaheadOffset) const
     {
         if ((m_offset + lookaheadOffset) >= m_stringLength)
-            return kEndOfFileMarker;
+            return '\0';
         return (*m_string)[m_offset + lookaheadOffset];
     }
 

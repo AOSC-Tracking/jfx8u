@@ -64,7 +64,7 @@ public:
 private:
     CachedModuleScriptLoader(CachedModuleScriptLoaderClient&, DeferredPromise&, CachedScriptFetcher&, RefPtr<ModuleFetchParameters>&&);
 
-    void notifyFinished(CachedResource&, const NetworkLoadMetrics&) final;
+    void notifyFinished(CachedResource&) final;
 
     CachedModuleScriptLoaderClient* m_client { nullptr };
     RefPtr<DeferredPromise> m_promise;

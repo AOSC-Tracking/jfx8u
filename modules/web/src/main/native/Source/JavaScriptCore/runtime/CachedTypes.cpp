@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2019 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -26,7 +26,6 @@
 #include "config.h"
 #include "CachedTypes.h"
 
-#include "BuiltinNames.h"
 #include "BytecodeCacheError.h"
 #include "BytecodeLivenessAnalysis.h"
 #include "JSCInlines.h"
@@ -40,6 +39,7 @@
 #include "UnlinkedMetadataTableInlines.h"
 #include "UnlinkedModuleProgramCodeBlock.h"
 #include "UnlinkedProgramCodeBlock.h"
+#include <wtf/FastMalloc.h>
 #include <wtf/MallocPtr.h>
 #include <wtf/Optional.h>
 #include <wtf/Packed.h>
@@ -668,7 +668,7 @@ private:
     Second m_second;
 };
 
-template<typename Key, typename Value, typename HashArg = DefaultHash<SourceType<Key>>, typename KeyTraitsArg = HashTraits<SourceType<Key>>, typename MappedTraitsArg = HashTraits<SourceType<Value>>>
+template<typename Key, typename Value, typename HashArg = typename DefaultHash<SourceType<Key>>::Hash, typename KeyTraitsArg = HashTraits<SourceType<Key>>, typename MappedTraitsArg = HashTraits<SourceType<Value>>>
 class CachedHashMap : public VariableLengthObject<HashMap<SourceType<Key>, SourceType<Value>, HashArg, KeyTraitsArg, MappedTraitsArg>> {
     template<typename K, typename V>
     using Map = HashMap<K, V, HashArg, KeyTraitsArg, MappedTraitsArg>;
@@ -702,17 +702,14 @@ public:
     {
         m_isAtomic = string.isAtom();
         m_isSymbol = string.isSymbol();
-        m_isWellKnownSymbol = false;
         RefPtr<StringImpl> impl = const_cast<StringImpl*>(&string);
 
         if (m_isSymbol) {
             SymbolImpl* symbol = static_cast<SymbolImpl*>(impl.get());
             if (!symbol->isNullSymbol()) {
                 // We have special handling for well-known symbols.
-                if (!symbol->isPrivate()) {
-                    m_isWellKnownSymbol = true;
-                    impl = symbol->substring(strlen("Symbol."));
-                }
+                if (!symbol->isPrivate())
+                    impl = encoder.vm().propertyNames->getPublicName(encoder.vm(), symbol).impl();
             }
         }
 
@@ -741,19 +738,10 @@ public:
             if (!m_isSymbol)
                 return AtomStringImpl::add(buffer, m_length).leakRef();
 
-            SymbolImpl* symbol;
-            if (m_isWellKnownSymbol)
-                symbol = decoder.vm().propertyNames->builtinNames().lookUpWellKnownSymbol(buffer, m_length);
-            else
-                symbol = decoder.vm().propertyNames->builtinNames().lookUpPrivateName(buffer, m_length);
-            RELEASE_ASSERT(symbol);
-            String str = symbol;
+            Identifier ident = Identifier::fromString(decoder.vm(), buffer, m_length);
+            String str = decoder.vm().propertyNames->lookUpPrivateName(ident);
             StringImpl* impl = str.releaseImpl().get();
             ASSERT(impl->isSymbol());
-            if (m_isWellKnownSymbol)
-                ASSERT(!static_cast<SymbolImpl*>(impl)->isPrivate());
-            else
-                ASSERT(static_cast<SymbolImpl*>(impl)->isPrivate());
             return static_cast<UniquedStringImpl*>(impl);
         };
 
@@ -771,7 +759,6 @@ public:
 private:
     bool m_is8Bit : 1;
     bool m_isSymbol : 1;
-    bool m_isWellKnownSymbol : 1;
     bool m_isAtomic : 1;
     unsigned m_length;
 };
@@ -856,12 +843,6 @@ public:
         else
             encode(encoder, { *source });
     }
-
-    SourceType<T>* decodeAsPtr(Decoder& decoder) const
-    {
-        RELEASE_ASSERT(!this->isEmpty());
-        return this->template buffer<T>()->decode(decoder);
-    }
 };
 
 class CachedSimpleJumpTable : public CachedObject<UnlinkedSimpleJumpTable> {
@@ -924,7 +905,7 @@ private:
     size_t m_numBits;
 };
 
-template<typename T, typename HashArg = DefaultHash<T>>
+template<typename T, typename HashArg = typename DefaultHash<T>::Hash>
 class CachedHashSet : public CachedObject<HashSet<SourceType<T>, HashArg>> {
 public:
     void encode(Encoder& encoder, const HashSet<SourceType<T>, HashArg>& set)
@@ -1009,45 +990,23 @@ private:
     unsigned m_needsClassFieldInitializer : 1;
 };
 
-class CachedVariableEnvironmentRareData : public CachedObject<VariableEnvironment::RareData> {
-public:
-    void encode(Encoder& encoder, const VariableEnvironment::RareData& rareData)
-    {
-        m_privateNames.encode(encoder, rareData.m_privateNames);
-    }
-
-    void decode(Decoder& decoder, VariableEnvironment::RareData& rareData) const
-    {
-        m_privateNames.decode(decoder, rareData.m_privateNames);
-    }
-
-private:
-    CachedHashMap<CachedRefPtr<CachedUniquedStringImpl, UniquedStringImpl, WTF::PackedPtrTraits<UniquedStringImpl>>, PrivateNameEntry, IdentifierRepHash, HashTraits<RefPtr<UniquedStringImpl>>, PrivateNameEntryHashTraits> m_privateNames;
-};
-
 class CachedVariableEnvironment : public CachedObject<VariableEnvironment> {
 public:
     void encode(Encoder& encoder, const VariableEnvironment& env)
     {
         m_isEverythingCaptured = env.m_isEverythingCaptured;
         m_map.encode(encoder, env.m_map);
-        m_rareData.encode(encoder, env.m_rareData.get());
     }
 
     void decode(Decoder& decoder, VariableEnvironment& env) const
     {
         env.m_isEverythingCaptured = m_isEverythingCaptured;
         m_map.decode(decoder, env.m_map);
-        if (!m_rareData.isEmpty()) {
-            env.m_rareData = WTF::makeUnique<VariableEnvironment::RareData>();
-            m_rareData->decode(decoder, *env.m_rareData);
-        }
     }
 
 private:
     bool m_isEverythingCaptured;
     CachedHashMap<CachedRefPtr<CachedUniquedStringImpl, UniquedStringImpl, WTF::PackedPtrTraits<UniquedStringImpl>>, VariableEnvironmentEntry, IdentifierRepHash, HashTraits<RefPtr<UniquedStringImpl>>, VariableEnvironmentEntryHashTraits> m_map;
-    CachedPtr<CachedVariableEnvironmentRareData> m_rareData;
 };
 
 class CachedCompactVariableEnvironment : public CachedObject<CompactVariableEnvironment> {
@@ -1148,8 +1107,7 @@ public:
 
     ScopedArgumentsTable* decode(Decoder& decoder) const
     {
-        ScopedArgumentsTable* scopedArgumentsTable = ScopedArgumentsTable::tryCreate(decoder.vm(), m_length);
-        RELEASE_ASSERT(scopedArgumentsTable); // We crash here. This is unlikely to continue execution if we hit this condition when decoding UnlinkedCodeBlock.
+        ScopedArgumentsTable* scopedArgumentsTable = ScopedArgumentsTable::create(decoder.vm(), m_length);
         m_arguments.decode(decoder, scopedArgumentsTable->m_arguments.get(m_length), m_length);
         return scopedArgumentsTable;
     }
@@ -1175,22 +1133,6 @@ private:
     intptr_t m_bits;
 };
 
-class CachedSymbolTableRareData : public CachedObject<SymbolTable::SymbolTableRareData> {
-public:
-    void encode(Encoder& encoder, const SymbolTable::SymbolTableRareData& rareData)
-    {
-        m_privateNames.encode(encoder, rareData.m_privateNames);
-    }
-
-    void decode(Decoder& decoder, SymbolTable::SymbolTableRareData& rareData) const
-    {
-        m_privateNames.decode(decoder, rareData.m_privateNames);
-    }
-
-private:
-    CachedHashSet<CachedRefPtr<CachedUniquedStringImpl>, IdentifierRepHash> m_privateNames;
-};
-
 class CachedSymbolTable : public CachedObject<SymbolTable> {
 public:
     void encode(Encoder& encoder, const SymbolTable& symbolTable)
@@ -1201,7 +1143,6 @@ public:
         m_nestedLexicalScope = symbolTable.m_nestedLexicalScope;
         m_scopeType = symbolTable.m_scopeType;
         m_arguments.encode(encoder, symbolTable.m_arguments.get());
-        m_rareData.encode(encoder, symbolTable.m_rareData.get());
     }
 
     SymbolTable* decode(Decoder& decoder) const
@@ -1215,11 +1156,6 @@ public:
         ScopedArgumentsTable* scopedArgumentsTable = m_arguments.decode(decoder);
         if (scopedArgumentsTable)
             symbolTable->m_arguments.set(decoder.vm(), symbolTable, scopedArgumentsTable);
-        if (!m_rareData.isEmpty()) {
-            symbolTable->m_rareData = WTF::makeUnique<SymbolTable::SymbolTableRareData>();
-            m_rareData->decode(decoder, *symbolTable->m_rareData);
-        }
-
         return symbolTable;
     }
 
@@ -1230,7 +1166,6 @@ private:
     unsigned m_nestedLexicalScope : 1;
     unsigned m_scopeType : 3;
     CachedPtr<CachedScopedArgumentsTable> m_arguments;
-    CachedPtr<CachedSymbolTableRareData> m_rareData;
 };
 
 class CachedJSValue;
@@ -1330,8 +1265,7 @@ public:
 
     JSBigInt* decode(Decoder& decoder) const
     {
-        JSBigInt* bigInt = JSBigInt::tryCreateWithLength(decoder.vm(), m_length);
-        RELEASE_ASSERT(bigInt);
+        JSBigInt* bigInt = JSBigInt::createWithLengthUnchecked(decoder.vm(), m_length);
         bigInt->setSign(m_sign);
         if (m_length)
             memcpy(bigInt->dataStorage(), this->buffer(), sizeof(JSBigInt::Digit) * m_length);
@@ -1510,12 +1444,12 @@ class CachedSourceOrigin : public CachedObject<SourceOrigin> {
 public:
     void encode(Encoder& encoder, const SourceOrigin& sourceOrigin)
     {
-        m_string.encode(encoder, sourceOrigin.url().string());
+        m_string.encode(encoder, sourceOrigin.string());
     }
 
     SourceOrigin decode(Decoder& decoder) const
     {
-        return SourceOrigin { URL({ }, m_string.decode(decoder)) };
+        return SourceOrigin { m_string.decode(decoder) };
     }
 
 private:
@@ -1546,7 +1480,7 @@ public:
     void encode(Encoder& encoder, const SourceProvider& sourceProvider)
     {
         m_sourceOrigin.encode(encoder, sourceProvider.sourceOrigin());
-        m_sourceURL.encode(encoder, sourceProvider.sourceURL());
+        m_url.encode(encoder, sourceProvider.url());
         m_sourceURLDirective.encode(encoder, sourceProvider.sourceURLDirective());
         m_sourceMappingURLDirective.encode(encoder, sourceProvider.sourceMappingURLDirective());
         m_startPosition.encode(encoder, sourceProvider.startPosition());
@@ -1560,7 +1494,7 @@ public:
 
 protected:
     CachedSourceOrigin m_sourceOrigin;
-    CachedString m_sourceURL;
+    CachedString m_url;
     CachedString m_sourceURLDirective;
     CachedString m_sourceMappingURLDirective;
     CachedTextPosition m_startPosition;
@@ -1580,10 +1514,10 @@ public:
     {
         String decodedSource = m_source.decode(decoder);
         SourceOrigin decodedSourceOrigin = m_sourceOrigin.decode(decoder);
-        String decodedSourceURL = m_sourceURL.decode(decoder);
+        String decodedURL = m_url.decode(decoder);
         TextPosition decodedStartPosition = m_startPosition.decode(decoder);
 
-        Ref<StringSourceProvider> sourceProvider = StringSourceProvider::create(decodedSource, decodedSourceOrigin, decodedSourceURL, decodedStartPosition, sourceType);
+        Ref<StringSourceProvider> sourceProvider = StringSourceProvider::create(decodedSource, decodedSourceOrigin, URL(URL(), decodedURL), decodedStartPosition, sourceType);
         Base::decode(decoder, sourceProvider.get());
         return &sourceProvider.leakRef();
     }
@@ -1607,11 +1541,11 @@ public:
     {
         Vector<uint8_t> decodedData;
         SourceOrigin decodedSourceOrigin = m_sourceOrigin.decode(decoder);
-        String decodedSourceURL = m_sourceURL.decode(decoder);
+        String decodedURL = m_url.decode(decoder);
 
         m_data.decode(decoder, decodedData);
 
-        Ref<WebAssemblySourceProvider> sourceProvider = WebAssemblySourceProvider::create(WTFMove(decodedData), decodedSourceOrigin, decodedSourceURL);
+        Ref<WebAssemblySourceProvider> sourceProvider = WebAssemblySourceProvider::create(WTFMove(decodedData), decodedSourceOrigin, URL(URL(), decodedURL));
         Base::decode(decoder, sourceProvider.get());
 
         return &sourceProvider.leakRef();
@@ -1870,6 +1804,7 @@ public:
     Ref<UnlinkedMetadataTable> metadata(Decoder& decoder) const { return m_metadata.decode(decoder); }
 
     unsigned usesEval() const { return m_usesEval; }
+    unsigned isStrictMode() const { return m_isStrictMode; }
     unsigned isConstructor() const { return m_isConstructor; }
     unsigned hasCapturedVariables() const { return m_hasCapturedVariables; }
     unsigned isBuiltinFunction() const { return m_isBuiltinFunction; }
@@ -1902,6 +1837,7 @@ private:
     VirtualRegister m_scopeRegister;
 
     unsigned m_usesEval : 1;
+    unsigned m_isStrictMode : 1;
     unsigned m_isConstructor : 1;
     unsigned m_hasCapturedVariables : 1;
     unsigned m_isBuiltinFunction : 1;
@@ -2098,6 +2034,7 @@ ALWAYS_INLINE UnlinkedCodeBlock::UnlinkedCodeBlock(Decoder& decoder, Structure* 
     , m_scopeRegister(cachedCodeBlock.scopeRegister())
 
     , m_usesEval(cachedCodeBlock.usesEval())
+    , m_isStrictMode(cachedCodeBlock.isStrictMode())
     , m_isConstructor(cachedCodeBlock.isConstructor())
     , m_hasCapturedVariables(cachedCodeBlock.hasCapturedVariables())
     , m_isBuiltinFunction(cachedCodeBlock.isBuiltinFunction())
@@ -2111,7 +2048,7 @@ ALWAYS_INLINE UnlinkedCodeBlock::UnlinkedCodeBlock(Decoder& decoder, Structure* 
     , m_evalContextType(cachedCodeBlock.evalContextType())
     , m_codeType(cachedCodeBlock.codeType())
 
-    , m_didOptimize(static_cast<unsigned>(TriState::Indeterminate))
+    , m_didOptimize(static_cast<unsigned>(MixedTriState))
     , m_age(0)
     , m_hasCheckpoints(cachedCodeBlock.hasCheckpoints())
 
@@ -2283,6 +2220,7 @@ ALWAYS_INLINE void CachedCodeBlock<CodeBlockType>::encode(Encoder& encoder, cons
     m_thisRegister = codeBlock.m_thisRegister;
     m_scopeRegister = codeBlock.m_scopeRegister;
     m_usesEval = codeBlock.m_usesEval;
+    m_isStrictMode = codeBlock.m_isStrictMode;
     m_isConstructor = codeBlock.m_isConstructor;
     m_hasCapturedVariables = codeBlock.m_hasCapturedVariables;
     m_isBuiltinFunction = codeBlock.m_isBuiltinFunction;
@@ -2380,8 +2318,6 @@ private:
     CachedCodeBlockTag m_tag;
 };
 
-static_assert(alignof(GenericCacheEntry) <= alignof(std::max_align_t));
-
 template<typename UnlinkedCodeBlockType>
 class CacheEntry : public GenericCacheEntry {
 public:
@@ -2418,9 +2354,6 @@ private:
     CachedSourceCodeKey m_key;
     CachedPtr<CachedCodeBlockType<UnlinkedCodeBlockType>> m_codeBlock;
 };
-
-static_assert(alignof(CacheEntry<UnlinkedProgramCodeBlock>) <= alignof(std::max_align_t));
-static_assert(alignof(CacheEntry<UnlinkedModuleProgramCodeBlock>) <= alignof(std::max_align_t));
 
 bool GenericCacheEntry::decode(Decoder& decoder, std::pair<SourceCodeKey, UnlinkedCodeBlock*>& result) const
 {

@@ -60,7 +60,7 @@ static ExceptionOr<String> computeReferrer(ScriptExecutionContext& context, cons
     if (!referrerURL.isValid())
         return Exception { TypeError, "Referrer is not a valid URL."_s };
 
-    if (referrerURL.protocolIsAbout() && referrerURL.path() == "client")
+    if (referrerURL.protocolIs("about") && referrerURL.path() == "client")
         return "client"_str;
 
     if (!(context.securityOrigin() && context.securityOrigin()->canRequest(referrerURL)))
@@ -160,10 +160,9 @@ static inline Optional<Exception> processInvalidSignal(ScriptExecutionContext& c
 ExceptionOr<void> FetchRequest::initializeWith(const String& url, Init&& init)
 {
     ASSERT(scriptExecutionContext());
-
-    // FIXME: Tighten the URL parsing algorithm according to https://url.spec.whatwg.org/#concept-url-parser.
+    // FIXME: Tighten the URL parsing algorithm according https://url.spec.whatwg.org/#concept-url-parser.
     URL requestURL = scriptExecutionContext()->completeURL(url, ScriptExecutionContext::ForceUTF8::Yes);
-    if (!requestURL.isValid() || requestURL.hasCredentials())
+    if (!requestURL.isValid() || !requestURL.user().isEmpty() || !requestURL.pass().isEmpty())
         return Exception { TypeError, "URL is not valid or contains user credentials."_s };
 
     m_options.mode = Mode::Cors;
@@ -300,7 +299,7 @@ String FetchRequest::referrer() const
 const String& FetchRequest::urlString() const
 {
     if (m_requestURL.isNull())
-        m_requestURL = m_request.url().string();
+        m_requestURL = m_request.url();
     return m_requestURL;
 }
 
@@ -334,3 +333,4 @@ const char* FetchRequest::activeDOMObjectName() const
 }
 
 } // namespace WebCore
+

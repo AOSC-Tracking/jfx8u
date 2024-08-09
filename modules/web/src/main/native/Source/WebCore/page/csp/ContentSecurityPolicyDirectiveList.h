@@ -89,19 +89,16 @@ public:
 private:
     void parse(const String&, ContentSecurityPolicy::PolicyFrom);
 
-    struct ParsedDirective {
-        String name;
-        String value;
-    };
-    template<typename CharacterType> Optional<ParsedDirective> parseDirective(StringParsingBuffer<CharacterType>);
-    void parseReportURI(ParsedDirective&&);
-    void addDirective(ParsedDirective&&);
-    void applySandboxPolicy(ParsedDirective&&);
-    void setUpgradeInsecureRequests(ParsedDirective&&);
-    void setBlockAllMixedContentEnabled(ParsedDirective&&);
+    bool parseDirective(const UChar* begin, const UChar* end, String& name, String& value);
+    void parseReportURI(const String& name, const String& value);
+    void parsePluginTypes(const String& name, const String& value);
+    void addDirective(const String& name, const String& value);
+    void applySandboxPolicy(const String& name, const String& sandboxPolicy);
+    void setUpgradeInsecureRequests(const String& name);
+    void setBlockAllMixedContentEnabled(const String& name);
 
     template <class CSPDirectiveType>
-    void setCSPDirective(ParsedDirective&&, std::unique_ptr<CSPDirectiveType>&);
+    void setCSPDirective(const String& name, const String& value, std::unique_ptr<CSPDirectiveType>&);
 
     ContentSecurityPolicySourceListDirective* operativeDirective(ContentSecurityPolicySourceListDirective*) const;
 

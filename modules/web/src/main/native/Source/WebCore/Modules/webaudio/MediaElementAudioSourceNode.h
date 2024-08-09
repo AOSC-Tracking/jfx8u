@@ -1,6 +1,5 @@
 /*
  * Copyright (C) 2011, Google Inc. All rights reserved.
- * Copyright (C) 2020, Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -37,12 +36,11 @@
 namespace WebCore {
 
 class AudioContext;
-struct MediaElementAudioSourceOptions;
 
 class MediaElementAudioSourceNode final : public AudioNode, public AudioSourceProviderClient {
     WTF_MAKE_ISO_ALLOCATED(MediaElementAudioSourceNode);
 public:
-    static ExceptionOr<Ref<MediaElementAudioSourceNode>> create(BaseAudioContext&, MediaElementAudioSourceOptions&&);
+    static Ref<MediaElementAudioSourceNode> create(AudioContext&, HTMLMediaElement&);
 
     virtual ~MediaElementAudioSourceNode();
 
@@ -59,7 +57,7 @@ public:
     void unlock();
 
 private:
-    MediaElementAudioSourceNode(BaseAudioContext&, Ref<HTMLMediaElement>&&);
+    MediaElementAudioSourceNode(AudioContext&, HTMLMediaElement&);
 
     double tailTime() const override { return 0; }
     double latencyTime() const override { return 0; }
@@ -72,8 +70,8 @@ private:
     Ref<HTMLMediaElement> m_mediaElement;
     Lock m_processMutex;
 
-    unsigned m_sourceNumberOfChannels { 0 };
-    double m_sourceSampleRate { 0 };
+    unsigned m_sourceNumberOfChannels;
+    double m_sourceSampleRate;
     bool m_muted { false };
 
     std::unique_ptr<MultiChannelResampler> m_multiChannelResampler;

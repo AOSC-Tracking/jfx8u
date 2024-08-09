@@ -218,7 +218,7 @@ void ScriptExecutionContext::destroyedMessagePort(MessagePort& messagePort)
     m_messagePorts.remove(&messagePort);
 }
 
-void ScriptExecutionContext::didLoadResourceSynchronously(const URL&)
+void ScriptExecutionContext::didLoadResourceSynchronously()
 {
 }
 
@@ -543,6 +543,12 @@ bool ScriptExecutionContext::allowsMediaDevices() const
 #else
     return false;
 #endif
+}
+
+bool ScriptExecutionContext::hasServiceWorkerScheme() const
+{
+    ASSERT(securityOrigin());
+    return LegacySchemeRegistry::isServiceWorkerContainerCustomScheme(securityOrigin()->protocol());
 }
 
 #if ENABLE(SERVICE_WORKER)

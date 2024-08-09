@@ -55,31 +55,19 @@ public:
     bool isNone() const { return m_isNone; }
 
 private:
-    struct Host {
-        String value;
-        bool hasWildcard { false };
-    };
-    struct Port {
-        Optional<uint16_t> value;
-        bool hasWildcard { false };
-    };
-    struct Source {
-        String scheme;
-        Host host;
-        Port port;
-        String path;
-    };
+    void parse(const UChar* begin, const UChar* end);
+
+    bool parseSource(const UChar* begin, const UChar* end, String& scheme, String& host, Optional<uint16_t>& port, String& path, bool& hostHasWildcard, bool& portHasWildcard);
+    bool parseScheme(const UChar* begin, const UChar* end, String& scheme);
+    bool parseHost(const UChar* begin, const UChar* end, String& host, bool& hostHasWildcard);
+    bool parsePort(const UChar* begin, const UChar* end, Optional<uint16_t>& port, bool& portHasWildcard);
+    bool parsePath(const UChar* begin, const UChar* end, String& path);
+
+    bool parseNonceSource(const UChar* begin, const UChar* end);
 
     bool isProtocolAllowedByStar(const URL&) const;
 
-    template<typename CharacterType> void parse(StringParsingBuffer<CharacterType>);
-    template<typename CharacterType> Optional<Source> parseSource(StringParsingBuffer<CharacterType>);
-    template<typename CharacterType> Optional<String> parseScheme(StringParsingBuffer<CharacterType>);
-    template<typename CharacterType> Optional<Host> parseHost(StringParsingBuffer<CharacterType>);
-    template<typename CharacterType> Optional<Port> parsePort(StringParsingBuffer<CharacterType>);
-    template<typename CharacterType> Optional<String> parsePath(StringParsingBuffer<CharacterType>);
-    template<typename CharacterType> bool parseNonceSource(StringParsingBuffer<CharacterType>);
-    template<typename CharacterType> bool parseHashSource(StringParsingBuffer<CharacterType>);
+    bool parseHashSource(const UChar* begin, const UChar* end);
 
     const ContentSecurityPolicy& m_policy;
     Vector<ContentSecurityPolicySource> m_list;

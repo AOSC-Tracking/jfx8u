@@ -1,7 +1,7 @@
 /*
  *  Copyright (C) 1999-2001 Harri Porten (porten@kde.org)
  *  Copyright (C) 2001 Peter Kelly (pmk@post.com)
- *  Copyright (C) 2003-2020 Apple Inc. All rights reserved.
+ *  Copyright (C) 2003-2019 Apple Inc. All rights reserved.
  *  Copyright (C) 2007 Eric Seidel (eric@webkit.org)
  *
  *  This library is free software; you can redistribute it and/or
@@ -24,9 +24,11 @@
 #include "config.h"
 #include "JSObject.h"
 
-#include "ArrayConstructor.h"
+#include "ButterflyInlines.h"
 #include "CatchScope.h"
 #include "CustomGetterSetter.h"
+#include "DatePrototype.h"
+#include "ErrorConstructor.h"
 #include "Exception.h"
 #include "GCDeferralContextInlines.h"
 #include "GetterSetter.h"
@@ -35,18 +37,19 @@
 #include "JSCInlines.h"
 #include "JSCustomGetterSetterFunction.h"
 #include "JSFunction.h"
+#include "JSGlobalObject.h"
 #include "JSImmutableButterfly.h"
 #include "Lookup.h"
+#include "NativeErrorConstructor.h"
+#include "ObjectPrototype.h"
 #include "PropertyDescriptor.h"
 #include "PropertyNameArray.h"
 #include "ProxyObject.h"
+#include "SlotVisitorInlines.h"
 #include "TypeError.h"
 #include "VMInlines.h"
+#include <math.h>
 #include <wtf/Assertions.h>
-
-#if PLATFORM(IOS)
-#include <wtf/spi/darwin/dyldSPI.h>
-#endif
 
 namespace JSC {
 
@@ -513,37 +516,12 @@ String JSObject::className(const JSObject* object, VM& vm)
     return info->className;
 }
 
-#if PLATFORM(IOS)
-inline static bool isPokerBros()
-{
-    auto bundleID = CFBundleGetIdentifier(CFBundleGetMainBundle());
-    return bundleID
-        && CFEqual(bundleID, CFSTR("com.kpgame.PokerBros"))
-        && dyld_get_program_sdk_version() < DYLD_IOS_VERSION_14_0;
-}
-#endif
-
 String JSObject::toStringName(const JSObject* object, JSGlobalObject* globalObject)
 {
     VM& vm = globalObject->vm();
-#if PLATFORM(IOS)
-    static bool needsOldStringName = isPokerBros();
-    if (UNLIKELY(needsOldStringName)) {
     const ClassInfo* info = object->classInfo(vm);
     ASSERT(info);
     return info->className;
-    }
-#endif
-    auto scope = DECLARE_THROW_SCOPE(vm);
-    bool objectIsArray = isArray(globalObject, object);
-    RETURN_IF_EXCEPTION(scope, String());
-    if (objectIsArray)
-        return "Array"_s;
-    if (TypeInfo::isArgumentsType(object->type()))
-        return "Arguments"_s;
-    if (const_cast<JSObject*>(object)->isCallable(vm))
-        return "Function"_s;
-    return "Object"_s;
 }
 
 String JSObject::calculatedClassName(JSObject* object)
@@ -556,7 +534,7 @@ String JSObject::calculatedClassName(JSObject* object)
 
     // Check for a display name of obj.constructor.
     // This is useful to get `Foo` for the `(class Foo).prototype` object.
-    PropertySlot slot(object, PropertySlot::InternalMethodType::VMInquiry, &vm);
+    PropertySlot slot(object, PropertySlot::InternalMethodType::VMInquiry);
     if (object->getOwnPropertySlot(object, globalObject, vm.propertyNames->constructor, slot)) {
         EXCEPTION_ASSERT(!scope.exception());
         if (slot.isValue()) {
@@ -576,11 +554,12 @@ String JSObject::calculatedClassName(JSObject* object)
     // Get the display name of obj.__proto__.constructor.
     // This is useful to get `Foo` for a `new Foo` object.
     if (constructorFunctionName.isNull()) {
-        if (LIKELY(!structure->typeInfo().overridesGetPrototype())) {
+        MethodTable::GetPrototypeFunctionPtr defaultGetPrototype = JSObject::getPrototype;
+        if (LIKELY(structure->classInfo()->methodTable.getPrototype == defaultGetPrototype)) {
             JSValue protoValue = object->getPrototypeDirect(vm);
             if (protoValue.isObject()) {
                 JSObject* protoObject = asObject(protoValue);
-                PropertySlot slot(protoValue, PropertySlot::InternalMethodType::VMInquiry, &vm);
+                PropertySlot slot(protoValue, PropertySlot::InternalMethodType::VMInquiry);
                 if (protoObject->getPropertySlot(globalObject, vm.propertyNames->constructor, slot)) {
                     EXCEPTION_ASSERT(!scope.exception());
                     if (slot.isValue()) {
@@ -690,20 +669,6 @@ bool JSObject::getOwnPropertySlotByIndex(JSObject* thisObject, JSGlobalObject* g
     return false;
 }
 
-#if ASSERT_ENABLED
-// These needs to be unique (not inlined) for ASSERT_ENABLED builds to enable
-// Structure::validateFlags() to do checks using function pointer comparisons.
-
-bool JSObject::getOwnPropertySlot(JSObject* object, JSGlobalObject* globalObject, PropertyName propertyName, PropertySlot& slot)
-{
-    return getOwnPropertySlotImpl(object, globalObject, propertyName, slot);
-}
-
-void JSObject::doPutPropertySecurityCheck(JSObject*, JSGlobalObject*, PropertyName, PutPropertySlot&)
-{
-}
-#endif // ASSERT_ENABLED
-
 // https://tc39.github.io/ecma262/#sec-ordinaryset
 bool ordinarySetSlow(JSGlobalObject* globalObject, JSObject* object, PropertyName propertyName, JSValue value, JSValue receiver, bool shouldThrow)
 {
@@ -802,9 +767,10 @@ bool ordinarySetSlow(JSGlobalObject* globalObject, JSObject* object, PropertyNam
     args.append(value);
     ASSERT(!args.hasOverflowed());
 
-    auto callData = getCallData(vm, setterObject);
+    CallData callData;
+    CallType callType = setterObject->methodTable(vm)->getCallData(setterObject, callData);
     scope.release();
-    call(globalObject, setterObject, callData, receiver, args);
+    call(globalObject, setterObject, callType, callData, receiver, args);
 
     // 9.1.9.1-9 Return true.
     return true;
@@ -844,7 +810,7 @@ bool JSObject::putInlineSlow(JSGlobalObject* globalObject, PropertyName property
                 if (!this->structure(vm)->isDictionary())
                     slot.setCacheableSetter(obj, offset);
 
-                bool result = callSetter(globalObject, slot.thisValue(), gs, value, slot.isStrictMode() ? ECMAMode::strict() : ECMAMode::sloppy());
+                bool result = callSetter(globalObject, slot.thisValue(), gs, value, slot.isStrictMode() ? StrictMode : NotStrictMode);
                 RETURN_IF_EXCEPTION(scope, false);
                 return result;
             }
@@ -1731,7 +1697,7 @@ ArrayStorage* JSObject::ensureArrayStorageSlow(VM& vm)
 
     default:
         RELEASE_ASSERT_NOT_REACHED();
-        return nullptr;
+        return 0;
     }
 }
 
@@ -1764,7 +1730,7 @@ ArrayStorage* JSObject::ensureArrayStorageExistsAndEnterDictionaryIndexingMode(V
 
     default:
         CRASH();
-        return nullptr;
+        return 0;
     }
 }
 
@@ -1852,7 +1818,7 @@ bool JSObject::setPrototypeWithCycleCheck(VM& vm, JSGlobalObject* globalObject, 
         return typeError(globalObject, scope, shouldThrowIfCantSet, "Cannot set prototype of immutable prototype object"_s);
     }
 
-    ASSERT(methodTable(vm)->toThis(this, globalObject, ECMAMode::sloppy()) == this);
+    ASSERT(methodTable(vm)->toThis(this, globalObject, NotStrictMode) == this);
 
     if (this->getPrototypeDirect(vm) == prototype)
         return true;
@@ -1993,14 +1959,6 @@ bool JSObject::hasProperty(JSGlobalObject* globalObject, unsigned propertyName) 
     return hasPropertyGeneric(globalObject, propertyName, PropertySlot::InternalMethodType::HasProperty);
 }
 
-bool JSObject::hasProperty(JSGlobalObject* globalObject, uint64_t propertyName) const
-{
-    if (LIKELY(propertyName <= MAX_ARRAY_INDEX))
-        return hasProperty(globalObject, static_cast<uint32_t>(propertyName));
-    ASSERT(propertyName <= maxSafeInteger());
-    return hasProperty(globalObject, Identifier::from(globalObject->vm(), propertyName));
-}
-
 bool JSObject::hasPropertyGeneric(JSGlobalObject* globalObject, PropertyName propertyName, PropertySlot::InternalMethodType internalMethodType) const
 {
     PropertySlot slot(this, internalMethodType);
@@ -2014,7 +1972,7 @@ bool JSObject::hasPropertyGeneric(JSGlobalObject* globalObject, unsigned propert
 }
 
 // ECMA 8.6.2.5
-bool JSObject::deleteProperty(JSCell* cell, JSGlobalObject* globalObject, PropertyName propertyName, DeletePropertySlot& slot)
+bool JSObject::deleteProperty(JSCell* cell, JSGlobalObject* globalObject, PropertyName propertyName)
 {
     JSObject* thisObject = jsCast<JSObject*>(cell);
     VM& vm = globalObject->vm();
@@ -2041,10 +1999,8 @@ bool JSObject::deleteProperty(JSCell* cell, JSGlobalObject* globalObject, Proper
 
     bool propertyIsPresent = isValidOffset(structure->get(vm, propertyName, attributes));
     if (propertyIsPresent) {
-        if (attributes & PropertyAttribute::DontDelete && vm.deletePropertyMode() != VM::DeletePropertyMode::IgnoreConfigurable) {
-            slot.setNonconfigurable();
+        if (attributes & PropertyAttribute::DontDelete && vm.deletePropertyMode() != VM::DeletePropertyMode::IgnoreConfigurable)
             return false;
-        }
         DeferredStructureTransitionWatchpointFire deferredWatchpointFire(vm, structure);
 
         PropertyOffset offset = invalidOffset;
@@ -2052,8 +2008,11 @@ bool JSObject::deleteProperty(JSCell* cell, JSGlobalObject* globalObject, Proper
             offset = structure->removePropertyWithoutTransition(vm, propertyName, [] (const GCSafeConcurrentJSLocker&, PropertyOffset, PropertyOffset) { });
         else {
             structure = Structure::removePropertyTransition(vm, structure, propertyName, offset, &deferredWatchpointFire);
-            slot.setHit(offset);
-            ASSERT(structure->outOfLineCapacity() || !thisObject->structure(vm)->outOfLineCapacity());
+            if (thisObject->m_butterfly && !structure->outOfLineCapacity() && !structure->hasIndexingHeader(thisObject)) {
+                thisObject->nukeStructureAndSetButterfly(vm, thisObject->structureID(), nullptr);
+                offset = invalidOffset;
+                ASSERT(structure->maxOffset() == invalidOffset);
+            }
             thisObject->setStructure(vm, structure);
         }
 
@@ -2061,8 +2020,7 @@ bool JSObject::deleteProperty(JSCell* cell, JSGlobalObject* globalObject, Proper
 
         if (offset != invalidOffset)
             thisObject->locationForOffset(offset)->clear();
-    } else
-        slot.setConfigurableMiss();
+    }
 
     return true;
 }
@@ -2073,7 +2031,7 @@ bool JSObject::deletePropertyByIndex(JSCell* cell, JSGlobalObject* globalObject,
     JSObject* thisObject = jsCast<JSObject*>(cell);
 
     if (i > MAX_ARRAY_INDEX)
-        return JSCell::deleteProperty(thisObject, globalObject, Identifier::from(vm, i));
+        return thisObject->methodTable(vm)->deleteProperty(thisObject, globalObject, Identifier::from(vm, i));
 
     switch (thisObject->indexingMode()) {
     case ALL_BLANK_INDEXING_TYPES:
@@ -2159,8 +2117,9 @@ static ALWAYS_INLINE JSValue callToPrimitiveFunction(JSGlobalObject* globalObjec
     RETURN_IF_EXCEPTION(scope, scope.exception());
     if (function.isUndefinedOrNull() && mode == TypeHintMode::TakesHint)
         return JSValue();
-    auto callData = getCallData(vm, function);
-    if (callData.type == CallData::Type::None) {
+    CallData callData;
+    CallType callType = getCallData(vm, function, callData);
+    if (callType == CallType::None) {
         if (mode == TypeHintMode::TakesHint)
             throwTypeError(globalObject, scope, "Symbol.toPrimitive is not a function, undefined, or null"_s);
         return scope.exception();
@@ -2184,7 +2143,7 @@ static ALWAYS_INLINE JSValue callToPrimitiveFunction(JSGlobalObject* globalObjec
     }
     ASSERT(!callArgs.hasOverflowed());
 
-    JSValue result = call(globalObject, function, callData, const_cast<JSObject*>(object), callArgs);
+    JSValue result = call(globalObject, function, callType, callData, const_cast<JSObject*>(object), callArgs);
     RETURN_IF_EXCEPTION(scope, scope.exception());
     ASSERT(!result.isGetterSetter());
     if (result.isObject())
@@ -2281,8 +2240,9 @@ bool JSObject::hasInstance(JSGlobalObject* globalObject, JSValue value, JSValue 
     auto scope = DECLARE_THROW_SCOPE(vm);
 
     if (!hasInstanceValue.isUndefinedOrNull() && hasInstanceValue != globalObject->functionProtoHasInstanceSymbolFunction()) {
-        auto callData = JSC::getCallData(vm, hasInstanceValue);
-        if (callData.type == CallData::Type::None) {
+        CallData callData;
+        CallType callType = JSC::getCallData(vm, hasInstanceValue, callData);
+        if (callType == CallType::None) {
             throwException(globalObject, scope, createInvalidInstanceofParameterErrorHasInstanceValueNotFunction(globalObject, this));
             return false;
         }
@@ -2290,7 +2250,7 @@ bool JSObject::hasInstance(JSGlobalObject* globalObject, JSValue value, JSValue 
         MarkedArgumentBuffer args;
         args.append(value);
         ASSERT(!args.hasOverflowed());
-        JSValue result = call(globalObject, hasInstanceValue, callData, this, args);
+        JSValue result = call(globalObject, hasInstanceValue, callType, callData, this, args);
         RETURN_IF_EXCEPTION(scope, false);
         return result.toBoolean(globalObject);
     }
@@ -2623,17 +2583,12 @@ static bool putIndexedDescriptor(JSGlobalObject* globalObject, SparseArrayValueM
 
 ALWAYS_INLINE static bool canDoFastPutDirectIndex(VM& vm, JSObject* object)
 {
-    if (TypeInfo::isArgumentsType(object->type()))
-        return true;
-
-    if (object->inSparseIndexingMode())
-        return false;
-
     return (isJSArray(object) && !isCopyOnWrite(object->indexingMode()))
-        || jsDynamicCast<JSFinalObject*>(vm, object);
+        || jsDynamicCast<JSFinalObject*>(vm, object)
+        || TypeInfo::isArgumentsType(object->type());
 }
 
-// https://tc39.es/ecma262/#sec-ordinarydefineownproperty
+// Defined in ES5.1 8.12.9
 bool JSObject::defineOwnIndexedProperty(JSGlobalObject* globalObject, unsigned index, const PropertyDescriptor& descriptor, bool throwException)
 {
     VM& vm = globalObject->vm();
@@ -2644,21 +2599,11 @@ bool JSObject::defineOwnIndexedProperty(JSGlobalObject* globalObject, unsigned i
     ensureWritable(vm);
 
     if (!inSparseIndexingMode()) {
-        const PropertyDescriptor emptyAttributesDescriptor(jsUndefined(), static_cast<unsigned>(PropertyAttribute::None));
-        ASSERT(emptyAttributesDescriptor.attributes() == static_cast<unsigned>(PropertyAttribute::None));
-
-#if ASSERT_ENABLED
-        if (canGetIndexQuickly(index) && canDoFastPutDirectIndex(vm, this)) {
-            PropertyDescriptor currentDescriptor;
-            ASSERT(getOwnPropertyDescriptor(globalObject, Identifier::from(vm, index), currentDescriptor));
-            scope.assertNoException();
-            ASSERT(currentDescriptor.attributes() == emptyAttributesDescriptor.attributes());
-        }
-#endif
         // Fast case: we're putting a regular property to a regular array
-        if (descriptor.value()
-            && (!descriptor.attributes() || (canGetIndexQuickly(index) && !descriptor.attributesOverridingCurrent(emptyAttributesDescriptor)))
-            && canDoFastPutDirectIndex(vm, this)) {
+        // FIXME: this will pessimistically assume that if attributes are missing then they'll default to false
+        // however if the property currently exists missing attributes will override from their current 'true'
+        // state (i.e. defineOwnProperty could be used to set a value without needing to entering 'SparseMode').
+        if (!descriptor.attributes() && descriptor.value() && canDoFastPutDirectIndex(vm, this)) {
             ASSERT(!descriptor.isAccessorDescriptor());
             RELEASE_AND_RETURN(scope, putDirectIndex(globalObject, index, descriptor.value(), 0, throwException ? PutDirectIndexShouldThrow : PutDirectIndexShouldNotThrow));
         }
@@ -3529,23 +3474,44 @@ bool JSObject::getOwnPropertyDescriptor(JSGlobalObject* globalObject, PropertyNa
 {
     VM& vm = globalObject->vm();
     auto scope = DECLARE_THROW_SCOPE(vm);
-    PropertySlot slot(this, PropertySlot::InternalMethodType::GetOwnProperty);
+    JSC::PropertySlot slot(this, PropertySlot::InternalMethodType::GetOwnProperty);
 
     bool result = methodTable(vm)->getOwnPropertySlot(this, globalObject, propertyName, slot);
     EXCEPTION_ASSERT(!scope.exception() || !result);
     if (!result)
         return false;
 
+
+    // FIXME: https://bugs.webkit.org/show_bug.cgi?id=200560
+    // This breaks the assumption that getOwnPropertySlot should return "own" property.
+    // We should fix DebuggerScope, ProxyObject etc. to remove this.
+    //
+    // DebuggerScope::getOwnPropertySlot() (and possibly others) may return attributes from the prototype chain
+    // but getOwnPropertyDescriptor() should only work for 'own' properties so we exit early if we detect that
+    // the property is not an own property.
+    if (slot.slotBase() != this && slot.slotBase()) {
+        JSProxy* jsProxy = jsDynamicCast<JSProxy*>(vm, this);
+        if (!jsProxy || jsProxy->target() != slot.slotBase()) {
+            // Try ProxyObject.
+            ProxyObject* proxyObject = jsDynamicCast<ProxyObject*>(vm, this);
+            if (!proxyObject || proxyObject->target() != slot.slotBase())
+                return false;
+        }
+    }
+
     if (slot.isAccessor())
         descriptor.setAccessorDescriptor(slot.getterSetter(), slot.attributes());
     else if (slot.attributes() & PropertyAttribute::CustomAccessor) {
+        descriptor.setCustomDescriptor(slot.attributes());
+
+        JSObject* thisObject = this;
+        if (auto* proxy = jsDynamicCast<JSProxy*>(vm, this))
+            thisObject = proxy->target();
+
         CustomGetterSetter* getterSetter;
         if (slot.isCustomAccessor())
             getterSetter = slot.customGetterSetter();
         else {
-            ASSERT(slot.slotBase());
-            JSObject* thisObject = slot.slotBase();
-
             JSValue maybeGetterSetter = thisObject->getDirect(vm, propertyName);
             if (!maybeGetterSetter) {
                 thisObject->reifyAllStaticProperties(globalObject);
@@ -3559,7 +3525,6 @@ bool JSObject::getOwnPropertyDescriptor(JSGlobalObject* globalObject, PropertyNa
         if (!getterSetter)
             return false;
 
-        descriptor.setCustomDescriptor(slot.attributes());
         if (getterSetter->getter())
             descriptor.setGetter(getCustomGetterSetterFunctionForGetterSetter(globalObject, propertyName, getterSetter, JSCustomGetterSetterFunction::Type::Getter));
         if (getterSetter->setter())
@@ -3573,6 +3538,41 @@ bool JSObject::getOwnPropertyDescriptor(JSGlobalObject* globalObject, PropertyNa
     return true;
 }
 
+static bool putDescriptor(JSGlobalObject* globalObject, JSObject* target, PropertyName propertyName, const PropertyDescriptor& descriptor, unsigned attributes, const PropertyDescriptor& oldDescriptor)
+{
+    VM& vm = globalObject->vm();
+    if (descriptor.isGenericDescriptor() || descriptor.isDataDescriptor()) {
+        if (descriptor.isGenericDescriptor() && oldDescriptor.isAccessorDescriptor()) {
+            JSObject* getter = oldDescriptor.getterPresent() ? oldDescriptor.getterObject() : nullptr;
+            JSObject* setter = oldDescriptor.setterPresent() ? oldDescriptor.setterObject() : nullptr;
+            GetterSetter* accessor = GetterSetter::create(vm, globalObject, getter, setter);
+            target->putDirectAccessor(globalObject, propertyName, accessor, attributes | PropertyAttribute::Accessor);
+            return true;
+        }
+        JSValue newValue = jsUndefined();
+        if (descriptor.value())
+            newValue = descriptor.value();
+        else if (oldDescriptor.value())
+            newValue = oldDescriptor.value();
+        target->putDirect(vm, propertyName, newValue, attributes & ~PropertyAttribute::Accessor);
+        if (attributes & PropertyAttribute::ReadOnly)
+            target->structure(vm)->setContainsReadOnlyProperties();
+        return true;
+    }
+    attributes &= ~PropertyAttribute::ReadOnly;
+
+    JSObject* getter = descriptor.getterPresent()
+        ? descriptor.getterObject() : oldDescriptor.getterPresent()
+        ? oldDescriptor.getterObject() : nullptr;
+    JSObject* setter = descriptor.setterPresent()
+        ? descriptor.setterObject() : oldDescriptor.setterPresent()
+        ? oldDescriptor.setterObject() : nullptr;
+    GetterSetter* accessor = GetterSetter::create(vm, globalObject, getter, setter);
+
+    target->putDirectAccessor(globalObject, propertyName, accessor, attributes | PropertyAttribute::Accessor);
+    return true;
+}
+
 bool JSObject::putDirectMayBeIndex(JSGlobalObject* globalObject, PropertyName propertyName, JSValue value)
 {
     if (Optional<uint32_t> index = parseIndex(propertyName))
@@ -3580,7 +3580,8 @@ bool JSObject::putDirectMayBeIndex(JSGlobalObject* globalObject, PropertyName pr
     return putDirect(globalObject->vm(), propertyName, value);
 }
 
-// https://tc39.es/ecma262/#sec-validateandapplypropertydescriptor
+// 9.1.6.3 of the spec
+// http://www.ecma-international.org/ecma-262/6.0/index.html#sec-validateandapplypropertydescriptor
 bool validateAndApplyPropertyDescriptor(JSGlobalObject* globalObject, JSObject* object, PropertyName propertyName, bool isExtensible,
     const PropertyDescriptor& descriptor, bool isCurrentDefined, const PropertyDescriptor& current, bool throwException)
 {
@@ -3594,30 +3595,25 @@ bool validateAndApplyPropertyDescriptor(JSGlobalObject* globalObject, JSObject* 
         // Step 2.a
         if (!isExtensible)
             return typeError(globalObject, scope, throwException, NonExtensibleObjectPropertyDefineError);
-
-        if (object) {
-            if (descriptor.isAccessorDescriptor()) {
-                unsigned attributes = (descriptor.attributes() | PropertyAttribute::Accessor) & ~PropertyAttribute::ReadOnly;
-                object->putDirectAccessor(globalObject, propertyName, descriptor.slowGetterSetter(globalObject), attributes);
-            } else {
-                ASSERT(descriptor.isGenericDescriptor() || descriptor.isDataDescriptor());
-                JSValue value = descriptor.value() ? descriptor.value() : jsUndefined();
-                object->putDirect(vm, propertyName, value, descriptor.attributes() & ~PropertyAttribute::Accessor);
-            }
-        }
-
+        if (!object)
             return true;
+        // Step 2.c/d
+        PropertyDescriptor oldDescriptor;
+        oldDescriptor.setValue(jsUndefined());
+        // FIXME: spec says to always return true here.
+        return putDescriptor(globalObject, object, propertyName, descriptor, descriptor.attributes(), oldDescriptor);
     }
     // Step 3.
     if (descriptor.isEmpty())
         return true;
-
+    // Step 4.
     bool isEqual = current.equalTo(globalObject, descriptor);
     RETURN_IF_EXCEPTION(scope, false);
     if (isEqual)
         return true;
 
-    // Step 4.
+    // Step 5.
+    // Filter out invalid changes
     if (!current.configurable()) {
         if (descriptor.configurable())
             return typeError(globalObject, scope, throwException, UnconfigurablePropertyChangeConfigurabilityError);
@@ -3625,57 +3621,107 @@ bool validateAndApplyPropertyDescriptor(JSGlobalObject* globalObject, JSObject* 
             return typeError(globalObject, scope, throwException, UnconfigurablePropertyChangeEnumerabilityError);
     }
 
+    // Step 6.
+    // A generic descriptor is simply changing the attributes of an existing property
     if (descriptor.isGenericDescriptor()) {
-        // Step 5.
-        // Changing [[Enumerable]] and [[Configurable]] attributes of an existing property
-    } else if (current.isDataDescriptor() != descriptor.isDataDescriptor()) {
-        // Step 6.
-        // Changing between a data property and accessor property
+        if (!current.attributesEqual(descriptor) && object) {
+            object->methodTable(vm)->deleteProperty(object, globalObject, propertyName);
+            RETURN_IF_EXCEPTION(scope, false);
+            return putDescriptor(globalObject, object, propertyName, descriptor, descriptor.attributesOverridingCurrent(current), current);
+        }
+        return true;
+    }
+
+    // Step 7.
+    // Changing between a normal property or an accessor property
+    if (descriptor.isDataDescriptor() != current.isDataDescriptor()) {
         if (!current.configurable())
             return typeError(globalObject, scope, throwException, UnconfigurablePropertyChangeAccessMechanismError);
-    } else if (current.isDataDescriptor() && descriptor.isDataDescriptor()) {
-        // Step 7.
-        // Changing the value and attributes of an existing data property
-        if (!current.configurable() && !current.writable()) {
-            if (descriptor.writable())
-                return typeError(globalObject, scope, throwException, UnconfigurablePropertyChangeWritabilityError);
-            if (descriptor.value() && !sameValue(globalObject, current.value(), descriptor.value()))
-                        return typeError(globalObject, scope, throwException, ReadonlyPropertyChangeError);
 
+        if (!object)
             return true;
+
+        object->methodTable(vm)->deleteProperty(object, globalObject, propertyName);
+        RETURN_IF_EXCEPTION(scope, false);
+        return putDescriptor(globalObject, object, propertyName, descriptor, descriptor.attributesOverridingCurrent(current), current);
     }
-    } else {
-        // Step 8.
-        // Changing the accessor functions and attributes of an existing accessor property
+
+    // Step 8.
+    // Changing the value and attributes of an existing property
+    if (descriptor.isDataDescriptor()) {
+        if (!current.configurable()) {
+            if (!current.writable() && descriptor.writable())
+                return typeError(globalObject, scope, throwException, UnconfigurablePropertyChangeWritabilityError);
+            if (!current.writable()) {
+                if (descriptor.value()) {
+                    bool isSame = sameValue(globalObject, current.value(), descriptor.value());
+                    RETURN_IF_EXCEPTION(scope, false);
+                    if (!isSame)
+                        return typeError(globalObject, scope, throwException, ReadonlyPropertyChangeError);
+                }
+            }
+        }
+        if (current.attributesEqual(descriptor) && !descriptor.value())
+            return true;
+        if (!object)
+            return true;
+        object->methodTable(vm)->deleteProperty(object, globalObject, propertyName);
+        RETURN_IF_EXCEPTION(scope, false);
+        return putDescriptor(globalObject, object, propertyName, descriptor, descriptor.attributesOverridingCurrent(current), current);
+    }
+
+    // Step 9.
+    // Changing the accessor functions of an existing accessor property
     ASSERT(descriptor.isAccessorDescriptor());
     if (!current.configurable()) {
-            if (descriptor.setterPresent() && descriptor.setter() != current.setter())
+        if (descriptor.setterPresent() && !(current.setterPresent() && JSValue::strictEqual(globalObject, current.setter(), descriptor.setter())))
             return typeError(globalObject, scope, throwException, "Attempting to change the setter of an unconfigurable property."_s);
-            if (descriptor.getterPresent() && descriptor.getter() != current.getter())
+        if (descriptor.getterPresent() && !(current.getterPresent() && JSValue::strictEqual(globalObject, current.getter(), descriptor.getter())))
             return typeError(globalObject, scope, throwException, "Attempting to change the getter of an unconfigurable property."_s);
         if (current.attributes() & PropertyAttribute::CustomAccessor)
             return typeError(globalObject, scope, throwException, UnconfigurablePropertyChangeAccessMechanismError);
-
-        return true;
-    }
     }
 
+    // Step 10/11.
     if (!object)
         return true;
-    // Step 9.
-    unsigned attributes = descriptor.attributesOverridingCurrent(current);
-    if (descriptor.isAccessorDescriptor() || (current.isAccessorDescriptor() && !descriptor.isDataDescriptor())) {
-        ASSERT(attributes & PropertyAttribute::Accessor);
-        JSObject* getter = descriptor.getterPresent() ? descriptor.getterObject() : (current.getterPresent() ? current.getterObject() : nullptr);
-        JSObject* setter = descriptor.setterPresent() ? descriptor.setterObject() : (current.setterPresent() ? current.setterObject() : nullptr);
-    GetterSetter* getterSetter = GetterSetter::create(vm, globalObject, getter, setter);
-        object->putDirectAccessor(globalObject, propertyName, getterSetter, attributes & ~PropertyAttribute::ReadOnly);
+    JSValue accessor = object->getDirect(vm, propertyName);
+    if (!accessor)
+        return false;
+    JSObject* getter = nullptr;
+    JSObject* setter = nullptr;
+    bool getterSetterChanged = false;
+
+    if (accessor.isCustomGetterSetter()) {
+        auto* customGetterSetter = jsCast<CustomGetterSetter*>(accessor);
+        if (customGetterSetter->setter())
+            setter = getCustomGetterSetterFunctionForGetterSetter(globalObject, propertyName, customGetterSetter, JSCustomGetterSetterFunction::Type::Setter);
+        if (customGetterSetter->getter())
+            getter = getCustomGetterSetterFunctionForGetterSetter(globalObject, propertyName, customGetterSetter, JSCustomGetterSetterFunction::Type::Getter);
     } else {
-        ASSERT(descriptor.isGenericDescriptor() || descriptor.isDataDescriptor());
-        JSValue value = descriptor.value() ? descriptor.value() : (current.value() ? current.value() : jsUndefined());
-        object->putDirect(vm, propertyName, value, attributes & ~PropertyAttribute::Accessor);
+        ASSERT(accessor.isGetterSetter());
+        auto* getterSetter = jsCast<GetterSetter*>(accessor);
+        getter = getterSetter->getter();
+        setter = getterSetter->setter();
+    }
+    if (descriptor.setterPresent()) {
+        setter = descriptor.setterObject();
+        getterSetterChanged = true;
+    }
+    if (descriptor.getterPresent()) {
+        getter = descriptor.getterObject();
+        getterSetterChanged = true;
     }
 
+    if (current.attributesEqual(descriptor) && !getterSetterChanged)
+        return true;
+
+    GetterSetter* getterSetter = GetterSetter::create(vm, globalObject, getter, setter);
+
+    object->methodTable(vm)->deleteProperty(object, globalObject, propertyName);
+    RETURN_IF_EXCEPTION(scope, false);
+    unsigned attrs = descriptor.attributesOverridingCurrent(current);
+    object->putDirectAccessor(globalObject, propertyName, getterSetter, attrs | PropertyAttribute::Accessor);
     return true;
 }
 
@@ -3684,6 +3730,11 @@ bool JSObject::defineOwnNonIndexProperty(JSGlobalObject* globalObject, PropertyN
     VM& vm  = globalObject->vm();
     auto throwScope = DECLARE_THROW_SCOPE(vm);
 
+    // Track on the globaldata that we're in define property.
+    // Currently DefineOwnProperty uses delete to remove properties when they are being replaced
+    // (particularly when changing attributes), however delete won't allow non-configurable (i.e.
+    // DontDelete) properties to be deleted. For now, we can use this flag to make this work.
+    VM::DeletePropertyModeScope scope(vm, VM::DeletePropertyMode::IgnoreConfigurable);
     PropertyDescriptor current;
     bool isCurrentDefined = getOwnPropertyDescriptor(globalObject, propertyName, current);
     RETURN_IF_EXCEPTION(throwScope, false);
@@ -3833,7 +3884,7 @@ void JSObject::getGenericPropertyNames(JSObject* object, JSGlobalObject* globalO
 
 // Implements GetMethod(O, P) in section 7.3.9 of the spec.
 // http://www.ecma-international.org/ecma-262/6.0/index.html#sec-getmethod
-JSValue JSObject::getMethod(JSGlobalObject* globalObject, CallData& callData, const Identifier& ident, const String& errorMessage)
+JSValue JSObject::getMethod(JSGlobalObject* globalObject, CallData& callData, CallType& callType, const Identifier& ident, const String& errorMessage)
 {
     VM& vm = globalObject->vm();
     auto scope = DECLARE_THROW_SCOPE(vm);
@@ -3849,8 +3900,8 @@ JSValue JSObject::getMethod(JSGlobalObject* globalObject, CallData& callData, co
         return jsUndefined();
     }
 
-    callData = JSC::getCallData(vm, method);
-    if (callData.type == CallData::Type::None) {
+    callType = method.asCell()->methodTable(vm)->getCallData(method.asCell(), callData);
+    if (callType == CallType::None) {
         throwVMTypeError(globalObject, scope, errorMessage);
         return jsUndefined();
     }

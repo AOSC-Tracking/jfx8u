@@ -25,9 +25,8 @@
 
 #include "config.h"
 #include <wtf/MemoryFootprint.h>
-#include <wtf/Platform.h>
 
-#if !USE(SYSTEM_MALLOC) && (OS(LINUX) || OS(FREEBSD))
+#if !(defined(USE_SYSTEM_MALLOC) && USE_SYSTEM_MALLOC) && OS(LINUX)
 #include <bmalloc/bmalloc.h>
 #endif
 
@@ -35,7 +34,7 @@ namespace WTF {
 
 size_t memoryFootprint()
 {
-#if !USE(SYSTEM_MALLOC) && (OS(LINUX) || OS(FREEBSD))
+#if !(defined(USE_SYSTEM_MALLOC) && USE_SYSTEM_MALLOC) && OS(LINUX)
     return bmalloc::api::memoryFootprint();
 #else
     return 0;

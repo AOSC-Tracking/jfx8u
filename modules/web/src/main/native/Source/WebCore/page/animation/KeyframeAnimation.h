@@ -65,10 +65,7 @@ public:
 
     Optional<Seconds> timeToNextService() override;
 
-private:
-    KeyframeAnimation(const Animation&, Element&, CompositeAnimation&, const RenderStyle& unanimatedStyle);
-    virtual ~KeyframeAnimation();
-
+protected:
     void onAnimationStart(double elapsedTime) override;
     void onAnimationIteration(double elapsedTime) override;
     void onAnimationEnd(double elapsedTime) override;
@@ -97,6 +94,10 @@ private:
 #endif
     void checkForMatchingColorFilterFunctionLists();
     bool checkForMatchingFilterFunctionLists(CSSPropertyID, const std::function<const FilterOperations& (const RenderStyle&)>&) const;
+
+private:
+    KeyframeAnimation(const Animation&, Element&, CompositeAnimation&, const RenderStyle& unanimatedStyle);
+    virtual ~KeyframeAnimation();
 
     // Get the styles for the given property surrounding the current animation time and the progress between them.
     void fetchIntervalEndpointsForProperty(CSSPropertyID, const RenderStyle*& fromStyle, const RenderStyle*& toStyle, double& progress) const;

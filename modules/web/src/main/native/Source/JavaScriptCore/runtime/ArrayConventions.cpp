@@ -26,7 +26,7 @@
 #include "config.h"
 #include "ArrayConventions.h"
 
-#include "GCMemoryOperations.h"
+#include "JSCInlines.h"
 
 namespace JSC {
 

@@ -57,10 +57,11 @@ public:
 
     int endOffset() const { return m_endOffset; }
 
+protected:
+    static void destroy(JSCell*);
+
 private:
     JSTemplateObjectDescriptor(VM&, Ref<TemplateObjectDescriptor>&&, int);
-
-    static void destroy(JSCell*);
 
     Ref<TemplateObjectDescriptor> m_descriptor;
     int m_endOffset { 0 };

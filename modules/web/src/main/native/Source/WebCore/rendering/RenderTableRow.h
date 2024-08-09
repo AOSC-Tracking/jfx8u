@@ -70,6 +70,8 @@ private:
 
     const char* renderName() const override { return (isAnonymous() || isPseudoElement()) ? "RenderTableRow (anonymous)" : "RenderTableRow"; }
 
+    bool isTableRow() const override { return true; }
+
     bool canHaveChildren() const override { return true; }
     void willBeRemovedFromTree() override;
 

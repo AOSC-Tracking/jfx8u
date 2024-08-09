@@ -32,7 +32,7 @@
 #include "config.h"
 #include "WebVTTTokenizer.h"
 
-#if ENABLE(VIDEO)
+#if ENABLE(VIDEO_TRACK)
 
 #include "MarkupTokenizerInlines.h"
 #include <wtf/text/StringBuilder.h>

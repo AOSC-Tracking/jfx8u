@@ -41,6 +41,11 @@ public:
         return vm.arrayBufferSpace<mode>();
     }
 
+protected:
+    JSArrayBuffer(VM&, Structure*, RefPtr<ArrayBuffer>&&);
+    void finishCreation(VM&, JSGlobalObject*);
+
+public:
     // This function will register the new wrapper with the vm's TypedArrayController.
     JS_EXPORT_PRIVATE static JSArrayBuffer* create(VM&, Structure*, RefPtr<ArrayBuffer>&&);
 
@@ -56,12 +61,10 @@ public:
     // This is the default DOM unwrapping. It calls toUnsharedArrayBuffer().
     static ArrayBuffer* toWrapped(VM&, JSValue);
 
-private:
-    JSArrayBuffer(VM&, Structure*, RefPtr<ArrayBuffer>&&);
-    void finishCreation(VM&, JSGlobalObject*);
-
+protected:
     static size_t estimatedSize(JSCell*, VM&);
 
+private:
     ArrayBuffer* m_impl;
 };
 

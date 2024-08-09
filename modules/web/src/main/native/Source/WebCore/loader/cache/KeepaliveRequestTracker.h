@@ -39,7 +39,7 @@ public:
 
     // CachedRawResourceClient.
     void responseReceived(CachedResource&, const ResourceResponse&, CompletionHandler<void()>&&) final;
-    void notifyFinished(CachedResource&, const NetworkLoadMetrics&) final;
+    void notifyFinished(CachedResource&) final;
 
 private:
     void registerRequest(CachedResource&);

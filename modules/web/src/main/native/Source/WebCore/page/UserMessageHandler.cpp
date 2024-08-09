@@ -29,9 +29,7 @@
 #if ENABLE(USER_MESSAGE_HANDLERS)
 
 #include "Frame.h"
-#include "JSDOMPromiseDeferred.h"
 #include "SerializedScriptValue.h"
-#include <JavaScriptCore/JSCJSValue.h>
 
 namespace WebCore {
 
@@ -43,29 +41,14 @@ UserMessageHandler::UserMessageHandler(Frame& frame, UserMessageHandlerDescripto
 
 UserMessageHandler::~UserMessageHandler() = default;
 
-ExceptionOr<void> UserMessageHandler::postMessage(RefPtr<SerializedScriptValue>&& value, Ref<DeferredPromise>&& promise)
+ExceptionOr<void> UserMessageHandler::postMessage(RefPtr<SerializedScriptValue>&& value)
 {
     // Check to see if the descriptor has been removed. This can happen if the host application has
     // removed the named message handler at the WebKit2 API level.
-    if (!m_descriptor) {
-        promise->reject(Exception { InvalidAccessError });
+    if (!m_descriptor)
         return Exception { InvalidAccessError };
-    }
 
-    m_descriptor->didPostMessage(*this, value.get(), [promise = WTFMove(promise)](SerializedScriptValue* result, const String& errorMessage) {
-        auto* globalObject = promise->globalObject();
-        if (!globalObject)
-            return;
-
-        if (!errorMessage.isNull()) {
-            JSC::JSLockHolder lock(globalObject);
-            promise->reject<IDLAny>(JSC::createError(globalObject, errorMessage));
-            return;
-        }
-
-        ASSERT(result);
-        promise->resolve<IDLAny>(result->deserialize(*globalObject, globalObject));
-    });
+    m_descriptor->didPostMessage(*this, value.get());
     return { };
 }
 

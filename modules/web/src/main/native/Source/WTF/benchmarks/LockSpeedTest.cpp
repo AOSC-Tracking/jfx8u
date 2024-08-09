@@ -159,7 +159,7 @@ bool parseValue(const char* string, unsigned* variable)
 
 int main(int argc, char** argv)
 {
-    WTF::initialize();
+    WTF::initializeThreading();
 
     if (argc != 8
         || !parseValue(argv[2], &numThreadGroups)

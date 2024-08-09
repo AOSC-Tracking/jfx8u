@@ -23,32 +23,24 @@
 #include "SVGZoomAndPan.h"
 
 #include <wtf/text/StringConcatenateNumbers.h>
-#include <wtf/text/StringParsingBuffer.h>
 
 namespace WebCore {
 
-template<typename CharacterType> static constexpr CharacterType disable[] = { 'd', 'i', 's', 'a', 'b', 'l', 'e' };
-template<typename CharacterType> static constexpr CharacterType magnify[] = { 'm', 'a', 'g', 'n', 'i', 'f', 'y' };
-
-template<typename CharacterType> static Optional<SVGZoomAndPanType> parseZoomAndPanGeneric(StringParsingBuffer<CharacterType>& buffer)
+bool SVGZoomAndPan::parseZoomAndPan(const UChar*& start, const UChar* end)
 {
-    if (skipCharactersExactly(buffer, disable<CharacterType>))
-        return SVGZoomAndPanDisable;
+    static const UChar disable[] = { 'd', 'i', 's', 'a', 'b', 'l', 'e' };
+    if (skipString(start, end, disable, WTF_ARRAY_LENGTH(disable))) {
+        m_zoomAndPan = SVGZoomAndPanDisable;
+        return true;
+    }
 
-    if (skipCharactersExactly(buffer, magnify<CharacterType>))
-        return SVGZoomAndPanMagnify;
+    static const UChar magnify[] = { 'm', 'a', 'g', 'n', 'i', 'f', 'y' };
+    if (skipString(start, end, magnify, WTF_ARRAY_LENGTH(magnify))) {
+        m_zoomAndPan = SVGZoomAndPanMagnify;
+        return true;
+    }
 
-    return WTF::nullopt;
-}
-
-Optional<SVGZoomAndPanType> SVGZoomAndPan::parseZoomAndPan(StringParsingBuffer<LChar>& buffer)
-{
-    return parseZoomAndPanGeneric(buffer);
-}
-
-Optional<SVGZoomAndPanType> SVGZoomAndPan::parseZoomAndPan(StringParsingBuffer<UChar>& buffer)
-{
-    return parseZoomAndPanGeneric(buffer);
+    return false;
 }
 
 void SVGZoomAndPan::parseAttribute(const QualifiedName& attributeName, const AtomString& value)

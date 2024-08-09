@@ -25,6 +25,8 @@
 
 #pragma once
 
+#if ENABLE(VIDEO_TRACK)
+
 #include "CachedResource.h"
 
 namespace WebCore {
@@ -36,7 +38,7 @@ public:
 private:
     bool mayTryReplaceEncodedData() const override { return true; }
     void updateBuffer(SharedBuffer&) override;
-    void finishLoading(SharedBuffer*, const NetworkLoadMetrics&) override;
+    void finishLoading(SharedBuffer*) override;
 
     void doUpdateBuffer(SharedBuffer*);
 };
@@ -44,3 +46,5 @@ private:
 } // namespace WebCore
 
 SPECIALIZE_TYPE_TRAITS_CACHED_RESOURCE(CachedTextTrack, CachedResource::Type::TextTrackResource)
+
+#endif // ENABLE(VIDEO_TRACK)

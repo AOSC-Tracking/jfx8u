@@ -26,6 +26,7 @@
 #include "config.h"
 #include "IsoCellSet.h"
 
+#include "BlockDirectoryInlines.h"
 #include "MarkedBlockInlines.h"
 
 namespace JSC {
@@ -47,7 +48,7 @@ IsoCellSet::~IsoCellSet()
 
 Ref<SharedTask<MarkedBlock::Handle*()>> IsoCellSet::parallelNotEmptyMarkedBlockSource()
 {
-    class Task final : public SharedTask<MarkedBlock::Handle*()> {
+    class Task : public SharedTask<MarkedBlock::Handle*()> {
     public:
         Task(IsoCellSet& set)
             : m_set(set)
@@ -55,7 +56,7 @@ Ref<SharedTask<MarkedBlock::Handle*()>> IsoCellSet::parallelNotEmptyMarkedBlockS
         {
         }
 
-        MarkedBlock::Handle* run() final
+        MarkedBlock::Handle* run() override
         {
             if (m_done)
                 return nullptr;

@@ -59,7 +59,9 @@ Vector<ContentFilter::Type>& ContentFilter::types()
 #if HAVE(PARENTAL_CONTROLS)
             type<ParentalControlsContentFilter>(),
 #endif
+#if HAVE(NETWORK_EXTENSION)
             type<NetworkExtensionContentFilter>()
+#endif
         )
     };
     return types;

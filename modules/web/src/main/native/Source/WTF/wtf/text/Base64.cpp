@@ -209,8 +209,7 @@ static inline bool base64DecodeInternal(const T* data, unsigned length, SignedOr
                     break;
                 }
                 out[outLength++] = decodedCharacter;
-            } else if (!(options & Base64IgnoreSpacesAndNewLines)
-                || (!isLatin1(ch) || !isASCIISpace(ch) || ((options & Base64DiscardVerticalTab) && ch == '\v'))) {
+            } else if (!(options & Base64IgnoreSpacesAndNewLines) || !isSpaceOrNewline(ch)) {
                 hadError = true;
                 break;
             }

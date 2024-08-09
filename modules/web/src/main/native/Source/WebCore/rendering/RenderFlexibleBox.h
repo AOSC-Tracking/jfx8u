@@ -57,7 +57,6 @@ public:
     Optional<int> inlineBlockBaseline(LineDirectionMode) const override;
 
     void styleDidChange(StyleDifference, const RenderStyle*) override;
-    bool hitTestChildren(const HitTestRequest&, HitTestResult&, const HitTestLocation&, const LayoutPoint& adjustedLocation, HitTestAction) override;
     void paintChildren(PaintInfo& forSelf, const LayoutPoint&, PaintInfo& forChild, bool usePrintRect) override;
 
     bool isHorizontalFlow() const;
@@ -69,6 +68,8 @@ public:
 
     virtual bool isFlexibleBoxImpl() const { return false; };
 
+    Optional<LayoutUnit> crossSizeForPercentageResolution(const RenderBox&);
+    Optional<LayoutUnit> mainSizeForPercentageResolution(const RenderBox&);
     Optional<LayoutUnit> childLogicalHeightForPercentageResolution(const RenderBox&);
 
     void clearCachedMainSizeForChild(const RenderBox& child);
@@ -153,8 +154,6 @@ private:
     Overflow mainAxisOverflowForChild(const RenderBox& child) const;
     Overflow crossAxisOverflowForChild(const RenderBox& child) const;
     void cacheChildMainSize(const RenderBox& child);
-    Optional<LayoutUnit> crossSizeForPercentageResolution(const RenderBox&);
-    Optional<LayoutUnit> mainSizeForPercentageResolution(const RenderBox&);
 
     void layoutFlexItems(bool relayoutChildren);
     LayoutUnit autoMarginOffsetInMainAxis(const Vector<FlexItem>&, LayoutUnit& availableFreeSpace);
@@ -209,7 +208,6 @@ private:
     HashSet<const RenderBox*> m_relaidOutChildren;
 
     mutable OrderIterator m_orderIterator { *this };
-    Vector<RenderBox*> m_reversedOrderIteratorForHitTesting;
     int m_numberOfInFlowChildrenOnFirstLine { -1 };
 
     // This is SizeIsUnknown outside of layoutBlock()

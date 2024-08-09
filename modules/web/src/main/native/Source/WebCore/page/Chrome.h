@@ -44,6 +44,7 @@ class DateTimeChooserClient;
 class FileChooser;
 class FileIconLoader;
 class FloatRect;
+class FrameLoadRequest;
 class Element;
 class Frame;
 class Geolocation;
@@ -82,13 +83,10 @@ public:
     void setCursor(const Cursor&) override;
     void setCursorHiddenUntilMouseMoves(bool) override;
 
-    std::unique_ptr<ImageBuffer> createImageBuffer(const FloatSize&, ShouldAccelerate, ShouldUseDisplayList, RenderingPurpose, float resolutionScale, ColorSpace) const override;
-    std::unique_ptr<ImageBuffer> createImageBuffer(const FloatSize&, RenderingMode, float resolutionScale, ColorSpace) const override;
-
     void scheduleAnimation() override { }
 
     PlatformDisplayID displayID() const override;
-    void windowScreenDidChange(PlatformDisplayID, Optional<unsigned>) override;
+    void windowScreenDidChange(PlatformDisplayID) override;
 
     FloatSize screenSize() const override;
     FloatSize availableScreenSize() const override;
@@ -112,7 +110,7 @@ public:
     void focusedElementChanged(Element*) const;
     void focusedFrameChanged(Frame*) const;
 
-    WEBCORE_EXPORT Page* createWindow(Frame&, const WindowFeatures&, const NavigationAction&) const;
+    WEBCORE_EXPORT Page* createWindow(Frame&, const FrameLoadRequest&, const WindowFeatures&, const NavigationAction&) const;
     WEBCORE_EXPORT void show() const;
 
     bool canRunModal() const;
@@ -192,6 +190,7 @@ private:
 
     Page& m_page;
     ChromeClient& m_client;
+    PlatformDisplayID m_displayID { 0 };
     Vector<PopupOpeningObserver*> m_popupOpeningObservers;
 #if PLATFORM(IOS_FAMILY)
     bool m_isDispatchViewportDataDidChangeSuppressed { false };

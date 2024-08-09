@@ -307,15 +307,6 @@ static JSValueRef indexOfChildCallback(JSContextRef context, JSObjectRef functio
     return JSValueMakeNumber(context, (double)toAXElement(thisObject)->indexOfChild(childElement));
 }
 
-static JSObjectRef convertElementsToObjectArray(JSContextRef context, const Vector<AccessibilityUIElement>& elements)
-{
-    auto array = JSObjectMakeArray(context, 0, nullptr, nullptr);
-    unsigned size = elements.size();
-    for (unsigned i = 0; i < size; ++i)
-        JSObjectSetPropertyAtIndex(context, array, i, AccessibilityUIElement::makeJSAccessibilityUIElement(context, elements[i]), 0);
-    return array;
-}
-
 #if PLATFORM(IOS_FAMILY)
 
 static JSValueRef headerElementAtIndexCallback(JSContextRef context, JSObjectRef function, JSObjectRef thisObject, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception)
@@ -343,7 +334,13 @@ static JSValueRef elementsForRangeCallback(JSContextRef context, JSObjectRef fun
     Vector<AccessibilityUIElement> elements;
     toAXElement(thisObject)->elementsForRange(location, length, elements);
 
-    return convertElementsToObjectArray(context, elements);
+    JSValueRef arrayResult = JSObjectMakeArray(context, 0, 0, 0);
+    JSObjectRef arrayObj = JSValueToObject(context, arrayResult, 0);
+    unsigned elementsSize = elements.size();
+    for (unsigned k = 0; k < elementsSize; ++k)
+        JSObjectSetPropertyAtIndex(context, arrayObj, k, AccessibilityUIElement::makeJSAccessibilityUIElement(context, elements[k]), 0);
+
+    return arrayResult;
 }
 
 static JSValueRef increaseTextSelectionCallback(JSContextRef context, JSObjectRef function, JSObjectRef thisObject, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception)
@@ -618,18 +615,30 @@ static JSValueRef stringAttributeValueCallback(JSContextRef context, JSObjectRef
     return result;
 }
 
+static JSValueRef convertElementsToObjectArray(JSContextRef context, Vector<AccessibilityUIElement>& elements, JSValueRef* exception)
+{
+    JSValueRef arrayResult = JSObjectMakeArray(context, 0, 0, 0);
+    JSObjectRef arrayObj = JSValueToObject(context, arrayResult, 0);
+
+    size_t elementCount = elements.size();
+    for (size_t i = 0; i < elementCount; ++i)
+        JSObjectSetPropertyAtIndex(context, arrayObj, i, AccessibilityUIElement::makeJSAccessibilityUIElement(context, elements[i]), 0);
+
+    return arrayResult;
+}
+
 static JSValueRef columnHeadersCallback(JSContextRef context, JSObjectRef function, JSObjectRef thisObject, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception)
 {
     Vector<AccessibilityUIElement> elements;
     toAXElement(thisObject)->columnHeaders(elements);
-    return convertElementsToObjectArray(context, elements);
+    return convertElementsToObjectArray(context, elements, exception);
 }
 
 static JSValueRef rowHeadersCallback(JSContextRef context, JSObjectRef function, JSObjectRef thisObject, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception)
 {
     Vector<AccessibilityUIElement> elements;
     toAXElement(thisObject)->rowHeaders(elements);
-    return convertElementsToObjectArray(context, elements);
+    return convertElementsToObjectArray(context, elements, exception);
 }
 
 static JSValueRef uiElementArrayAttributeValueCallback(JSContextRef context, JSObjectRef function, JSObjectRef thisObject, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception)
@@ -641,7 +650,7 @@ static JSValueRef uiElementArrayAttributeValueCallback(JSContextRef context, JSO
 
     Vector<AccessibilityUIElement> elements;
     toAXElement(thisObject)->uiElementArrayAttributeValue(attribute.get(), elements);
-    return convertElementsToObjectArray(context, elements);
+    return convertElementsToObjectArray(context, elements, exception);
 }
 
 static JSValueRef uiElementAttributeValueCallback(JSContextRef context, JSObjectRef function, JSObjectRef thisObject, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception)
@@ -724,12 +733,6 @@ static JSValueRef showMenuCallback(JSContextRef context, JSObjectRef function, J
 static JSValueRef pressCallback(JSContextRef context, JSObjectRef function, JSObjectRef thisObject, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception)
 {
     toAXElement(thisObject)->press();
-    return JSValueMakeUndefined(context);
-}
-
-static JSValueRef dismissCallback(JSContextRef context, JSObjectRef function, JSObjectRef thisObject, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception)
-{
-    toAXElement(thisObject)->dismiss();
     return JSValueMakeUndefined(context);
 }
 
@@ -1984,7 +1987,6 @@ JSClassRef AccessibilityUIElement::getJSClass()
         { "decrement", decrementCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
         { "showMenu", showMenuCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
         { "press", pressCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
-        { "dismiss", dismissCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
         { "disclosedRowAtIndex", disclosedRowAtIndexCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
         { "ariaOwnsElementAtIndex", ariaOwnsElementAtIndexCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
         { "ariaFlowToElementAtIndex", ariaFlowToElementAtIndexCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },

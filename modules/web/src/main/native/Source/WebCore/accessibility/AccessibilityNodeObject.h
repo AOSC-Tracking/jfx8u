@@ -58,6 +58,7 @@ public:
     bool isGroup() const override;
     bool isHeading() const override;
     bool isHovered() const override;
+    bool isImage() const override;
     bool isImageButton() const override;
     bool isInputImage() const override;
     bool isLink() const override;
@@ -112,7 +113,7 @@ public:
     String title() const override;
     String text() const override;
     String stringValue() const override;
-    SRGBA<uint8_t> colorValue() const override;
+    void colorValue(int& r, int& g, int& b) const override;
     String ariaLabeledByAttribute() const override;
     bool hasAttributesRequiredForInclusion() const final;
     void setIsExpanded(bool) override;
@@ -189,9 +190,6 @@ private:
     bool computeAccessibilityIsIgnored() const override;
     bool usesAltTagForTextComputation() const;
     bool roleIgnoresTitle() const;
-    bool postKeyboardKeysForValueChange(bool increase);
-    void setNodeValue(bool increase, float value);
-    bool performDismissAction() final;
 
     Node* m_node;
 };

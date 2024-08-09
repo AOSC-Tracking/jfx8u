@@ -45,12 +45,15 @@ public:
         return Structure::create(vm, globalObject, prototype, TypeInfo(InternalFunctionType, StructureFlags), info());
     }
 
-private:
-    ErrorConstructor(VM&, Structure*);
+protected:
     void finishCreation(VM&, ErrorPrototype*);
 
     static bool put(JSCell*, JSGlobalObject*, PropertyName, JSValue, PutPropertySlot&);
-    static bool deleteProperty(JSCell*, JSGlobalObject*, PropertyName, DeletePropertySlot&);
+    static bool deleteProperty(JSCell*, JSGlobalObject*, PropertyName);
+
+private:
+    ErrorConstructor(VM&, Structure*);
+
 };
 STATIC_ASSERT_ISO_SUBSPACE_SHARABLE(ErrorConstructor, InternalFunction);
 

@@ -75,29 +75,6 @@ private:
     if (m_changeFlags.contains(GraphicsContextState::flag) && (m_state.property != state.property)) \
         changeFlags.add(GraphicsContextState::flag);
 
-GraphicsContextState::GraphicsContextState()
-    : shouldAntialias(true)
-    , shouldSmoothFonts(true)
-    , shouldSubpixelQuantizeFonts(true)
-    , shadowsIgnoreTransforms(false)
-#if USE(CG)
-    // Core Graphics incorrectly renders shadows with radius > 8px (<rdar://problem/8103442>),
-    // but we need to preserve this buggy behavior for canvas and -webkit-box-shadow.
-    , shadowsUseLegacyRadius(false)
-#endif
-#if PLATFORM(JAVA)
-    , clipBounds(FloatRect::infiniteRect())
-#endif
-    , drawLuminanceMask(false)
-{
-}
-
-GraphicsContextState::~GraphicsContextState() = default;
-GraphicsContextState::GraphicsContextState(const GraphicsContextState&) = default;
-GraphicsContextState::GraphicsContextState(GraphicsContextState&&) = default;
-GraphicsContextState& GraphicsContextState::operator=(const GraphicsContextState&) = default;
-GraphicsContextState& GraphicsContextState::operator=(GraphicsContextState&&) = default;
-
 GraphicsContextState::StateChangeFlags GraphicsContextStateChange::changesFromState(const GraphicsContextState& state) const
 {
     GraphicsContextState::StateChangeFlags changeFlags;
@@ -144,17 +121,17 @@ GraphicsContextState::StateChangeFlags GraphicsContextStateChange::changesFromSt
 void GraphicsContextStateChange::accumulate(const GraphicsContextState& state, GraphicsContextState::StateChangeFlags flags)
 {
     // FIXME: This code should move to GraphicsContextState.
-    if (flags.containsAny({ GraphicsContextState::StrokeColorChange, GraphicsContextState::StrokeGradientChange, GraphicsContextState::StrokePatternChange })) {
-        m_state.strokeColor = state.strokeColor;
+    if (flags.contains(GraphicsContextState::StrokeGradientChange))
         m_state.strokeGradient = state.strokeGradient;
-        m_state.strokePattern = state.strokePattern;
-    }
 
-    if (flags.containsAny({ GraphicsContextState::FillColorChange, GraphicsContextState::FillGradientChange, GraphicsContextState::FillPatternChange })) {
-        m_state.fillColor = state.fillColor;
+    if (flags.contains(GraphicsContextState::StrokePatternChange))
+        m_state.strokePattern = state.strokePattern;
+
+    if (flags.contains(GraphicsContextState::FillGradientChange))
         m_state.fillGradient = state.fillGradient;
+
+    if (flags.contains(GraphicsContextState::FillPatternChange))
         m_state.fillPattern = state.fillPattern;
-    }
 
     if (flags.contains(GraphicsContextState::ShadowChange)) {
         // FIXME: Deal with state.shadowsUseLegacyRadius.
@@ -168,6 +145,12 @@ void GraphicsContextStateChange::accumulate(const GraphicsContextState& state, G
 
     if (flags.contains(GraphicsContextState::TextDrawingModeChange))
         m_state.textDrawingMode = state.textDrawingMode;
+
+    if (flags.contains(GraphicsContextState::StrokeColorChange))
+        m_state.strokeColor = state.strokeColor;
+
+    if (flags.contains(GraphicsContextState::FillColorChange))
+        m_state.fillColor = state.fillColor;
 
     if (flags.contains(GraphicsContextState::StrokeStyleChange))
         m_state.strokeStyle = state.strokeStyle;
@@ -223,9 +206,6 @@ void GraphicsContextStateChange::apply(GraphicsContext& context) const
     if (m_changeFlags.contains(GraphicsContextState::FillPatternChange))
         context.setFillPattern(*m_state.fillPattern);
 
-    if (m_changeFlags.contains(GraphicsContextState::ShadowsIgnoreTransformsChange))
-        context.setShadowsIgnoreTransforms(m_state.shadowsIgnoreTransforms);
-
     if (m_changeFlags.contains(GraphicsContextState::ShadowChange)) {
 #if USE(CG)
         if (m_state.shadowsUseLegacyRadius)
@@ -268,6 +248,9 @@ void GraphicsContextStateChange::apply(GraphicsContext& context) const
     if (m_changeFlags.contains(GraphicsContextState::ShouldSubpixelQuantizeFontsChange))
         context.setShouldSubpixelQuantizeFonts(m_state.shouldSubpixelQuantizeFonts);
 
+    if (m_changeFlags.contains(GraphicsContextState::ShadowsIgnoreTransformsChange))
+        context.setShadowsIgnoreTransforms(m_state.shadowsIgnoreTransforms);
+
     if (m_changeFlags.contains(GraphicsContextState::DrawLuminanceMaskChange))
         context.setDrawLuminanceMask(m_state.drawLuminanceMask);
 
@@ -308,7 +291,7 @@ void GraphicsContextStateChange::dump(TextStream& ts) const
         ts.dumpProperty("stroke-thickness", m_state.strokeThickness);
 
     if (m_changeFlags.contains(GraphicsContextState::TextDrawingModeChange))
-        ts.dumpProperty("text-drawing-mode", m_state.textDrawingMode.toRaw());
+        ts.dumpProperty("text-drawing-mode", m_state.textDrawingMode);
 
     if (m_changeFlags.contains(GraphicsContextState::StrokeColorChange))
         ts.dumpProperty("stroke-color", m_state.strokeColor);
@@ -663,10 +646,10 @@ void GraphicsContext::endTransparencyLayer()
     --m_transparencyCount;
 }
 
-FloatSize GraphicsContext::drawText(const FontCascade& font, const TextRun& run, const FloatPoint& point, unsigned from, Optional<unsigned> to)
+float GraphicsContext::drawText(const FontCascade& font, const TextRun& run, const FloatPoint& point, unsigned from, Optional<unsigned> to)
 {
     if (paintingDisabled())
-        return FloatSize();
+        return 0;
 
     // Display list recording for text content is done at glyphs level. See GraphicsContext::drawGlyphs.
     return font.drawText(*this, run, point, from, to);
@@ -674,7 +657,6 @@ FloatSize GraphicsContext::drawText(const FontCascade& font, const TextRun& run,
 
 void GraphicsContext::drawGlyphs(const Font& font, const GlyphBuffer& buffer, unsigned from, unsigned numGlyphs, const FloatPoint& point, FontSmoothingMode fontSmoothingMode)
 {
-    ASSERT(buffer.isFlattened());
     if (paintingDisabled())
         return;
 
@@ -719,8 +701,8 @@ void GraphicsContext::drawBidiText(const FontCascade& font, const TextRun& run, 
         subrun.setDirection(isRTL ? TextDirection::RTL : TextDirection::LTR);
         subrun.setDirectionalOverride(bidiRun->dirOverride(false));
 
-        auto advance = font.drawText(*this, subrun, currPoint, 0, WTF::nullopt, customFontNotReadyAction);
-        currPoint.move(advance);
+        float width = font.drawText(*this, subrun, currPoint, 0, WTF::nullopt, customFontNotReadyAction);
+        currPoint.move(width, 0);
 
         bidiRun = bidiRun->next();
     }
@@ -735,7 +717,7 @@ ImageDrawResult GraphicsContext::drawImage(Image& image, const FloatPoint& desti
 
 ImageDrawResult GraphicsContext::drawImage(Image& image, const FloatRect& destination, const ImagePaintingOptions& imagePaintingOptions)
 {
-    FloatRect srcRect(FloatPoint(), image.size(imagePaintingOptions.orientation()));
+    FloatRect srcRect(FloatPoint(), image.size());
     return drawImage(image, destination, srcRect, imagePaintingOptions);
 }
 

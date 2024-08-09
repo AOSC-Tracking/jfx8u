@@ -103,13 +103,4 @@ URL Pasteboard::readURL(size_t index, String& title)
     return { };
 }
 
-#if !PLATFORM(MAC)
-
-bool Pasteboard::canWriteTrustworthyWebURLsPboardType()
-{
-    return false;
-}
-
-#endif
-
 };

@@ -27,6 +27,6 @@
 
 namespace WebCore {
 
-enum class UserContentInjectedFrames : bool { InjectInAllFrames, InjectInTopFrameOnly };
+enum UserContentInjectedFrames { InjectInAllFrames, InjectInTopFrameOnly };
 
 } // namespace WebCore

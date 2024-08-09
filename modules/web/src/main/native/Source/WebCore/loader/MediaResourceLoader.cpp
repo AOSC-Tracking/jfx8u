@@ -34,20 +34,12 @@
 #include "CachedResourceRequest.h"
 #include "CrossOriginAccessControl.h"
 #include "Document.h"
-#include "FrameLoaderClient.h"
 #include "HTMLMediaElement.h"
 #include "InspectorInstrumentation.h"
 #include "SecurityOrigin.h"
 #include <wtf/NeverDestroyed.h>
 
 namespace WebCore {
-
-static bool shouldRecordResponsesForTesting = false;
-
-void MediaResourceLoader::recordResponsesForTesting()
-{
-    shouldRecordResponsesForTesting = true;
-}
 
 MediaResourceLoader::MediaResourceLoader(Document& document, HTMLMediaElement& mediaElement, const String& crossOriginMode)
     : ContextDestructionObserver(&document)
@@ -69,15 +61,6 @@ void MediaResourceLoader::contextDestroyed()
     m_mediaElement = nullptr;
 }
 
-void MediaResourceLoader::sendH2Ping(const URL& url, CompletionHandler<void(Expected<Seconds, ResourceError>&&)>&& completionHandler)
-{
-    if (!m_document || !m_document->frame())
-        return completionHandler(makeUnexpected(internalError(url)));
-
-    m_document->frame()->loader().client().sendH2Ping(url, WTFMove(completionHandler));
-}
-
-
 RefPtr<PlatformMediaResource> MediaResourceLoader::requestResource(ResourceRequest&& request, LoadOptions options)
 {
     if (!m_document)
@@ -91,7 +74,7 @@ RefPtr<PlatformMediaResource> MediaResourceLoader::requestResource(ResourceReque
     if (m_mediaElement)
         request.setInspectorInitiatorNodeIdentifier(InspectorInstrumentation::identifierForNode(*m_mediaElement));
 
-#if PLATFORM(MAC)
+#if HAVE(AVFOUNDATION_LOADER_DELEGATE) && PLATFORM(MAC)
     // FIXME: Workaround for <rdar://problem/26071607>. We are not able to do CORS checking on 304 responses because they are usually missing the headers we need.
     if (!m_crossOriginMode.isNull())
         request.makeUnconditional();
@@ -135,7 +118,7 @@ void MediaResourceLoader::removeResource(MediaResource& mediaResource)
 void MediaResourceLoader::addResponseForTesting(const ResourceResponse& response)
 {
     const auto maximumResponsesForTesting = 5;
-    if (!shouldRecordResponsesForTesting || m_responsesForTesting.size() > maximumResponsesForTesting)
+    if (m_responsesForTesting.size() > maximumResponsesForTesting)
         return;
     m_responsesForTesting.append(response);
 }
@@ -192,7 +175,7 @@ void MediaResource::responseReceived(CachedResource& resource, const ResourceRes
         m_client->responseReceived(*this, response, [this, protectedThis = makeRef(*this), completionHandler = completionHandlerCaller.release()] (auto shouldContinue) mutable {
             if (completionHandler)
                 completionHandler();
-            if (shouldContinue == ShouldContinuePolicyCheck::No)
+            if (shouldContinue == PolicyChecker::ShouldContinue::No)
                 stop();
         });
 
@@ -238,7 +221,7 @@ void MediaResource::dataReceived(CachedResource& resource, const char* data, int
         m_client->dataReceived(*this, data, dataLength);
 }
 
-void MediaResource::notifyFinished(CachedResource& resource, const NetworkLoadMetrics& metrics)
+void MediaResource::notifyFinished(CachedResource& resource)
 {
     ASSERT_UNUSED(resource, &resource == m_resource);
 
@@ -247,7 +230,7 @@ void MediaResource::notifyFinished(CachedResource& resource, const NetworkLoadMe
         if (m_resource->loadFailedOrCanceled())
             m_client->loadFailed(*this, m_resource->resourceError());
         else
-            m_client->loadFinished(*this, metrics);
+            m_client->loadFinished(*this);
     }
     stop();
 }

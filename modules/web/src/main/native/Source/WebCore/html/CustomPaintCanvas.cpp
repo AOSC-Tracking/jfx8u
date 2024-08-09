@@ -60,6 +60,7 @@ ExceptionOr<RefPtr<PaintRenderingContext2D>> CustomPaintCanvas::getContext()
 
     m_context = PaintRenderingContext2D::create(*this);
     downcast<PaintRenderingContext2D>(*m_context).setUsesDisplayListDrawing(true);
+    downcast<PaintRenderingContext2D>(*m_context).setTracksDisplayListReplay(false);
 
     return { RefPtr<PaintRenderingContext2D> { &downcast<PaintRenderingContext2D>(*m_context) } };
 }

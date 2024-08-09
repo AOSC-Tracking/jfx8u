@@ -25,7 +25,7 @@
 
 #include "config.h"
 
-#if ENABLE(VIDEO)
+#if ENABLE(VIDEO_TRACK)
 
 #include "TextTrackList.h"
 
@@ -266,11 +266,6 @@ bool TextTrackList::contains(TrackBase& track) const
 EventTargetInterface TextTrackList::eventTargetInterface() const
 {
     return TextTrackListEventTargetInterfaceType;
-}
-
-const char* TextTrackList::activeDOMObjectName() const
-{
-    return "TextTrackList";
 }
 
 } // namespace WebCore

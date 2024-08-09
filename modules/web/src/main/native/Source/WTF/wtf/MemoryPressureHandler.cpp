@@ -36,12 +36,8 @@ namespace WTF {
 
 #if RELEASE_LOG_DISABLED
 WTFLogChannel LogMemoryPressure = { WTFLogChannelState::On, "MemoryPressure", WTFLogLevel::Error };
-#endif
-#if USE(OS_LOG) && !RELEASE_LOG_DISABLED
+#else
 WTFLogChannel LogMemoryPressure = { WTFLogChannelState::On, "MemoryPressure", WTFLogLevel::Error, LOG_CHANNEL_WEBKIT_SUBSYSTEM, OS_LOG_DEFAULT };
-#endif
-#if USE(JOURNALD) && !RELEASE_LOG_DISABLED
-WTFLogChannel LogMemoryPressure = { WTFLogChannelState::On, "MemoryPressure", WTFLogLevel::Error, LOG_CHANNEL_WEBKIT_SUBSYSTEM };
 #endif
 
 WTF_EXPORT_PRIVATE bool MemoryPressureHandler::ReliefLogger::s_loggingEnabled = false;
@@ -53,7 +49,7 @@ MemoryPressureHandler& MemoryPressureHandler::singleton()
 }
 
 MemoryPressureHandler::MemoryPressureHandler()
-#if OS(LINUX) || OS(FREEBSD)
+#if OS(LINUX)
     : m_holdOffTimer(RunLoop::main(), this, &MemoryPressureHandler::holdOffTimerFired)
 #elif OS(WINDOWS)
     : m_windowsMeasurementTimer(RunLoop::main(), this, &MemoryPressureHandler::windowsMeasurementTimerFired)
@@ -87,8 +83,6 @@ static const char* toString(MemoryUsagePolicy policy)
     case MemoryUsagePolicy::Conservative: return "Conservative";
     case MemoryUsagePolicy::Strict: return "Strict";
     }
-    ASSERT_NOT_REACHED();
-    return "";
 }
 #endif
 
@@ -191,9 +185,7 @@ void MemoryPressureHandler::setMemoryUsagePolicyBasedOnFootprint(size_t footprin
 void MemoryPressureHandler::measurementTimerFired()
 {
     size_t footprint = memoryFootprint();
-#if PLATFORM(COCOA)
     RELEASE_LOG(MemoryPressure, "Current memory footprint: %zu MB", footprint / MB);
-#endif
     if (footprint >= thresholdForMemoryKill()) {
         shrinkOrDie();
         return;
@@ -283,21 +275,23 @@ void MemoryPressureHandler::memoryPressureStatusChanged()
 void MemoryPressureHandler::ReliefLogger::logMemoryUsageChange()
 {
 #if !RELEASE_LOG_DISABLED
+#define STRING_SPECIFICATION "%{public}s"
 #define MEMORYPRESSURE_LOG(...) RELEASE_LOG(MemoryPressure, __VA_ARGS__)
 #else
+#define STRING_SPECIFICATION "%s"
 #define MEMORYPRESSURE_LOG(...) WTFLogAlways(__VA_ARGS__)
 #endif
 
     auto currentMemory = platformMemoryUsage();
     if (!currentMemory || !m_initialMemory) {
-        MEMORYPRESSURE_LOG("Memory pressure relief: %" PUBLIC_LOG_STRING ": (Unable to get dirty memory information for process)", m_logString);
+        MEMORYPRESSURE_LOG("Memory pressure relief: " STRING_SPECIFICATION ": (Unable to get dirty memory information for process)", m_logString);
         return;
     }
 
     long residentDiff = currentMemory->resident - m_initialMemory->resident;
     long physicalDiff = currentMemory->physical - m_initialMemory->physical;
 
-    MEMORYPRESSURE_LOG("Memory pressure relief: %" PUBLIC_LOG_STRING ": res = %zu/%zu/%ld, res+swap = %zu/%zu/%ld",
+    MEMORYPRESSURE_LOG("Memory pressure relief: " STRING_SPECIFICATION ": res = %zu/%zu/%ld, res+swap = %zu/%zu/%ld",
         m_logString,
         m_initialMemory->resident, currentMemory->resident, residentDiff,
         m_initialMemory->physical, currentMemory->physical, physicalDiff);

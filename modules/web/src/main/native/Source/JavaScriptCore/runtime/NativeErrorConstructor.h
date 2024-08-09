@@ -59,6 +59,8 @@ public:
         constructor->finishCreation(vm, prototype, errorType);
         return constructor;
     }
+
+    Structure* errorStructure(VM&) { return globalObject()->errorStructure(errorType); }
 private:
     static EncodedJSValue JSC_HOST_CALL callNativeErrorConstructor(JSGlobalObject*, CallFrame*);
     static EncodedJSValue JSC_HOST_CALL constructNativeErrorConstructor(JSGlobalObject*, CallFrame*);

@@ -32,15 +32,15 @@ function match(regexp)
     if (@isUndefinedOrNull(this))
         @throwTypeError("String.prototype.match requires that |this| not be null or undefined");
 
-    if (!@isUndefinedOrNull(regexp)) {
-        var matcher = regexp.@@match;
-        if (!@isUndefinedOrNull(matcher))
+    if (regexp != null) {
+        var matcher = regexp.@matchSymbol;
+        if (matcher != @undefined)
             return matcher.@call(regexp, this);
     }
 
     var thisString = @toString(this);
     var createdRegExp = @regExpCreate(regexp, @undefined);
-    return createdRegExp.@@match(thisString);
+    return createdRegExp.@matchSymbol(thisString);
 }
 
 function matchAll(arg)
@@ -54,14 +54,14 @@ function matchAll(arg)
         if (@isRegExp(arg) && !@stringIncludesInternal.@call(@toString(arg.flags), "g"))
             @throwTypeError("String.prototype.matchAll argument must not be a non-global regular expression");
 
-        var matcher = arg.@@matchAll;
+        var matcher = arg.@matchAllSymbol;
         if (!@isUndefinedOrNull(matcher))
             return matcher.@call(arg, this);
     }
 
     var string = @toString(this);
     var regExp = @regExpCreate(arg, "g");
-    return regExp.@@matchAll(string);
+    return regExp.@matchAllSymbol(string);
 }
 
 @globalPrivate
@@ -113,7 +113,7 @@ function repeatCharactersSlowPath(string, count)
         operand += operand;
     }
     if (remainingCharacters)
-        result += @stringSubstringInternal.@call(string, 0, remainingCharacters);
+        result += @stringSubstrInternal.@call(string, 0, remainingCharacters);
     return result;
 }
 
@@ -245,9 +245,9 @@ function replace(search, replace)
     if (@isUndefinedOrNull(this))
         @throwTypeError("String.prototype.replace requires that |this| not be null or undefined");
 
-    if (!@isUndefinedOrNull(search)) {
-        var replacer = search.@@replace;
-        if (!@isUndefinedOrNull(replacer)) {
+    if (search != null) {
+        var replacer = search.@replaceSymbol;
+        if (replacer !== @undefined) {
             if (!@hasObservableSideEffectsForStringReplace(search, replacer))
                 return @toString(this).@replaceUsingRegExp(search, replace);
             return replacer.@call(search, this, replace);
@@ -266,12 +266,12 @@ function replaceAll(search, replace)
     if (@isUndefinedOrNull(this))
         @throwTypeError("String.prototype.replaceAll requires |this| not to be null nor undefined");
 
-    if (!@isUndefinedOrNull(search)) {
+    if (search != null) {
         if (@isRegExp(search) && !@stringIncludesInternal.@call(@toString(search.flags), "g"))
             @throwTypeError("String.prototype.replaceAll argument must not be a non-global regular expression");
 
-        var replacer = search.@@replace;
-        if (!@isUndefinedOrNull(replacer)) {
+        var replacer = search.@replaceSymbol;
+        if (replacer !== @undefined) {
             if (!@hasObservableSideEffectsForStringReplace(search, replacer))
                 return @toString(this).@replaceUsingRegExp(search, replace);
             return replacer.@call(search, this, replace);
@@ -290,15 +290,15 @@ function search(regexp)
     if (@isUndefinedOrNull(this))
         @throwTypeError("String.prototype.search requires that |this| not be null or undefined");
 
-    if (!@isUndefinedOrNull(regexp)) {
-        var searcher = regexp.@@search;
-        if (!@isUndefinedOrNull(searcher))
+    if (regexp != null) {
+        var searcher = regexp.@searchSymbol;
+        if (searcher != @undefined)
             return searcher.@call(regexp, this);
     }
 
     var thisString = @toString(this);
     var createdRegExp = @regExpCreate(regexp, @undefined);
-    return createdRegExp.@@search(thisString);
+    return createdRegExp.@searchSymbol(thisString);
 }
 
 function split(separator, limit)
@@ -308,9 +308,9 @@ function split(separator, limit)
     if (@isUndefinedOrNull(this))
         @throwTypeError("String.prototype.split requires that |this| not be null or undefined");
     
-    if (!@isUndefinedOrNull(separator)) {
-        var splitter = separator.@@split;
-        if (!@isUndefinedOrNull(splitter))
+    if (separator != null) {
+        var splitter = separator.@splitSymbol;
+        if (splitter != @undefined)
             return splitter.@call(separator, this, limit);
     }
     

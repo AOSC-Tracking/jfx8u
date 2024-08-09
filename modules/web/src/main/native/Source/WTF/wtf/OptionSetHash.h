@@ -31,17 +31,19 @@
 namespace WTF {
 
 template<typename T> struct DefaultHash<OptionSet<T>> {
-    static unsigned hash(OptionSet<T> key)
-    {
-        return IntHash<typename OptionSet<T>::StorageType>::hash(key.toRaw());
-    }
+    struct Hash {
+        static unsigned hash(OptionSet<T> key)
+        {
+            return IntHash<typename OptionSet<T>::StorageType>::hash(key.toRaw());
+        }
 
-    static bool equal(OptionSet<T> a, OptionSet<T> b)
-    {
-        return a == b;
-    }
+        static bool equal(OptionSet<T> a, OptionSet<T> b)
+        {
+            return a == b;
+        }
 
-    static constexpr bool safeToCompareToEmptyOrDeleted = true;
+        static constexpr bool safeToCompareToEmptyOrDeleted = true;
+    };
 };
 
 template<typename T> struct HashTraits<OptionSet<T>> : GenericHashTraits<OptionSet<T>> {

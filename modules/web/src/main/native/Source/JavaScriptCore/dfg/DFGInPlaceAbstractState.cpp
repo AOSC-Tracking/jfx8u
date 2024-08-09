@@ -28,8 +28,13 @@
 
 #if ENABLE(DFG_JIT)
 
+#include "CodeBlock.h"
 #include "DFGBasicBlock.h"
-#include "JSCJSValueInlines.h"
+#include "GetByStatus.h"
+#include "JSCInlines.h"
+#include "PutByIdStatus.h"
+#include "StringObject.h"
+#include "SuperSampler.h"
 
 namespace JSC { namespace DFG {
 
@@ -54,9 +59,6 @@ void InPlaceAbstractState::beginBasicBlock(BasicBlock* basicBlock)
     ASSERT(basicBlock->variablesAtHead.numberOfLocals() == basicBlock->valuesAtHead.numberOfLocals());
     ASSERT(basicBlock->variablesAtTail.numberOfLocals() == basicBlock->valuesAtTail.numberOfLocals());
     ASSERT(basicBlock->variablesAtHead.numberOfLocals() == basicBlock->variablesAtTail.numberOfLocals());
-    ASSERT(basicBlock->variablesAtHead.numberOfTmps() == basicBlock->valuesAtHead.numberOfTmps());
-    ASSERT(basicBlock->variablesAtTail.numberOfTmps() == basicBlock->valuesAtTail.numberOfTmps());
-    ASSERT(basicBlock->variablesAtHead.numberOfTmps() == basicBlock->variablesAtTail.numberOfTmps());
 
     m_abstractValues.resize();
 
@@ -159,10 +161,6 @@ void InPlaceAbstractState::initialize()
             entrypoint->valuesAtHead.local(i).clear();
             entrypoint->valuesAtTail.local(i).clear();
         }
-        for (size_t i = 0; i < entrypoint->valuesAtHead.numberOfTmps(); ++i) {
-            entrypoint->valuesAtHead.tmp(i).clear();
-            entrypoint->valuesAtTail.tmp(i).clear();
-        }
     }
 
     for (BasicBlock* block : m_graph.blocksInNaturalOrder()) {
@@ -177,9 +175,13 @@ void InPlaceAbstractState::initialize()
         block->cfaThinksShouldTryConstantFolding = false;
         block->cfaStructureClobberStateAtHead = StructuresAreWatched;
         block->cfaStructureClobberStateAtTail = StructuresAreWatched;
-        for (size_t i = 0; i < block->valuesAtHead.size(); ++i) {
-            block->valuesAtHead[i].clear();
-            block->valuesAtTail[i].clear();
+        for (size_t i = 0; i < block->valuesAtHead.numberOfArguments(); ++i) {
+            block->valuesAtHead.argument(i).clear();
+            block->valuesAtTail.argument(i).clear();
+        }
+        for (size_t i = 0; i < block->valuesAtHead.numberOfLocals(); ++i) {
+            block->valuesAtHead.local(i).clear();
+            block->valuesAtTail.local(i).clear();
         }
     }
 
@@ -237,7 +239,7 @@ bool InPlaceAbstractState::endBasicBlock()
             case PhantomLocal:
             case Flush: {
                 // The block transfers the value from head to tail.
-                destination = atIndex(index);
+                destination = variableAt(index);
                 break;
             }
 
@@ -302,7 +304,7 @@ bool InPlaceAbstractState::endBasicBlock()
                 continue;
             }
 
-            block->valuesAtTail[i] = atIndex(i);
+            block->valuesAtTail[i] = variableAt(i);
         }
 
         for (NodeAbstractValuePair& valueAtTail : block->ssa->valuesAtTail)
@@ -321,7 +323,7 @@ bool InPlaceAbstractState::endBasicBlock()
 
 void InPlaceAbstractState::reset()
 {
-    m_block = nullptr;
+    m_block = 0;
     m_isValid = false;
     m_branchDirection = InvalidBranchDirection;
     m_structureClobberState = StructuresAreWatched;
@@ -341,7 +343,6 @@ bool InPlaceAbstractState::merge(BasicBlock* from, BasicBlock* to)
         dataLog("   Merging from ", pointerDump(from), " to ", pointerDump(to), "\n");
     ASSERT(from->variablesAtTail.numberOfArguments() == to->variablesAtHead.numberOfArguments());
     ASSERT(from->variablesAtTail.numberOfLocals() == to->variablesAtHead.numberOfLocals());
-    ASSERT(from->variablesAtTail.numberOfTmps() == to->variablesAtHead.numberOfTmps());
 
     bool changed = false;
 
@@ -351,9 +352,14 @@ bool InPlaceAbstractState::merge(BasicBlock* from, BasicBlock* to)
 
     switch (m_graph.m_form) {
     case ThreadedCPS: {
-        for (size_t index = 0; index < from->variablesAtTail.size(); ++index) {
-            AbstractValue& destination = to->valuesAtHead.at(index);
-            changed |= mergeVariableBetweenBlocks(destination, from->valuesAtTail.at(index), to->variablesAtHead.at(index), from->variablesAtTail.at(index));
+        for (size_t argument = 0; argument < from->variablesAtTail.numberOfArguments(); ++argument) {
+            AbstractValue& destination = to->valuesAtHead.argument(argument);
+            changed |= mergeVariableBetweenBlocks(destination, from->valuesAtTail.argument(argument), to->variablesAtHead.argument(argument), from->variablesAtTail.argument(argument));
+        }
+
+        for (size_t local = 0; local < from->variablesAtTail.numberOfLocals(); ++local) {
+            AbstractValue& destination = to->valuesAtHead.local(local);
+            changed |= mergeVariableBetweenBlocks(destination, from->valuesAtTail.local(local), to->variablesAtHead.local(local), from->variablesAtTail.local(local));
         }
         break;
     }

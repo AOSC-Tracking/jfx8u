@@ -30,6 +30,7 @@
 #include "Element.h"
 #include "IntRect.h"
 #include "LayoutRect.h"
+#include "Range.h"
 #include "ScrollAlignment.h"
 #include "Timer.h"
 #include "VisibleSelection.h"
@@ -61,8 +62,6 @@ enum RevealExtentOption {
 class CaretBase {
     WTF_MAKE_NONCOPYABLE(CaretBase);
     WTF_MAKE_FAST_ALLOCATED;
-public:
-    WEBCORE_EXPORT static Color computeCaretColor(const RenderStyle& elementStyle, const Node*);
 protected:
     enum CaretVisibility { Visible, Hidden };
     explicit CaretBase(CaretVisibility = Hidden);
@@ -71,7 +70,7 @@ protected:
     void clearCaretRect();
     bool updateCaretRect(Document*, const VisiblePosition& caretPosition);
     bool shouldRepaintCaret(const RenderView*, bool isContentEditable) const;
-    void paintCaret(const Node&, GraphicsContext&, const LayoutPoint&, const LayoutRect& clipRect) const;
+    void paintCaret(Node*, GraphicsContext&, const LayoutPoint&, const LayoutRect& clipRect) const;
 
     const LayoutRect& localCaretRectWithoutUpdate() const { return m_caretLocalRect; }
 
@@ -139,10 +138,11 @@ public:
         return options;
     }
 
-    WEBCORE_EXPORT explicit FrameSelection(Document* = nullptr);
+    WEBCORE_EXPORT explicit FrameSelection(Frame* = nullptr);
 
     WEBCORE_EXPORT Element* rootEditableElementOrDocumentElement() const;
 
+    WEBCORE_EXPORT void moveTo(const Range*);
     WEBCORE_EXPORT void moveTo(const VisiblePosition&, EUserTriggered = NotUserTriggered, CursorAlignOnScroll = AlignCursorOnScrollIfNeeded);
     WEBCORE_EXPORT void moveTo(const VisiblePosition&, const VisiblePosition&, EUserTriggered = NotUserTriggered);
     void moveTo(const Position&, EAffinity, EUserTriggered = NotUserTriggered);
@@ -150,13 +150,13 @@ public:
     void moveWithoutValidationTo(const Position&, const Position&, bool selectionHasDirection, bool shouldSetFocus, SelectionRevealMode, const AXTextStateChangeIntent& = AXTextStateChangeIntent());
 
     const VisibleSelection& selection() const { return m_selection; }
-    WEBCORE_EXPORT void setSelection(const VisibleSelection&, OptionSet<SetSelectionOption> = defaultSetSelectionOptions(), AXTextStateChangeIntent = AXTextStateChangeIntent(), CursorAlignOnScroll = AlignCursorOnScrollIfNeeded, TextGranularity = TextGranularity::CharacterGranularity);
+    WEBCORE_EXPORT void setSelection(const VisibleSelection&, OptionSet<SetSelectionOption> = defaultSetSelectionOptions(), AXTextStateChangeIntent = AXTextStateChangeIntent(), CursorAlignOnScroll = AlignCursorOnScrollIfNeeded, TextGranularity = CharacterGranularity);
 
     enum class ShouldCloseTyping : bool { No, Yes };
-    WEBCORE_EXPORT bool setSelectedRange(const Optional<SimpleRange>&, EAffinity, ShouldCloseTyping, EUserTriggered = NotUserTriggered);
+    WEBCORE_EXPORT bool setSelectedRange(Range*, EAffinity, ShouldCloseTyping, EUserTriggered = NotUserTriggered);
     WEBCORE_EXPORT void selectAll();
     WEBCORE_EXPORT void clear();
-    void willBeRemovedFromFrame();
+    void prepareForDestruction();
 
     void updateAppearanceAfterLayout();
     void scheduleAppearanceUpdateAfterStyleChange();
@@ -195,6 +195,8 @@ public:
     bool isCaretOrRange() const { return m_selection.isCaretOrRange(); }
     bool isAll(EditingBoundaryCrossingRule rule = CannotCrossEditingBoundary) const { return m_selection.isAll(rule); }
 
+    RefPtr<Range> toNormalizedRange() const { return m_selection.toNormalizedRange(); }
+
     void debugRenderer(RenderObject*, bool selected) const;
 
     void nodeWillBeRemoved(Node&);
@@ -222,19 +224,22 @@ public:
 #endif
 
 #if PLATFORM(IOS_FAMILY)
+public:
     WEBCORE_EXPORT void expandSelectionToElementContainingCaretSelection();
-    WEBCORE_EXPORT Optional<SimpleRange> elementRangeContainingCaretSelection() const;
+    WEBCORE_EXPORT RefPtr<Range> elementRangeContainingCaretSelection() const;
     WEBCORE_EXPORT void expandSelectionToWordContainingCaretSelection();
-    WEBCORE_EXPORT Optional<SimpleRange> wordRangeContainingCaretSelection();
+    WEBCORE_EXPORT RefPtr<Range> wordRangeContainingCaretSelection();
     WEBCORE_EXPORT void expandSelectionToStartOfWordContainingCaretSelection();
     WEBCORE_EXPORT UChar characterInRelationToCaretSelection(int amount) const;
     WEBCORE_EXPORT UChar characterBeforeCaretSelection() const;
     WEBCORE_EXPORT UChar characterAfterCaretSelection() const;
+    WEBCORE_EXPORT int wordOffsetInRange(const Range*) const;
+    WEBCORE_EXPORT bool spaceFollowsWordInRange(const Range*) const;
     WEBCORE_EXPORT bool selectionAtDocumentStart() const;
     WEBCORE_EXPORT bool selectionAtSentenceStart() const;
     WEBCORE_EXPORT bool selectionAtWordStart() const;
-    WEBCORE_EXPORT Optional<SimpleRange> rangeByMovingCurrentSelection(int amount) const;
-    WEBCORE_EXPORT Optional<SimpleRange> rangeByExtendingCurrentSelection(int amount) const;
+    WEBCORE_EXPORT RefPtr<Range> rangeByMovingCurrentSelection(int amount) const;
+    WEBCORE_EXPORT RefPtr<Range> rangeByExtendingCurrentSelection(int amount) const;
     WEBCORE_EXPORT void selectRangeOnElement(unsigned location, unsigned length, Node&);
     WEBCORE_EXPORT void clearCurrentSelection();
     void setCaretBlinks(bool caretBlinks = true);
@@ -248,13 +253,16 @@ public:
         ASSERT(m_scrollingSuppressCount);
         --m_scrollingSuppressCount;
     }
+private:
+    bool actualSelectionAtSentenceStart(const VisibleSelection&) const;
+    RefPtr<Range> rangeByAlteringCurrentSelection(EAlteration, int amount) const;
+public:
 #endif
 
     bool shouldChangeSelection(const VisibleSelection&) const;
     bool shouldDeleteSelection(const VisibleSelection&) const;
-
-    enum class EndPointsAdjustmentMode : bool { DoNotAdjust, AdjustAtBidiBoundary };
-    void setSelectionByMouseIfDifferent(const VisibleSelection&, TextGranularity, EndPointsAdjustmentMode = EndPointsAdjustmentMode::DoNotAdjust);
+    enum EndPointsAdjustmentMode { AdjustEndpointsAtBidiBoundary, DoNotAdjsutEndpoints };
+    void setSelectionByMouseIfDifferent(const VisibleSelection&, TextGranularity, EndPointsAdjustmentMode = DoNotAdjsutEndpoints);
 
     EditingStyle* typingStyle() const;
     WEBCORE_EXPORT RefPtr<MutableStyleProperties> copyTypingStyle() const;
@@ -266,6 +274,7 @@ public:
 
     enum class TextRectangleHeight { TextHeight, SelectionHeight };
     WEBCORE_EXPORT void getClippedVisibleTextRectangles(Vector<FloatRect>&, TextRectangleHeight = TextRectangleHeight::SelectionHeight) const;
+    WEBCORE_EXPORT void getTextRectangles(Vector<FloatRect>&, TextRectangleHeight = TextRectangleHeight::SelectionHeight) const;
 
     WEBCORE_EXPORT HTMLFormElement* currentForm() const;
 
@@ -328,11 +337,7 @@ private:
 
     bool dispatchSelectStart();
 
-#if PLATFORM(IOS_FAMILY)
-    Optional<SimpleRange> rangeByAlteringCurrentSelection(EAlteration, int amount) const;
-#endif
-
-    Document* m_document;
+    Frame* m_frame;
 
     LayoutUnit m_xPosForVerticalArrowNavigation;
 

@@ -26,11 +26,13 @@
 #include "config.h"
 #include "MarkingConstraintSet.h"
 
+#include "JSCInlines.h"
 #include "MarkingConstraintSolver.h"
 #include "Options.h"
 #include "SimpleMarkingConstraint.h"
 #include "SuperSampler.h"
 #include <wtf/Function.h>
+#include <wtf/TimeWithDynamicClockType.h>
 
 namespace JSC {
 

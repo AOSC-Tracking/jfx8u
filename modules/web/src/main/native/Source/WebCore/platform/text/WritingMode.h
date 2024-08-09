@@ -31,11 +31,9 @@
 
 #pragma once
 
-#include <wtf/EnumTraits.h>
-
 namespace WebCore {
 
-enum class TextDirection : bool { LTR, RTL };
+enum class TextDirection : uint8_t { LTR, RTL };
 
 inline bool isLeftToRightDirection(TextDirection direction)
 {

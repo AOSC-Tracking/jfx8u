@@ -48,7 +48,7 @@ void CachedXSLStyleSheet::didAddClient(CachedResourceClient& client)
 {
     ASSERT(client.resourceClientType() == CachedStyleSheetClient::expectedType());
     if (!isLoading())
-        static_cast<CachedStyleSheetClient&>(client).setXSLStyleSheet(m_resourceRequest.url().string(), m_response.url(), m_sheet);
+        static_cast<CachedStyleSheetClient&>(client).setXSLStyleSheet(m_resourceRequest.url(), m_response.url(), m_sheet);
 }
 
 void CachedXSLStyleSheet::setEncoding(const String& chs)
@@ -61,24 +61,24 @@ String CachedXSLStyleSheet::encoding() const
     return m_decoder->encoding().name();
 }
 
-void CachedXSLStyleSheet::finishLoading(SharedBuffer* data, const NetworkLoadMetrics& metrics)
+void CachedXSLStyleSheet::finishLoading(SharedBuffer* data)
 {
     m_data = data;
     setEncodedSize(data ? data->size() : 0);
     if (data)
         m_sheet = m_decoder->decodeAndFlush(data->data(), encodedSize());
     setLoading(false);
-    checkNotify(metrics);
+    checkNotify();
 }
 
-void CachedXSLStyleSheet::checkNotify(const NetworkLoadMetrics&)
+void CachedXSLStyleSheet::checkNotify()
 {
     if (isLoading())
         return;
 
     CachedResourceClientWalker<CachedStyleSheetClient> w(m_clients);
     while (CachedStyleSheetClient* c = w.next())
-        c->setXSLStyleSheet(m_resourceRequest.url().string(), m_response.url(), m_sheet);
+        c->setXSLStyleSheet(m_resourceRequest.url(), m_response.url(), m_sheet);
 }
 
 #endif

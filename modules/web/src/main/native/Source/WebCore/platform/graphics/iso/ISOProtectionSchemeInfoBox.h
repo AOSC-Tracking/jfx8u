@@ -40,7 +40,7 @@ public:
     const ISOSchemeTypeBox* schemeTypeBox() const { return m_schemeTypeBox.get(); }
     const ISOSchemeInformationBox* schemeInformationBox() const { return m_schemeInformationBox.get(); }
 
-private:
+protected:
     bool parse(JSC::DataView&, unsigned& offset) override;
 
     ISOOriginalFormatBox m_originalFormatBox;

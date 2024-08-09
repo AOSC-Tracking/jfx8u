@@ -27,6 +27,8 @@
 #include "JSJavaScriptCallFrame.h"
 
 #include "DebuggerScope.h"
+#include "Error.h"
+#include "IdentifierInlines.h"
 #include "JSCInlines.h"
 #include "JSJavaScriptCallFramePrototype.h"
 #include "ObjectConstructor.h"
@@ -38,7 +40,7 @@ using namespace JSC;
 const ClassInfo JSJavaScriptCallFrame::s_info = { "JavaScriptCallFrame", &Base::s_info, nullptr, nullptr, CREATE_METHOD_TABLE(JSJavaScriptCallFrame) };
 
 JSJavaScriptCallFrame::JSJavaScriptCallFrame(VM& vm, Structure* structure, Ref<JavaScriptCallFrame>&& impl)
-    : Base(vm, structure)
+    : JSDestructibleObject(vm, structure)
     , m_impl(&impl.leakRef())
 {
 }

@@ -42,20 +42,23 @@ JS_EXPORT_PRIVATE void weakClearSlowCase(WeakImpl*&);
 template<typename T> class Weak {
     WTF_MAKE_NONCOPYABLE(Weak);
 public:
-    Weak() = default;
-
-    constexpr Weak(std::nullptr_t)
-        : Weak()
+    Weak()
+        : m_impl(0)
     {
     }
 
-    Weak(T*, WeakHandleOwner* = nullptr, void* context = nullptr);
+    Weak(std::nullptr_t)
+        : m_impl(0)
+    {
+    }
 
-    bool isHashTableDeletedValue() const;
-    Weak(WTF::HashTableDeletedValueType);
-    constexpr bool isHashTableEmptyValue() const { return !m_impl; }
+    inline Weak(T*, WeakHandleOwner* = 0, void* context = 0);
 
-    Weak(Weak&&);
+    enum HashTableDeletedValueTag { HashTableDeletedValue };
+    inline bool isHashTableDeletedValue() const;
+    inline Weak(HashTableDeletedValueTag);
+
+    inline Weak(Weak&&);
 
     ~Weak()
     {
@@ -76,7 +79,6 @@ public:
     inline explicit operator bool() const;
 
     inline WeakImpl* leakImpl() WARN_UNUSED_RETURN;
-    WeakImpl* unsafeImpl() const { return m_impl; }
     void clear()
     {
         if (!m_impl)
@@ -87,7 +89,7 @@ public:
 private:
     static inline WeakImpl* hashTableDeletedValue();
 
-    WeakImpl* m_impl { nullptr };
+    WeakImpl* m_impl;
 };
 
 } // namespace JSC
@@ -103,9 +105,6 @@ template<typename T> struct HashTraits<JSC::Weak<T>> : SimpleClassHashTraits<JSC
 
     typedef std::nullptr_t EmptyValueType;
     static EmptyValueType emptyValue() { return nullptr; }
-
-    static constexpr bool hasIsEmptyValueFunction = true;
-    static bool isEmptyValue(const JSC::Weak<T>& value) { return value.isHashTableEmptyValue(); }
 
     typedef T* PeekType;
     static PeekType peek(const StorageType& value) { return value.get(); }

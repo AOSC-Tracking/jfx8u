@@ -27,8 +27,7 @@
 
 namespace WebCore {
 
-#if ENABLE(VIDEO_PRESENTATION_MODE)
-WEBCORE_EXPORT void setSupportsPictureInPicture(bool);
+#if PLATFORM(IOS_FAMILY) || (PLATFORM(MAC) && ENABLE(VIDEO_PRESENTATION_MODE))
 WEBCORE_EXPORT bool supportsPictureInPicture();
 #else
 constexpr bool supportsPictureInPicture() { return false; }

@@ -101,7 +101,9 @@ struct OriginHash {
 namespace WTF {
 
 template<typename T> struct DefaultHash;
-template<> struct DefaultHash<JSC::Profiler::Origin> : JSC::Profiler::OriginHash { };
+template<> struct DefaultHash<JSC::Profiler::Origin> {
+    typedef JSC::Profiler::OriginHash Hash;
+};
 
 template<typename T> struct HashTraits;
 template<> struct HashTraits<JSC::Profiler::Origin> : SimpleClassHashTraits<JSC::Profiler::Origin> { };

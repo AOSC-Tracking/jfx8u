@@ -116,6 +116,8 @@ public:
     bool hasAutofocused() { return m_hasAutofocused; }
     void setAutofocused() { m_hasAutofocused = true; }
 
+    static HTMLFormControlElement* enclosingFormControlElement(Node*);
+
     WEBCORE_EXPORT String autocomplete() const;
     WEBCORE_EXPORT void setAutocomplete(const String&);
 

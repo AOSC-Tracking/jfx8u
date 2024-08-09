@@ -55,12 +55,13 @@ private:
     void setEncoding(const String&) final;
     String encoding() const final;
     const TextResourceDecoder* textResourceDecoder() const final { return m_decoder.get(); }
-    void finishLoading(SharedBuffer*, const NetworkLoadMetrics&) final;
+    void finishLoading(SharedBuffer*) final;
     void destroyDecodedData() final;
 
     void setBodyDataFrom(const CachedResource&) final;
 
-    void checkNotify(const NetworkLoadMetrics&) final;
+protected:
+    void checkNotify() final;
 
     RefPtr<TextResourceDecoder> m_decoder;
     String m_decodedSheetText;

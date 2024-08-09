@@ -109,14 +109,12 @@ void PopupMenuJava::populate()
         JLString itemTextJ(itemText.toJavaString(env));
         ASSERT(itemTextJ);
         PopupMenuStyle style = client()->itemStyle(i);
-        auto [r1, g1, b1, a1] = style.backgroundColor().toSRGBALossy<uint8_t>();
-        auto [r2, g2, b2, a2] = style.foregroundColor().toSRGBALossy<uint8_t>();
         env->CallVoidMethod(m_popup, mid, (jstring)itemTextJ,
                             bool_to_jbool(client()->itemIsLabel(i)),
                             bool_to_jbool(client()->itemIsSeparator(i)),
                             bool_to_jbool(client()->itemIsEnabled(i)),
-                            (jint)(a1 << 24 | r1 << 16 | g1 << 8 | b1),
-                            (jint)(a2 << 24 | r2 << 16 | g2 << 8 | b2),
+                            style.backgroundColor().rgb(),
+                            style.foregroundColor().rgb(),
                             (jobject)*style.font().primaryFont().platformData().nativeFontData());
         WTF::CheckAndClearException(env);
     }

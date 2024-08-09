@@ -26,7 +26,7 @@
 #include "config.h"
 #include "IndexingType.h"
 
-#include "JSCJSValueInlines.h"
+#include "JSCInlines.h"
 
 namespace JSC {
 

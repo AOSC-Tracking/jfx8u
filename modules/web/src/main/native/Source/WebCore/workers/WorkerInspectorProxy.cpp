@@ -31,7 +31,6 @@
 #include "WorkerGlobalScope.h"
 #include "WorkerInspectorController.h"
 #include "WorkerRunLoop.h"
-#include "WorkerThread.h"
 #include <JavaScriptCore/InspectorAgentBase.h>
 #include <wtf/NeverDestroyed.h>
 
@@ -62,18 +61,17 @@ WorkerThreadStartMode WorkerInspectorProxy::workerStartMode(ScriptExecutionConte
     return pauseOnStart ? WorkerThreadStartMode::WaitForInspector : WorkerThreadStartMode::Normal;
 }
 
-void WorkerInspectorProxy::workerStarted(ScriptExecutionContext* scriptExecutionContext, WorkerThread* thread, const URL& url, const String& name)
+void WorkerInspectorProxy::workerStarted(ScriptExecutionContext* scriptExecutionContext, WorkerThread* thread, const URL& url)
 {
     ASSERT(!m_workerThread);
 
     m_scriptExecutionContext = scriptExecutionContext;
     m_workerThread = thread;
     m_url = url;
-    m_name = name;
 
     allWorkerInspectorProxies().add(this);
 
-    InspectorInstrumentation::workerStarted(*this);
+    InspectorInstrumentation::workerStarted(*m_scriptExecutionContext.get(), this, m_url);
 }
 
 void WorkerInspectorProxy::workerTerminated()
@@ -81,7 +79,7 @@ void WorkerInspectorProxy::workerTerminated()
     if (!m_workerThread)
         return;
 
-    InspectorInstrumentation::workerTerminated(*this);
+    InspectorInstrumentation::workerTerminated(*m_scriptExecutionContext.get(), this);
 
     allWorkerInspectorProxies().remove(this);
 
@@ -97,13 +95,13 @@ void WorkerInspectorProxy::resumeWorkerIfPaused()
     });
 }
 
-void WorkerInspectorProxy::connectToWorkerInspectorController(PageChannel& channel)
+void WorkerInspectorProxy::connectToWorkerInspectorController(PageChannel* channel)
 {
     ASSERT(m_workerThread);
     if (!m_workerThread)
         return;
 
-    m_pageChannel = &channel;
+    m_pageChannel = channel;
 
     m_workerThread->runLoop().postDebuggerTask([] (ScriptExecutionContext& context) {
         downcast<WorkerGlobalScope>(context).inspectorController().connectFrontend();
@@ -143,7 +141,7 @@ void WorkerInspectorProxy::sendMessageFromWorkerToFrontend(const String& message
     if (!m_pageChannel)
         return;
 
-    m_pageChannel->sendMessageFromWorkerToFrontend(*this, message);
+    m_pageChannel->sendMessageFromWorkerToFrontend(this, message);
 }
 
 } // namespace WebCore

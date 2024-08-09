@@ -36,7 +36,6 @@ struct PaymentOptions {
     bool requestPayerEmail { false };
     bool requestPayerPhone { false };
     bool requestShipping { false };
-    bool requestBillingAddress { false };
     PaymentShippingType shippingType { PaymentShippingType::Shipping };
 };
 

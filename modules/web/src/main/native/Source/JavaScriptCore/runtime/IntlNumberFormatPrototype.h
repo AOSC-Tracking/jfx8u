@@ -26,30 +26,29 @@
 
 #pragma once
 
+#if ENABLE(INTL)
+
 #include "JSObject.h"
 
 namespace JSC {
 
 class IntlNumberFormatPrototype final : public JSNonFinalObject {
 public:
-    using Base = JSNonFinalObject;
+    typedef JSNonFinalObject Base;
     static constexpr unsigned StructureFlags = Base::StructureFlags | HasStaticPropertyTable;
-
-    template<typename CellType, SubspaceAccess>
-    static IsoSubspace* subspaceFor(VM& vm)
-    {
-        STATIC_ASSERT_ISO_SUBSPACE_SHARABLE(IntlNumberFormatPrototype, Base);
-        return &vm.plainObjectSpace;
-    }
 
     static IntlNumberFormatPrototype* create(VM&, JSGlobalObject*, Structure*);
     static Structure* createStructure(VM&, JSGlobalObject*, JSValue);
 
     DECLARE_INFO;
 
+protected:
+    void finishCreation(VM&, JSGlobalObject*, Structure*);
+
 private:
     IntlNumberFormatPrototype(VM&, Structure*);
-    void finishCreation(VM&);
 };
 
 } // namespace JSC
+
+#endif // ENABLE(INTL)

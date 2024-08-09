@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2018 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -23,35 +23,38 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "config.h"
-#include "FrameRateMonitor.h"
+#pragma once
+
+#include "NativeImage.h"
+#include "PlatformLayer.h"
+#include <wtf/Function.h>
+#include <wtf/Noncopyable.h>
 
 namespace WebCore {
 
-static constexpr Seconds MinimumAverageDuration = 1_s;
-static constexpr Seconds MaxQueueDuration = 2_s;
-static constexpr unsigned MaxFrameDelayCount = 3;
+class FloatRect;
+class IntSize;
+class TextTrackRepresentation;
 
-void FrameRateMonitor::update()
-{
-    ++m_frameCount;
+class VideoFullscreenLayerManager {
+    WTF_MAKE_NONCOPYABLE(VideoFullscreenLayerManager);
+public:
+    VideoFullscreenLayerManager() = default;
+    virtual ~VideoFullscreenLayerManager() { }
 
-    auto frameTime = MonotonicTime::now().secondsSinceEpoch().value();
-    auto lastFrameTime = m_observedFrameTimeStamps.isEmpty() ? frameTime : m_observedFrameTimeStamps.last();
+    virtual PlatformLayer *videoInlineLayer() const = 0;
+    virtual PlatformLayer *videoFullscreenLayer() const = 0;
+    virtual FloatRect videoFullscreenFrame() const = 0;
+    virtual void setVideoLayer(PlatformLayer*, IntSize) = 0;
+    virtual void setVideoFullscreenLayer(PlatformLayer*, WTF::Function<void()>&& completionHandler, NativeImagePtr) = 0;
+    virtual void updateVideoFullscreenInlineImage(NativeImagePtr) = 0;
+    virtual void setVideoFullscreenFrame(FloatRect) = 0;
+    virtual void didDestroyVideoLayer() = 0;
 
-    if (m_observedFrameRate) {
-        auto maxDelay = MaxFrameDelayCount / m_observedFrameRate;
-        if ((frameTime - lastFrameTime) > maxDelay)
-            m_lateFrameCallback({ MonotonicTime::fromRawSeconds(frameTime), MonotonicTime::fromRawSeconds(lastFrameTime) });
-    }
-    m_observedFrameTimeStamps.append(frameTime);
-    m_observedFrameTimeStamps.removeAllMatching([&](auto time) {
-        return time <= frameTime - MaxQueueDuration.value();
-    });
-
-    auto queueDuration = m_observedFrameTimeStamps.last() - m_observedFrameTimeStamps.first();
-    if (queueDuration > MinimumAverageDuration.value())
-        m_observedFrameRate = (m_observedFrameTimeStamps.size() / queueDuration);
-}
+    virtual bool requiresTextTrackRepresentation() const = 0;
+    virtual void setTextTrackRepresentation(TextTrackRepresentation*) = 0;
+    virtual void syncTextTrackBounds() = 0;
+};
 
 }
+

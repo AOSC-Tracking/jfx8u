@@ -39,6 +39,9 @@ DebuggerLocation::DebuggerLocation(ScriptExecutable* executable)
     sourceID = executable->sourceID();
     line = executable->firstLine();
     column = executable->startColumn();
+    url = executable->sourceURL();
+    if (url.isEmpty())
+        url = executable->source().provider()->sourceURLDirective();
 }
 
 } // namespace JSC

@@ -48,12 +48,9 @@
     void setZoomFactor(unrestricted float zoom);
     float zoomFactor();
 
-    void setForcedAppearance(DOMString appearance);
-
     DOMString userInterfaceLayoutDirection();
 
-    boolean supportsDockSide(DOMString dockSide);
-    void requestSetDockSide(DOMString dockSide);
+    void requestSetDockSide(DOMString side);
 
     void setAttachedWindowHeight(unsigned long height);
     void setAttachedWindowWidth(unsigned long width);
@@ -93,7 +90,9 @@
     boolean isBeingInspected();
 
     readonly attribute boolean supportsDiagnosticLogging;
-    [Conditional=INSPECTOR_TELEMETRY] void logDiagnosticEvent(DOMString eventName, DOMString content);
+#if ENABLE_INSPECTOR_TELEMETRY
+    void logDiagnosticEvent(DOMString eventName, DOMString content);
+#endif
 };
 
 dictionary ContextMenuItem {

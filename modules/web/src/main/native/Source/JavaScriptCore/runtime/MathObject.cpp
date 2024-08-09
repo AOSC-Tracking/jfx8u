@@ -23,6 +23,8 @@
 
 #include "JSCInlines.h"
 #include "MathCommon.h"
+#include "ObjectPrototype.h"
+#include <time.h>
 #include <wtf/Assertions.h>
 #include <wtf/MathExtras.h>
 #include <wtf/Vector.h>
@@ -84,7 +86,7 @@ void MathObject::finishCreation(VM& vm, JSGlobalObject* globalObject)
     putDirectWithoutTransition(vm, Identifier::fromString(vm, "PI"), jsNumber(piDouble), PropertyAttribute::DontDelete | PropertyAttribute::DontEnum | PropertyAttribute::ReadOnly);
     putDirectWithoutTransition(vm, Identifier::fromString(vm, "SQRT1_2"), jsNumber(sqrt(0.5)), PropertyAttribute::DontDelete | PropertyAttribute::DontEnum | PropertyAttribute::ReadOnly);
     putDirectWithoutTransition(vm, Identifier::fromString(vm, "SQRT2"), jsNumber(sqrt(2.0)), PropertyAttribute::DontDelete | PropertyAttribute::DontEnum | PropertyAttribute::ReadOnly);
-    JSC_TO_STRING_TAG_WITHOUT_TRANSITION();
+    putDirectWithoutTransition(vm, vm.propertyNames->toStringTagSymbol, jsNontrivialString(vm, "Math"_s), PropertyAttribute::DontEnum | PropertyAttribute::ReadOnly);
 
     putDirectNativeFunctionWithoutTransition(vm, globalObject, Identifier::fromString(vm, "abs"), 1, mathProtoFuncAbs, AbsIntrinsic, static_cast<unsigned>(PropertyAttribute::DontEnum));
     putDirectNativeFunctionWithoutTransition(vm, globalObject, Identifier::fromString(vm, "acos"), 1, mathProtoFuncACos, ACosIntrinsic, static_cast<unsigned>(PropertyAttribute::DontEnum));

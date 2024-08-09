@@ -65,11 +65,7 @@ public:
 
     bool contains(Fields) const;
 
-    bool operator==(const AutosizeStatus& other) const { return fields() == other.fields(); }
-    bool operator!=(const AutosizeStatus& other) const { return !(*this == other); }
-
     static float idempotentTextSize(float specifiedSize, float pageScale);
-    static AutosizeStatus computeStatus(const RenderStyle&);
     static void updateStatus(RenderStyle&);
 
     static bool probablyContainsASmallFixedNumberOfLines(const RenderStyle&);

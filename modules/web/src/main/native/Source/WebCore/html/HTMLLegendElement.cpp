@@ -72,11 +72,10 @@ void HTMLLegendElement::focus(bool restorePreviousSelection, FocusDirection dire
         control->focus(false, direction);
 }
 
-bool HTMLLegendElement::accessKeyAction(bool sendMouseEvents)
+void HTMLLegendElement::accessKeyAction(bool sendMouseEvents)
 {
     if (auto control = associatedControl())
-        return control->accessKeyAction(sendMouseEvents);
-    return false;
+        control->accessKeyAction(sendMouseEvents);
 }
 
 HTMLFormElement* HTMLLegendElement::form() const

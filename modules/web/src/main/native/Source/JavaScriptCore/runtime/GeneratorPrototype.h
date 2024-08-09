@@ -34,15 +34,8 @@ namespace JSC {
 // https://tc39.github.io/ecma262/#sec-properties-of-generator-prototype
 class GeneratorPrototype final : public JSNonFinalObject {
 public:
-    using Base = JSNonFinalObject;
+    typedef JSNonFinalObject Base;
     static constexpr unsigned StructureFlags = Base::StructureFlags | HasStaticPropertyTable;
-
-    template<typename CellType, SubspaceAccess>
-    static IsoSubspace* subspaceFor(VM& vm)
-    {
-        STATIC_ASSERT_ISO_SUBSPACE_SHARABLE(GeneratorPrototype, Base);
-        return &vm.plainObjectSpace;
-    }
 
     static GeneratorPrototype* create(VM& vm, JSGlobalObject*, Structure* structure)
     {

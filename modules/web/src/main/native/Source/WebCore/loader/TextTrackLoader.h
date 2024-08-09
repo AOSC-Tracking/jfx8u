@@ -25,7 +25,7 @@
 
 #pragma once
 
-#if ENABLE(VIDEO)
+#if ENABLE(VIDEO_TRACK)
 
 #include "CachedResourceClient.h"
 #include "CachedResourceHandle.h"
@@ -39,7 +39,7 @@ class CachedTextTrack;
 class Document;
 class HTMLTrackElement;
 class TextTrackLoader;
-class VTTCue;
+class ScriptExecutionContext;
 
 class TextTrackLoaderClient {
 public:
@@ -51,30 +51,29 @@ public:
     virtual void newStyleSheetsAvailable(TextTrackLoader&) = 0;
 };
 
-class TextTrackLoader final : public CachedResourceClient, private WebVTTParserClient {
+class TextTrackLoader : public CachedResourceClient, private WebVTTParserClient {
     WTF_MAKE_NONCOPYABLE(TextTrackLoader);
     WTF_MAKE_FAST_ALLOCATED;
 public:
-    TextTrackLoader(TextTrackLoaderClient&, Document&);
+    TextTrackLoader(TextTrackLoaderClient&, ScriptExecutionContext*);
     virtual ~TextTrackLoader();
 
     bool load(const URL&, HTMLTrackElement&);
     void cancelLoad();
-
-    Vector<Ref<VTTCue>> getNewCues();
-    Vector<Ref<VTTRegion>> getNewRegions();
+    void getNewCues(Vector<RefPtr<TextTrackCue>>& outputCues);
+    void getNewRegions(Vector<RefPtr<VTTRegion>>& outputRegions);
     Vector<String> getNewStyleSheets();
-
 private:
+
     // CachedResourceClient
-    void notifyFinished(CachedResource&, const NetworkLoadMetrics&) final;
-    void deprecatedDidReceiveCachedResource(CachedResource&) final;
+    void notifyFinished(CachedResource&) override;
+    void deprecatedDidReceiveCachedResource(CachedResource&) override;
 
     // WebVTTParserClient
-    void newCuesParsed() final;
-    void newRegionsParsed() final;
+    void newCuesParsed() override;
+    void newRegionsParsed() override;
     void newStyleSheetsParsed() final;
-    void fileFailedToParse() final;
+    void fileFailedToParse() override;
 
     void processNewCueData(CachedResource&);
     void cueLoadTimerFired();
@@ -85,13 +84,13 @@ private:
     TextTrackLoaderClient& m_client;
     std::unique_ptr<WebVTTParser> m_cueParser;
     CachedResourceHandle<CachedTextTrack> m_resource;
-    Document& m_document;
+    ScriptExecutionContext* m_scriptExecutionContext;
     Timer m_cueLoadTimer;
-    State m_state { Idle };
-    unsigned m_parseOffset { 0 };
-    bool m_newCuesAvailable { false };
+    State m_state;
+    unsigned m_parseOffset;
+    bool m_newCuesAvailable;
 };
 
 } // namespace WebCore
 
-#endif // ENABLE(VIDEO)
+#endif // ENABLE(VIDEO_TRACK)

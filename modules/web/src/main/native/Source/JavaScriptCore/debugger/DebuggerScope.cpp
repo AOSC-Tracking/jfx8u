@@ -28,6 +28,7 @@
 
 #include "JSLexicalEnvironment.h"
 #include "JSCInlines.h"
+#include "JSWithScope.h"
 
 namespace JSC {
 
@@ -128,14 +129,14 @@ bool DebuggerScope::put(JSCell* cell, JSGlobalObject* globalObject, PropertyName
     return thisObject->methodTable(globalObject->vm())->put(thisObject, globalObject, propertyName, value, slot);
 }
 
-bool DebuggerScope::deleteProperty(JSCell* cell, JSGlobalObject* globalObject, PropertyName propertyName, DeletePropertySlot& slot)
+bool DebuggerScope::deleteProperty(JSCell* cell, JSGlobalObject* globalObject, PropertyName propertyName)
 {
     DebuggerScope* scope = jsCast<DebuggerScope*>(cell);
     ASSERT(scope->isValid());
     if (!scope->isValid())
         return false;
     JSObject* thisObject = JSScope::objectAtScope(scope->jsScope());
-    return thisObject->methodTable(globalObject->vm())->deleteProperty(thisObject, globalObject, propertyName, slot);
+    return thisObject->methodTable(globalObject->vm())->deleteProperty(thisObject, globalObject, propertyName);
 }
 
 void DebuggerScope::getOwnPropertyNames(JSObject* object, JSGlobalObject* globalObject, PropertyNameArray& propertyNames, EnumerationMode mode)

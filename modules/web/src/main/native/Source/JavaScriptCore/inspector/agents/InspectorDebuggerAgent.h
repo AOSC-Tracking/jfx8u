@@ -55,7 +55,7 @@ class JS_EXPORT_PRIVATE InspectorDebuggerAgent : public InspectorAgentBase, publ
 public:
     ~InspectorDebuggerAgent() override;
 
-    static const char* const backtraceObjectGroup;
+    static const char* backtraceObjectGroup;
 
     // InspectorAgentBase
     void didCreateFrontendAndBackend(FrontendRouter*, BackendDispatcher*) final;
@@ -72,7 +72,6 @@ public:
     void removeBreakpoint(ErrorString&, const String& breakpointIdentifier) final;
     void continueUntilNextRunLoop(ErrorString&) final;
     void continueToLocation(ErrorString&, const JSON::Object& location) final;
-    void stepNext(ErrorString&) final;
     void stepOver(ErrorString&) final;
     void stepInto(ErrorString&) final;
     void stepOut(ErrorString&) final;

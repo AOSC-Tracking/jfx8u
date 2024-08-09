@@ -68,7 +68,9 @@ struct BasicBlockKeyHash {
 namespace WTF {
 
 template<typename T> struct DefaultHash;
-template<> struct DefaultHash<JSC::BasicBlockKey> : JSC::BasicBlockKeyHash { };
+template<> struct DefaultHash<JSC::BasicBlockKey> {
+    typedef JSC::BasicBlockKeyHash Hash;
+};
 
 template<typename T> struct HashTraits;
 template<> struct HashTraits<JSC::BasicBlockKey> : SimpleClassHashTraits<JSC::BasicBlockKey> {

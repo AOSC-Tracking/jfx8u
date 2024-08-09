@@ -29,7 +29,10 @@
 
 #pragma once
 
-#include "FrameLoader.h"
+#include "FrameLoaderTypes.h"
+#include <wtf/Noncopyable.h>
+#include <wtf/RefPtr.h>
+#include <wtf/text/WTFString.h>
 
 namespace WebCore {
 
@@ -41,7 +44,7 @@ enum class ShouldTreatAsContinuingLoad : bool;
 
 struct StringWithDirection;
 
-class FrameLoader::HistoryController {
+class HistoryController {
     WTF_MAKE_NONCOPYABLE(HistoryController);
     WTF_MAKE_FAST_ALLOCATED;
 public:

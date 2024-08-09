@@ -32,6 +32,7 @@
 #include "Editing.h"
 #include "Editor.h"
 #include "Element.h"
+#include "Frame.h"
 #include "HTMLInputElement.h"
 #include "HTMLTextAreaElement.h"
 #include "NodeTraversal.h"
@@ -126,18 +127,32 @@ EditCommand::EditCommand(Document& document, EditAction editingAction)
     : m_document(document)
     , m_editingAction(editingAction)
 {
-    setStartingSelection(m_document->selection().selection());
+    ASSERT(document.frame());
+    setStartingSelection(m_document->frame()->selection().selection());
     setEndingSelection(m_startingSelection);
 }
 
 EditCommand::EditCommand(Document& document, const VisibleSelection& startingSelection, const VisibleSelection& endingSelection)
     : m_document(document)
 {
+    ASSERT(document.frame());
     setStartingSelection(startingSelection);
     setEndingSelection(endingSelection);
 }
 
 EditCommand::~EditCommand() = default;
+
+Frame& EditCommand::frame()
+{
+    ASSERT(document().frame());
+    return *document().frame();
+}
+
+const Frame& EditCommand::frame() const
+{
+    ASSERT(document().frame());
+    return *document().frame();
+}
 
 EditAction EditCommand::editingAction() const
 {
@@ -153,7 +168,11 @@ static inline EditCommandComposition* compositionIfPossible(EditCommand* command
 
 bool EditCommand::isEditingTextAreaOrTextInput() const
 {
-    auto* container = m_document->selection().selection().start().containerNode();
+    auto* frame = m_document->frame();
+    if (!frame)
+        return false;
+
+    auto* container = frame->selection().selection().start().containerNode();
     if (!container)
         return false;
 
@@ -198,7 +217,7 @@ void EditCommand::postTextStateChangeNotification(AXTextEditType type, const Str
 {
     if (!AXObjectCache::accessibilityEnabled())
         return;
-    postTextStateChangeNotification(type, text, m_document->selection().selection().start());
+    postTextStateChangeNotification(type, text, frame().selection().selection().start());
 }
 
 void EditCommand::postTextStateChangeNotification(AXTextEditType type, const String& text, const VisiblePosition& position)

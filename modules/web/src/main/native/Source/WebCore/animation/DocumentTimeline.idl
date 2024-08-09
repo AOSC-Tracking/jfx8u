@@ -26,6 +26,7 @@
 [
     EnabledAtRuntime=WebAnimations,
     Exposed=Window,
+    ConstructorCallWith=Document,
+    Constructor (optional DocumentTimelineOptions options)
 ] interface DocumentTimeline : AnimationTimeline {
-    [CallWith=Document] constructor(optional DocumentTimelineOptions options);
 };

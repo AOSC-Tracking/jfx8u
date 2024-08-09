@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2015-2019 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -35,112 +35,22 @@
 #include "AirLiveness.h"
 #include "AirPadInterference.h"
 #include "AirPhaseScope.h"
-#include "AirTmpWidthInlines.h"
+#include "AirTmpInlines.h"
+#include "AirTmpWidth.h"
 #include "AirUseCounts.h"
+#include <wtf/ListDump.h>
 
 namespace JSC { namespace B3 { namespace Air {
 
 namespace {
 
-static constexpr bool debug = false;
-static constexpr bool traceDebug = false;
-static constexpr bool reportStats = false;
-
-// Interference edges are not directed. An edge between any two Tmps is represented
-// by the concatenated values of the smallest Tmp followed by the bigger Tmp.
-// We have a templated version to support 16 bit and a 32 bit implementations
-// since the number of entries in an interference table is O(N^2).
-// In most cases, we use the 16 bit flavor, thus saving half the memory
-// with a single implementation.
-template <typename IndexImplType, typename PairStorageType>
-class InterferenceEdge {
-    static_assert(sizeof(IndexImplType) * 2 == sizeof(PairStorageType));
-    const unsigned ShiftAmount = sizeof(IndexImplType) * 8;
-    const PairStorageType IndexMask = std::numeric_limits<IndexImplType>::max();
-
-protected:
-    using IndexType = unsigned;
-
-public:
-    struct InterferenceEdgeHash {
-        static unsigned hash(const InterferenceEdge<IndexImplType, PairStorageType>& key) { return key.hash(); }
-        static bool equal(const InterferenceEdge<IndexImplType, PairStorageType>& a, const InterferenceEdge<IndexImplType, PairStorageType>& b) { return a == b; }
-        static constexpr bool safeToCompareToEmptyOrDeleted = true;
-    };
-    typedef SimpleClassHashTraits<InterferenceEdge<IndexImplType, PairStorageType>> InterferenceEdgeHashTraits;
-
-    typedef HashSet<InterferenceEdge<IndexImplType, PairStorageType>, InterferenceEdgeHash, InterferenceEdgeHashTraits> InterferenceSet;
-
-    InterferenceEdge()
-    {
-    }
-
-    InterferenceEdge(IndexType a, IndexType b)
-    {
-        ASSERT(a);
-        ASSERT(b);
-        ASSERT(a < std::numeric_limits<IndexImplType>::max());
-        ASSERT(b < std::numeric_limits<IndexImplType>::max());
-        ASSERT_WITH_MESSAGE(a != b, "A Tmp can never interfere with itself. Doing so would force it to be the superposition of two registers.");
-
-        if (b < a)
-            std::swap(a, b);
-        m_value = static_cast<PairStorageType>(a) << ShiftAmount | b;
-    }
-
-    InterferenceEdge(const InterferenceEdge<IndexImplType, PairStorageType>& other)
-        : m_value(other.m_value)
-    {
-    }
-
-
-    InterferenceEdge(WTF::HashTableDeletedValueType)
-        : m_value(std::numeric_limits<PairStorageType>::max())
-    {
-    }
-
-    IndexType first() const
-    {
-        return m_value >> ShiftAmount & IndexMask;
-    }
-
-    IndexType second() const
-    {
-        return m_value & IndexMask;
-    }
-
-    bool operator==(const InterferenceEdge& other) const
-    {
-        return m_value == other.m_value;
-    }
-
-    InterferenceEdge& operator=(const InterferenceEdge& other)
-    {
-        m_value = other.m_value;
-        return *this;
-    }
-    bool isHashTableDeletedValue() const
-    {
-        return *this == InterferenceEdge(WTF::HashTableDeletedValue);
-    }
-
-    unsigned hash() const
-    {
-        return WTF::IntHash<PairStorageType>::hash(m_value);
-    }
-
-    void dump(PrintStream& out) const
-    {
-        out.print(first(), "<=>", second());
-    }
-
-private:
-    PairStorageType m_value { 0 };
-};
+bool debug = false;
+bool traceDebug = false;
+bool reportStats = false;
 
 // The AbstractColoringAllocator defines all the code that is independant
 // from the bank or register and can be shared when allocating registers.
-template<typename IndexType, typename TmpMapper, typename InterferenceEdgeType>
+template<typename IndexType, typename TmpMapper>
 class AbstractColoringAllocator {
 public:
     AbstractColoringAllocator(Code& code, const Vector<Reg>& regsInPriorityOrder, IndexType lastPrecoloredRegisterIndex, unsigned tmpArraySize, const HashSet<unsigned>& unspillableTmps, const UseCounts<Tmp>& useCounts)
@@ -206,7 +116,7 @@ protected:
     void addEdgeDistinct(IndexType a, IndexType b)
     {
         ASSERT(a != b);
-        bool isNewEdge = addInterferenceEdge(InterferenceEdgeType(a, b));
+        bool isNewEdge = addInterferenceEdge(InterferenceEdge(a, b));
         if (isNewEdge) {
             if (!isPrecolored(a)) {
                 ASSERT(!m_adjacencyList[a].contains(b));
@@ -225,7 +135,7 @@ protected:
     bool addEdgeDistinctWithoutDegreeChange(IndexType a, IndexType b)
     {
         ASSERT(a != b);
-        bool isNewEdge = addInterferenceEdge(InterferenceEdgeType(a, b));
+        bool isNewEdge = addInterferenceEdge(InterferenceEdge(a, b));
         if (isNewEdge) {
             if (!isPrecolored(a)) {
                 ASSERT(!m_adjacencyList[a].contains(b));
@@ -340,7 +250,7 @@ protected:
             if (!isPrecolored(adjacentTmpIndex)
                 && !hasBeenSimplified(adjacentTmpIndex)
                 && m_degrees[adjacentTmpIndex] >= registerCount()
-                && !hasInterferenceEdge(InterferenceEdgeType(u, adjacentTmpIndex)))
+                && !hasInterferenceEdge(InterferenceEdge(u, adjacentTmpIndex)))
                 return false;
         }
         return true;
@@ -430,7 +340,7 @@ protected:
         ASSERT(m_spillWorklist.isEmpty());
 
         // Reclaim as much memory as possible.
-        clearInterferenceEdges();
+        m_interferenceEdges.clear();
 
         m_degrees.clear();
         m_moveList.clear();
@@ -512,21 +422,6 @@ protected:
             m_coloredTmp.clear();
     }
 
-    bool addInterferenceEdge(InterferenceEdgeType edge)
-    {
-        return m_interferenceEdges.add(edge).isNewEntry;
-    }
-
-    bool hasInterferenceEdge(InterferenceEdgeType edge)
-    {
-        return m_interferenceEdges.contains(edge);
-    }
-
-    void clearInterferenceEdges()
-    {
-        m_interferenceEdges.clear();
-    }
-
     void dumpInterferenceGraphInDot(PrintStream& out)
     {
         out.print("graph InterferenceGraph { \n");
@@ -550,17 +445,93 @@ protected:
         out.print("}\n");
     }
 
+    // Interference edges are not directed. An edge between any two Tmps is represented
+    // by the concatenated values of the smallest Tmp followed by the bigger Tmp.
+    class InterferenceEdge {
+    public:
+        InterferenceEdge()
+        {
+        }
+
+        InterferenceEdge(IndexType a, IndexType b)
+        {
+            ASSERT(a);
+            ASSERT(b);
+            ASSERT_WITH_MESSAGE(a != b, "A Tmp can never interfere with itself. Doing so would force it to be the superposition of two registers.");
+
+            if (b < a)
+                std::swap(a, b);
+            m_value = static_cast<uint64_t>(a) << 32 | b;
+        }
+
+        InterferenceEdge(WTF::HashTableDeletedValueType)
+            : m_value(std::numeric_limits<uint64_t>::max())
+        {
+        }
+
+        IndexType first() const
+        {
+            return m_value >> 32 & 0xffffffff;
+        }
+
+        IndexType second() const
+        {
+            return m_value & 0xffffffff;
+        }
+
+        bool operator==(const InterferenceEdge& other) const
+        {
+            return m_value == other.m_value;
+        }
+
+        bool isHashTableDeletedValue() const
+        {
+            return *this == InterferenceEdge(WTF::HashTableDeletedValue);
+        }
+
+        unsigned hash() const
+        {
+            return WTF::IntHash<uint64_t>::hash(m_value);
+        }
+
+        void dump(PrintStream& out) const
+        {
+            out.print(first(), "<=>", second());
+        }
+
+    private:
+        uint64_t m_value { 0 };
+    };
+
+    bool addInterferenceEdge(InterferenceEdge edge)
+    {
+        return m_interferenceEdges.add(edge).isNewEntry;
+    }
+
+    bool hasInterferenceEdge(InterferenceEdge edge)
+    {
+        return m_interferenceEdges.contains(edge);
+    }
+
+    struct InterferenceEdgeHash {
+        static unsigned hash(const InterferenceEdge& key) { return key.hash(); }
+        static bool equal(const InterferenceEdge& a, const InterferenceEdge& b) { return a == b; }
+        static constexpr bool safeToCompareToEmptyOrDeleted = true;
+    };
+    typedef SimpleClassHashTraits<InterferenceEdge> InterferenceEdgeHashTraits;
+
     Vector<Reg> m_regsInPriorityOrder;
     IndexType m_lastPrecoloredRegisterIndex { 0 };
 
-    typename InterferenceEdgeType::InterferenceSet m_interferenceEdges;
+    // The interference graph.
+    HashSet<InterferenceEdge, InterferenceEdgeHash, InterferenceEdgeHashTraits> m_interferenceEdges;
 
     Vector<Vector<IndexType, 0, UnsafeVectorOverflow, 4>, 0, UnsafeVectorOverflow> m_adjacencyList;
     Vector<IndexType, 0, UnsafeVectorOverflow> m_degrees;
 
-    using IndexTypeSet = HashSet<IndexType, DefaultHash<IndexType>, WTF::UnsignedWithZeroKeyHashTraits<IndexType>>;
+    using IndexTypeSet = HashSet<IndexType, typename DefaultHash<IndexType>::Hash, WTF::UnsignedWithZeroKeyHashTraits<IndexType>>;
 
-    HashMap<IndexType, IndexTypeSet, DefaultHash<IndexType>, WTF::UnsignedWithZeroKeyHashTraits<IndexType>> m_biases;
+    HashMap<IndexType, IndexTypeSet, typename DefaultHash<IndexType>::Hash, WTF::UnsignedWithZeroKeyHashTraits<IndexType>> m_biases;
 
     // Instead of keeping track of the move instructions, we just keep their operands around and use the index
     // in the vector as the "identifier" for the move.
@@ -602,9 +573,9 @@ protected:
     Vector<Tmp, 4> m_pinnedRegs;
 };
 
-template <typename IndexType, typename TmpMapper, typename InterferenceEdge>
-class Briggs : public AbstractColoringAllocator<IndexType, TmpMapper, InterferenceEdge> {
-    using Base = AbstractColoringAllocator<IndexType, TmpMapper, InterferenceEdge>;
+template <typename IndexType, typename TmpMapper>
+class Briggs : public AbstractColoringAllocator<IndexType, TmpMapper> {
+    using Base = AbstractColoringAllocator<IndexType, TmpMapper>;
 protected:
     using Base::m_isOnSelectStack;
     using Base::m_selectStack;
@@ -624,6 +595,7 @@ protected:
     using Base::m_lastPrecoloredRegisterIndex;
     using Base::m_coloredTmp;
     using Base::m_code;
+    using InterferenceEdge = typename Base::InterferenceEdge;
     using Base::m_unspillableTmps;
     using Base::hasInterferenceEdge;
     using Base::getAlias;
@@ -634,6 +606,7 @@ protected:
     using Base::forEachAdjacent;
     using Base::hasBeenSimplified;
     using Base::addToSpill;
+    using Base::m_interferenceEdges;
     using Base::addBias;
     using Base::m_pinnedRegs;
     using Base::m_regsInPriorityOrder;
@@ -956,9 +929,9 @@ protected:
     MoveSet m_worklistMoves;
 };
 
-template <typename IndexType, typename TmpMapper, typename InterferenceEdge>
-class IRC : public AbstractColoringAllocator<IndexType, TmpMapper, InterferenceEdge> {
-    using Base = AbstractColoringAllocator<IndexType, TmpMapper, InterferenceEdge>;
+template <typename IndexType, typename TmpMapper>
+class IRC : public AbstractColoringAllocator<IndexType, TmpMapper> {
+    using Base = AbstractColoringAllocator<IndexType, TmpMapper>;
 protected:
     using Base::m_isOnSelectStack;
     using Base::m_selectStack;
@@ -978,6 +951,7 @@ protected:
     using Base::m_lastPrecoloredRegisterIndex;
     using Base::m_coloredTmp;
     using Base::m_code;
+    using InterferenceEdge = typename Base::InterferenceEdge;
     using Base::m_unspillableTmps;
     using Base::hasInterferenceEdge;
     using Base::getAlias;
@@ -988,6 +962,7 @@ protected:
     using Base::forEachAdjacent;
     using Base::hasBeenSimplified;
     using Base::addToSpill;
+    using Base::m_interferenceEdges;
     using Base::m_adjacencyList;
     using Base::dumpInterferenceGraphInDot;
     using Base::addBias;
@@ -1397,10 +1372,10 @@ protected:
 };
 
 // This perform all the tasks that are specific to certain register type.
-template<Bank bank, template<typename, typename, typename> class AllocatorType, typename InterferenceEdgeType>
-class ColoringAllocator : public AllocatorType<unsigned, AbsoluteTmpMapper<bank>, InterferenceEdgeType> {
+template<Bank bank, template<typename, typename> class AllocatorType>
+class ColoringAllocator : public AllocatorType<unsigned, AbsoluteTmpMapper<bank>> {
     using TmpMapper = AbsoluteTmpMapper<bank>;
-    using Base = AllocatorType<unsigned, TmpMapper, InterferenceEdgeType>;
+    using Base = AllocatorType<unsigned, TmpMapper>;
     using Base::m_isOnSelectStack;
     using Base::m_selectStack;
     using Base::m_simplifyWorklist;
@@ -1419,10 +1394,12 @@ class ColoringAllocator : public AllocatorType<unsigned, AbsoluteTmpMapper<bank>
     using Base::m_lastPrecoloredRegisterIndex;
     using Base::m_coloredTmp;
     using Base::m_code;
+    using InterferenceEdge = typename Base::InterferenceEdge;
     using Base::m_worklistMoves;
     using Base::hasInterferenceEdge;
     using Base::getAlias;
     using Base::addEdge;
+    using Base::m_interferenceEdges;
     using Base::m_pinnedRegs;
     using Base::m_regsInPriorityOrder;
 
@@ -1581,7 +1558,7 @@ protected:
         unsigned leftIndex = TmpMapper::absoluteIndex(leftTmp);
         unsigned rightIndex = TmpMapper::absoluteIndex(rightTmp);
 
-        return !hasInterferenceEdge(InterferenceEdgeType(leftIndex, rightIndex));
+        return !hasInterferenceEdge(InterferenceEdge(leftIndex, rightIndex));
     }
 
     void addToLowPriorityCoalescingCandidates(Arg left, Arg right)
@@ -1863,7 +1840,7 @@ private:
             // possible that most of the TmpWidth overhead is from queries of TmpWidth rather than the
             // recomputation, in which case speeding up the lookup would be a bigger win.
             // https://bugs.webkit.org/show_bug.cgi?id=152478
-            m_tmpWidth.recompute<bank>(m_code);
+            m_tmpWidth.recompute(m_code);
 
             auto doAllocation = [&] (auto& allocator) -> bool {
                 allocator.allocate();
@@ -1880,21 +1857,11 @@ private:
             };
 
             if (useIRC()) {
-                if (m_code.numTmps(bank) < std::numeric_limits<uint16_t>::max()) {
-                    ColoringAllocator<bank, IRC, InterferenceEdge<uint16_t, uint32_t>> allocator(m_code, m_tmpWidth, m_useCounts, unspillableTmps);
-                    done = doAllocation(allocator);
-                } else {
-                    ColoringAllocator<bank, IRC, InterferenceEdge<uint32_t, uint64_t>> allocator(m_code, m_tmpWidth, m_useCounts, unspillableTmps);
-                    done = doAllocation(allocator);
-                }
+                ColoringAllocator<bank, IRC> allocator(m_code, m_tmpWidth, m_useCounts, unspillableTmps);
+                done = doAllocation(allocator);
             } else {
-                if (m_code.numTmps(bank) < std::numeric_limits<uint16_t>::max()) {
-                    ColoringAllocator<bank, Briggs, InterferenceEdge<uint16_t, uint32_t>> allocator(m_code, m_tmpWidth, m_useCounts, unspillableTmps);
-                    done = doAllocation(allocator);
-                } else {
-                    ColoringAllocator<bank, Briggs, InterferenceEdge<uint32_t, uint64_t>> allocator(m_code, m_tmpWidth, m_useCounts, unspillableTmps);
-                    done = doAllocation(allocator);
-                }
+                ColoringAllocator<bank, Briggs> allocator(m_code, m_tmpWidth, m_useCounts, unspillableTmps);
+                done = doAllocation(allocator);
             }
         }
         dataLogLnIf(reportStats, "Num iterations = ", numIterations, " for bank: ", bank);
@@ -2238,7 +2205,7 @@ void allocateRegistersByGraphColoring(Code& code)
 {
     PhaseScope phaseScope(code, "allocateRegistersByGraphColoring");
 
-    if (traceDebug)
+    if (false)
         dataLog("Code before graph coloring:\n", code);
 
     UseCounts<Tmp> useCounts(code);

@@ -37,7 +37,7 @@ Ref<SourceAlpha> SourceAlpha::create(FilterEffect& sourceEffect)
 
 const AtomString& SourceAlpha::effectName()
 {
-    static MainThreadNeverDestroyed<const AtomString> s_effectName("SourceAlpha", AtomString::ConstructFromLiteral);
+    static NeverDestroyed<const AtomString> s_effectName("SourceAlpha", AtomString::ConstructFromLiteral);
     return s_effectName;
 }
 
@@ -70,7 +70,7 @@ TextStream& SourceAlpha::externalRepresentation(TextStream& ts, RepresentationTy
 }
 
 SourceAlpha::SourceAlpha(FilterEffect& sourceEffect)
-    : FilterEffect(sourceEffect.filter(), Type::SourceAlpha)
+    : FilterEffect(sourceEffect.filter())
 {
     setOperatingColorSpace(sourceEffect.operatingColorSpace());
     inputEffects().append(&sourceEffect);

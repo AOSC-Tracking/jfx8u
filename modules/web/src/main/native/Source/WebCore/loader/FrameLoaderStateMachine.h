@@ -52,7 +52,7 @@ public:
 
     WEBCORE_EXPORT bool committingFirstRealLoad() const;
     bool committedFirstRealDocumentLoad() const;
-    WEBCORE_EXPORT bool creatingInitialEmptyDocument() const;
+    bool creatingInitialEmptyDocument() const;
     WEBCORE_EXPORT bool isDisplayingInitialEmptyDocument() const;
     WEBCORE_EXPORT bool firstLayoutDone() const;
     void advanceTo(State);

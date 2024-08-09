@@ -25,7 +25,7 @@
 
 #include "Filter.h"
 #include "GraphicsContext.h"
-#include "ImageData.h"
+#include <JavaScriptCore/Uint8ClampedArray.h>
 #include <wtf/MathExtras.h>
 #include <wtf/text/TextStream.h>
 
@@ -36,7 +36,7 @@
 namespace WebCore {
 
 FEColorMatrix::FEColorMatrix(Filter& filter, ColorMatrixType type, const Vector<float>& values)
-    : FilterEffect(filter, Type::ColorMatrix)
+    : FilterEffect(filter)
     , m_type(type)
     , m_values(values)
 {
@@ -87,7 +87,7 @@ inline void saturateAndHueRotate(float& red, float& green, float& blue, const fl
     blue    = r * components[6] + g * components[7] + b * components[8];
 }
 
-// FIXME: this should use luminance(const ColorComponents<float>& sRGBCompontents).
+// FIXME: this should use luminance(const FloatComponents& sRGBCompontents).
 inline void luminance(float& red, float& green, float& blue, float& alpha)
 {
     alpha = 0.2125 * red + 0.7154 * green + 0.0721 * blue;
@@ -286,12 +286,10 @@ void FEColorMatrix::platformApplySoftware()
         resultImage->context().drawImageBuffer(*inBuffer, drawingRegionOfInputImage(in->absolutePaintRect()));
 
     IntRect imageRect(IntPoint(), resultImage->logicalSize());
-    auto imageData = resultImage->getImageData(AlphaPremultiplication::Unpremultiplied, imageRect);
-    if (!imageData)
+    IntSize pixelArrayDimensions;
+    auto pixelArray = resultImage->getUnmultipliedImageData(imageRect, &pixelArrayDimensions);
+    if (!pixelArray)
         return;
-
-    auto* pixelArray = imageData->data();
-    IntSize pixelArrayDimensions = imageData->size();
 
     Vector<float> values = normalizedFloats(m_values);
 
@@ -313,7 +311,7 @@ void FEColorMatrix::platformApplySoftware()
         break;
     }
 
-    resultImage->putImageData(AlphaPremultiplication::Unpremultiplied, *imageData, imageRect);
+    resultImage->putByteArray(*pixelArray, AlphaPremultiplication::Unpremultiplied, imageRect.size(), imageRect, IntPoint());
 }
 
 static TextStream& operator<<(TextStream& ts, const ColorMatrixType& type)

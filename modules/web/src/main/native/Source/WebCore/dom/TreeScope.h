@@ -76,7 +76,7 @@ public:
     static ptrdiff_t documentScopeMemoryOffset() { return OBJECT_OFFSETOF(TreeScope, m_documentScope); }
 
     // https://dom.spec.whatwg.org/#retarget
-    Ref<Node> retargetToScope(Node&) const;
+    Node& retargetToScope(Node&) const;
 
     WEBCORE_EXPORT Node* ancestorNodeInThisScope(Node*) const;
     WEBCORE_EXPORT Element* ancestorElementInThisScope(Element*) const;
@@ -123,7 +123,7 @@ protected:
         m_documentScope = document;
     }
 
-    RefPtr<Node> nodeFromPoint(const LayoutPoint& clientPoint, LayoutPoint* localPoint);
+    Node* nodeFromPoint(const LayoutPoint& clientPoint, LayoutPoint* localPoint);
 
 private:
 

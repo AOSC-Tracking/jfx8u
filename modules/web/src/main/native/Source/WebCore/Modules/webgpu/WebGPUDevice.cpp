@@ -96,11 +96,8 @@ WTF_MAKE_ISO_ALLOCATED_IMPL(WebGPUDevice);
 
 RefPtr<WebGPUDevice> WebGPUDevice::tryCreate(ScriptExecutionContext& context, Ref<const WebGPUAdapter>&& adapter)
 {
-    if (auto device = GPUDevice::tryCreate(adapter->options())) {
-        auto result = adoptRef(new WebGPUDevice(context, WTFMove(adapter), makeRef(*device)));
-        device->setErrorScopes(result->m_errorScopes.copyRef());
-        return result;
-    }
+    if (auto device = GPUDevice::tryCreate(adapter->options()))
+        return adoptRef(new WebGPUDevice(context, WTFMove(adapter), device.releaseNonNull()));
     return nullptr;
 }
 
@@ -112,8 +109,12 @@ HashSet<WebGPUDevice*>& WebGPUDevice::instances(const LockHolder&)
 
 Lock& WebGPUDevice::instancesMutex()
 {
-    static Lock mutex;
-    return mutex;
+    static LazyNeverDestroyed<Lock> mutex;
+    static std::once_flag initializeMutex;
+    std::call_once(initializeMutex, [] {
+        mutex.construct();
+    });
+    return mutex.get();
 }
 
 WebGPUDevice::WebGPUDevice(ScriptExecutionContext& context, Ref<const WebGPUAdapter>&& adapter, Ref<GPUDevice>&& device)
@@ -183,8 +184,6 @@ Vector<JSC::JSValue> WebGPUDevice::createBufferMapped(JSC::JSGlobalObject& lexic
 
 Ref<WebGPUTexture> WebGPUDevice::createTexture(const GPUTextureDescriptor& descriptor) const
 {
-    m_errorScopes->setErrorPrefix("GPUDevice.createTexture(): ");
-
     auto texture = m_device->tryCreateTexture(descriptor);
     return WebGPUTexture::create(WTFMove(texture));
 }

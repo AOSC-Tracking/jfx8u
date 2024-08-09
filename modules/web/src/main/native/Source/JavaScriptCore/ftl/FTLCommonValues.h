@@ -56,9 +56,6 @@ public:
     LValue intPtrThree { nullptr };
     LValue intPtrEight { nullptr };
     LValue doubleZero { nullptr };
-#if USE(BIGINT32)
-    LValue bigInt32Zero { nullptr };
-#endif
 
     const unsigned rangeKind { 0 };
     const unsigned profKind { 0 };

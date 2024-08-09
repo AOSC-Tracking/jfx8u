@@ -72,6 +72,7 @@
 #include "StyleRule.h"
 #include "StyleSheetContents.h"
 #include "UserAgentStyle.h"
+#include "ViewportStyleResolver.h"
 #include "VisitedLinkState.h"
 #include "WebKitFontFamilyNames.h"
 #include <wtf/Seconds.h>
@@ -87,6 +88,9 @@ using namespace HTMLNames;
 Resolver::Resolver(Document& document)
     : m_ruleSets(*this)
     , m_document(document)
+#if ENABLE(CSS_DEVICE_ADAPTATION)
+    , m_viewportStyleResolver(ViewportStyleResolver::create(&document))
+#endif
     , m_matchAuthorAndUserStyles(m_document.settings().authorAndUserStylesEnabled())
 {
     Element* root = m_document.documentElement();
@@ -138,6 +142,10 @@ void Resolver::appendAuthorStyleSheets(const Vector<RefPtr<CSSStyleSheet>>& styl
 
     if (auto renderView = document().renderView())
         renderView->style().fontCascade().update(&document().fontSelector());
+
+#if ENABLE(CSS_DEVICE_ADAPTATION)
+    viewportStyleResolver()->resolve();
+#endif
 }
 
 // This is a simplified style setting function for keyframe styles
@@ -152,6 +160,10 @@ Resolver::~Resolver()
     RELEASE_ASSERT(!m_document.isResolvingTreeStyle());
     RELEASE_ASSERT(!m_isDeleted);
     m_isDeleted = true;
+
+#if ENABLE(CSS_DEVICE_ADAPTATION)
+    m_viewportStyleResolver->clearDocument();
+#endif
 }
 
 Resolver::State::State(const Element& element, const RenderStyle* parentStyle, const RenderStyle* documentElementStyle)
@@ -183,7 +195,8 @@ inline void Resolver::State::setParentStyle(std::unique_ptr<RenderStyle> parentS
 
 static inline bool isAtShadowBoundary(const Element& element)
 {
-    return is<ShadowRoot>(element.parentNode());
+    auto* parentNode = element.parentNode();
+    return parentNode && parentNode->isShadowRoot();
 }
 
 BuilderContext Resolver::builderContext(const State& state)
@@ -260,10 +273,10 @@ std::unique_ptr<RenderStyle> Resolver::styleForKeyframe(const Element& element, 
     MatchResult result;
     result.authorDeclarations.append({ &keyframe->properties() });
 
-    auto state = State(element, nullptr, m_overrideDocumentElementStyle);
+    auto state = State(element, nullptr);
 
     state.setStyle(RenderStyle::clonePtr(*elementStyle));
-    state.setParentStyle(RenderStyle::clonePtr(m_parentElementStyleForKeyframes ? *m_parentElementStyleForKeyframes : *elementStyle));
+    state.setParentStyle(RenderStyle::clonePtr(*elementStyle));
 
     Builder builder(*state.style(), builderContext(state), result, { CascadeLevel::Author });
     builder.applyAllProperties();
@@ -359,7 +372,30 @@ void Resolver::keyframeStylesForAnimation(const Element& element, const RenderSt
         }
     }
 
-    list.fillImplicitKeyframes(element, *this, elementStyle);
+    // If the 0% keyframe is missing, create it (but only if there is at least one other keyframe).
+    int initialListSize = list.size();
+    if (initialListSize > 0 && list[0].key()) {
+        static StyleRuleKeyframe* zeroPercentKeyframe;
+        if (!zeroPercentKeyframe) {
+            zeroPercentKeyframe = &StyleRuleKeyframe::create(MutableStyleProperties::create()).leakRef();
+            zeroPercentKeyframe->setKey(0);
+        }
+        KeyframeValue keyframeValue(0, nullptr);
+        keyframeValue.setStyle(styleForKeyframe(element, elementStyle, zeroPercentKeyframe, keyframeValue));
+        list.insert(WTFMove(keyframeValue));
+    }
+
+    // If the 100% keyframe is missing, create it (but only if there is at least one other keyframe).
+    if (initialListSize > 0 && (list[list.size() - 1].key() != 1)) {
+        static StyleRuleKeyframe* hundredPercentKeyframe;
+        if (!hundredPercentKeyframe) {
+            hundredPercentKeyframe = &StyleRuleKeyframe::create(MutableStyleProperties::create()).leakRef();
+            hundredPercentKeyframe->setKey(1);
+        }
+        KeyframeValue keyframeValue(1, nullptr);
+        keyframeValue.setStyle(styleForKeyframe(element, elementStyle, hundredPercentKeyframe, keyframeValue));
+        list.insert(WTFMove(keyframeValue));
+    }
 }
 
 std::unique_ptr<RenderStyle> Resolver::pseudoStyleForElement(const Element& element, const PseudoElementRequest& pseudoElementRequest, const RenderStyle& parentStyle, const RenderStyle* parentBoxStyle, const SelectorFilter* selectorFilter)
@@ -574,7 +610,7 @@ bool Resolver::hasViewportDependentMediaQueries() const
 
 Optional<DynamicMediaQueryEvaluationChanges> Resolver::evaluateDynamicMediaQueries()
 {
-    return m_ruleSets.evaluateDynamicMediaQueryRules(m_mediaQueryEvaluator);
+    return m_ruleSets.evaluteDynamicMediaQueryRules(m_mediaQueryEvaluator);
 }
 
 } // namespace Style

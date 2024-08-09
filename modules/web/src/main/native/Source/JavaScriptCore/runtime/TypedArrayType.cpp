@@ -26,7 +26,9 @@
 #include "config.h"
 #include "TypedArrayType.h"
 
+#include "JSDataView.h"
 #include "JSTypedArrayConstructors.h"
+#include "JSTypedArrays.h"
 
 namespace JSC {
 
@@ -34,7 +36,7 @@ const ClassInfo* constructorClassInfoForType(TypedArrayType type)
 {
     switch (type) {
     case NotTypedArray:
-        return nullptr;
+        return 0;
     case TypeInt8:
         return JSInt8ArrayConstructor::info();
     case TypeUint8:
@@ -57,7 +59,7 @@ const ClassInfo* constructorClassInfoForType(TypedArrayType type)
         return JSDataViewConstructor::info();
     }
     RELEASE_ASSERT_NOT_REACHED();
-    return nullptr;
+    return 0;
 }
 
 } // namespace JSC

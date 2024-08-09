@@ -27,8 +27,7 @@
 #include "ConsoleClient.h"
 
 #include "CatchScope.h"
-#include "JSCJSValueInlines.h"
-#include "JSGlobalObject.h"
+#include "JSCInlines.h"
 #include "ScriptArguments.h"
 #include "ScriptCallStack.h"
 #include "ScriptCallStackFactory.h"
@@ -61,132 +60,75 @@ static void appendURLAndPosition(StringBuilder& builder, const String& url, unsi
 
 static void appendMessagePrefix(StringBuilder& builder, MessageSource source, MessageType type, MessageLevel level)
 {
-    String sourceString;
+    const char* sourceString;
     switch (source) {
-    case MessageSource::ConsoleAPI:
-        // Default, no need to be more specific.
-        break;
     case MessageSource::XML:
-        sourceString = "XML"_s;
+        sourceString = "XML";
         break;
     case MessageSource::JS:
-        sourceString = "JS"_s;
+        sourceString = "JS";
         break;
     case MessageSource::Network:
-        sourceString = "NETWORK"_s;
+        sourceString = "NETWORK";
+        break;
+    case MessageSource::ConsoleAPI:
+        sourceString = "CONSOLE";
         break;
     case MessageSource::Storage:
-        sourceString = "STORAGE"_s;
+        sourceString = "STORAGE";
         break;
     case MessageSource::AppCache:
-        sourceString = "APPCACHE"_s;
+        sourceString = "APPCACHE";
         break;
     case MessageSource::Rendering:
-        sourceString = "RENDERING"_s;
+        sourceString = "RENDERING";
         break;
     case MessageSource::CSS:
-        sourceString = "CSS"_s;
+        sourceString = "CSS";
         break;
     case MessageSource::Security:
-        sourceString = "SECURITY"_s;
-        break;
-    case MessageSource::ContentBlocker:
-        sourceString = "CONTENTBLOCKER"_s;
-        break;
-    case MessageSource::Media:
-        sourceString = "MEDIA"_s;
-        break;
-    case MessageSource::MediaSource:
-        sourceString = "MEDIASOURCE"_s;
-        break;
-    case MessageSource::WebRTC:
-        sourceString = "WEBRTC"_s;
-        break;
-    case MessageSource::ITPDebug:
-        sourceString = "ITPDEBUG"_s;
-        break;
-    case MessageSource::AdClickAttribution:
-        sourceString = "ADCLICKATTRIBUTION"_s;
+        sourceString = "SECURITY";
         break;
     case MessageSource::Other:
-        sourceString = "OTHER"_s;
+        sourceString = "OTHER";
+        break;
+    default:
+        ASSERT_NOT_REACHED();
+        sourceString = "UNKNOWN";
         break;
     }
 
-    String typeString;
-    switch (type) {
-    case MessageType::Log:
-        // Default, no need to be more specific.
-        break;
-    case MessageType::Clear:
-        typeString = "CLEAR"_s;
-        break;
-    case MessageType::Dir:
-        typeString = "DIR"_s;
-        break;
-    case MessageType::DirXML:
-        typeString = "DIRXML"_s;
-        break;
-    case MessageType::Table:
-        typeString = "TABLE"_s;
-        break;
-    case MessageType::Trace:
-        typeString = "TRACE"_s;
-        break;
-    case MessageType::StartGroup:
-        typeString = "STARTGROUP"_s;
-        break;
-    case MessageType::StartGroupCollapsed:
-        typeString = "STARTGROUPCOLLAPSED"_s;
-        break;
-    case MessageType::EndGroup:
-        typeString = "ENDGROUP"_s;
-        break;
-    case MessageType::Assert:
-        typeString = "ASSERT"_s;
-        break;
-    case MessageType::Timing:
-        typeString = "TIMING"_s;
-        break;
-    case MessageType::Profile:
-        typeString = "PROFILE"_s;
-        break;
-    case MessageType::ProfileEnd:
-        typeString = "PROFILEEND"_s;
-        break;
-    case MessageType::Image:
-        typeString = "IMAGE"_s;
-        break;
-    }
-
-    String levelString;
+    const char* levelString;
     switch (level) {
-    case MessageLevel::Log:
-        // Default, no need to be more specific.
-        if (type == MessageType::Log)
-            levelString = "LOG"_s;
-        break;
     case MessageLevel::Debug:
-        levelString = "DEBUG"_s;
+        levelString = "DEBUG";
+        break;
+    case MessageLevel::Log:
+        levelString = "LOG";
         break;
     case MessageLevel::Info:
-        levelString = "INFO"_s;
+        levelString = "INFO";
         break;
     case MessageLevel::Warning:
-        levelString = "WARN"_s;
+        levelString = "WARN";
         break;
     case MessageLevel::Error:
-        levelString = "ERROR"_s;
+        levelString = "ERROR";
+        break;
+    default:
+        ASSERT_NOT_REACHED();
+        levelString = "UNKNOWN";
         break;
     }
 
-    builder.append("CONSOLE");
-    if (!sourceString.isEmpty())
-        builder.append(' ', sourceString);
-    if (!typeString.isEmpty())
-        builder.append(' ', typeString);
-    if (!levelString.isEmpty())
-        builder.append(' ', levelString);
+    if (type == MessageType::Trace)
+        levelString = "TRACE";
+    else if (type == MessageType::Table)
+        levelString = "TABLE";
+
+    builder.append(sourceString);
+    builder.append(' ');
+    builder.append(levelString);
 }
 
 void ConsoleClient::printConsoleMessage(MessageSource source, MessageType type, MessageLevel level, const String& message, const String& url, unsigned lineNumber, unsigned columnNumber)

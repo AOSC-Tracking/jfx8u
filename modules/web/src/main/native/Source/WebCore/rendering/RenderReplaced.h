@@ -42,8 +42,6 @@ public:
 
     LayoutSize intrinsicSize() const final { return m_intrinsicSize; }
 
-    RoundedRect roundedContentBoxRect() const;
-
 protected:
     RenderReplaced(Element&, RenderStyle&&);
     RenderReplaced(Element&, RenderStyle&&, const LayoutSize& intrinsicSize);
@@ -57,7 +55,7 @@ protected:
 
     virtual LayoutUnit minimumReplacedHeight() const { return 0_lu; }
 
-    void setSelectionState(HighlightState) override;
+    void setSelectionState(SelectionState) override;
 
     bool isSelected() const;
 

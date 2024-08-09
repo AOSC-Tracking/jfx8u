@@ -47,7 +47,7 @@ public:
     void stopLoading();
 
 private:
-    void notifyFinished(CachedResource&, const NetworkLoadMetrics&) final;
+    void notifyFinished(CachedResource&) final;
 
     DocumentLoader& m_documentLoader;
     URL m_url;

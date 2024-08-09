@@ -31,13 +31,14 @@ struct GradientAttributes {
         , m_spreadMethodSet(false)
         , m_gradientUnitsSet(false)
         , m_gradientTransformSet(false)
+        , m_stopsSet(false)
     {
     }
 
     SVGSpreadMethodType spreadMethod() const { return static_cast<SVGSpreadMethodType>(m_spreadMethod); }
     SVGUnitTypes::SVGUnitType gradientUnits() const { return static_cast<SVGUnitTypes::SVGUnitType>(m_gradientUnits); }
     AffineTransform gradientTransform() const { return m_gradientTransform; }
-    const Gradient::ColorStopVector& stops() const { return m_stops; }
+    const Vector<Gradient::ColorStop>& stops() const { return m_stops; }
 
     void setSpreadMethod(SVGSpreadMethodType value)
     {
@@ -57,20 +58,21 @@ struct GradientAttributes {
         m_gradientTransformSet = true;
     }
 
-    void setStops(Gradient::ColorStopVector&& value)
+    void setStops(const Vector<Gradient::ColorStop>& value)
     {
-        m_stops = WTFMove(value);
+        m_stops = value;
+        m_stopsSet = true;
     }
 
     bool hasSpreadMethod() const { return m_spreadMethodSet; }
     bool hasGradientUnits() const { return m_gradientUnitsSet; }
     bool hasGradientTransform() const { return m_gradientTransformSet; }
-    bool hasStops() const { return !m_stops.isEmpty(); }
+    bool hasStops() const { return m_stopsSet; }
 
 private:
     // Properties
     AffineTransform m_gradientTransform;
-    Gradient::ColorStopVector m_stops;
+    Vector<Gradient::ColorStop> m_stops;
 
     unsigned m_spreadMethod : 2;
     unsigned m_gradientUnits : 2;
@@ -79,12 +81,13 @@ private:
     unsigned m_spreadMethodSet : 1;
     unsigned m_gradientUnitsSet : 1;
     unsigned m_gradientTransformSet : 1;
+    unsigned m_stopsSet : 1;
 };
 
 struct SameSizeAsGradientAttributes {
     AffineTransform a;
-    Gradient::ColorStopVector b;
-    unsigned c : 7;
+    Vector<Gradient::ColorStop> b;
+    unsigned c : 8;
 };
 
 COMPILE_ASSERT(sizeof(GradientAttributes) == sizeof(SameSizeAsGradientAttributes), GradientAttributes_size_guard);

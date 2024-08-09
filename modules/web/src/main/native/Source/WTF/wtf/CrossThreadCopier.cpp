@@ -32,6 +32,8 @@
 #include "config.h"
 #include <wtf/CrossThreadCopier.h>
 
+#include <wtf/CrossThreadTask.h>
+
 namespace WTF {
 
 // Test CrossThreadCopier using COMPILE_ASSERT.

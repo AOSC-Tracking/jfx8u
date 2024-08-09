@@ -27,18 +27,22 @@
 #pragma once
 
 #include "ExceptionOr.h"
-#include "FloatPoint.h"
+#include "Gradient.h"
 
 namespace WebCore {
 
 class CanvasBase;
-class Gradient;
 
 class CanvasGradient : public RefCounted<CanvasGradient> {
 public:
-    static Ref<CanvasGradient> create(const FloatPoint& p0, const FloatPoint& p1, CanvasBase&);
-    static Ref<CanvasGradient> create(const FloatPoint& p0, float r0, const FloatPoint& p1, float r1, CanvasBase&);
-    ~CanvasGradient();
+    static Ref<CanvasGradient> create(const FloatPoint& p0, const FloatPoint& p1, CanvasBase& canvasBase)
+    {
+        return adoptRef(*new CanvasGradient(p0, p1, canvasBase));
+    }
+    static Ref<CanvasGradient> create(const FloatPoint& p0, float r0, const FloatPoint& p1, float r1, CanvasBase& canvasBase)
+    {
+        return adoptRef(*new CanvasGradient(p0, r0, p1, r1, canvasBase));
+    }
 
     Gradient& gradient() { return m_gradient; }
     const Gradient& gradient() const { return m_gradient; }
@@ -51,6 +55,7 @@ private:
 
     Ref<Gradient> m_gradient;
     CanvasBase& m_canvas;
+
 };
 
 }

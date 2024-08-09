@@ -30,16 +30,12 @@
 namespace JSC {
 
 class InspectorInstrumentationObject final : public JSNonFinalObject {
-public:
-    using Base = JSNonFinalObject;
-    static constexpr unsigned StructureFlags = Base::StructureFlags | HasStaticPropertyTable;
+private:
+    InspectorInstrumentationObject(VM&, Structure*);
 
-    template<typename CellType, SubspaceAccess>
-    static IsoSubspace* subspaceFor(VM& vm)
-    {
-        STATIC_ASSERT_ISO_SUBSPACE_SHARABLE(InspectorInstrumentationObject, Base);
-        return &vm.plainObjectSpace;
-    }
+public:
+    typedef JSNonFinalObject Base;
+    static constexpr unsigned StructureFlags = Base::StructureFlags | HasStaticPropertyTable;
 
     static InspectorInstrumentationObject* create(VM& vm, JSGlobalObject* globalObject, Structure* structure)
     {
@@ -59,8 +55,7 @@ public:
     void disable(VM&);
     bool isEnabled(VM&) const;
 
-private:
-    InspectorInstrumentationObject(VM&, Structure*);
+protected:
     void finishCreation(VM&, JSGlobalObject*);
 };
 

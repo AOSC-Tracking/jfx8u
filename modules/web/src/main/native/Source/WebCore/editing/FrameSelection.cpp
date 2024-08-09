@@ -28,7 +28,6 @@
 
 #include "AXObjectCache.h"
 #include "CharacterData.h"
-#include "ColorBlending.h"
 #include "DeleteSelectionCommand.h"
 #include "Document.h"
 #include "Editing.h"
@@ -53,9 +52,7 @@
 #include "HitTestRequest.h"
 #include "HitTestResult.h"
 #include "InlineTextBox.h"
-#include "Logging.h"
 #include "Page.h"
-#include "Range.h"
 #include "RenderLayer.h"
 #include "RenderText.h"
 #include "RenderTextControl.h"
@@ -64,14 +61,12 @@
 #include "RenderWidget.h"
 #include "RenderedPosition.h"
 #include "Settings.h"
-#include "SimpleRange.h"
 #include "SpatialNavigation.h"
 #include "StyleProperties.h"
 #include "TypingCommand.h"
 #include "VisibleUnits.h"
 #include <stdio.h>
 #include <wtf/text/CString.h>
-#include <wtf/text/TextStream.h>
 
 #if PLATFORM(IOS_FAMILY)
 #include "Chrome.h"
@@ -143,15 +138,15 @@ IntRect DragCaretController::editableElementRectInRootViewCoordinates() const
     return { };
 }
 
-static inline bool shouldAlwaysUseDirectionalSelection(Document* document)
+static inline bool shouldAlwaysUseDirectionalSelection(Frame* frame)
 {
-    return !document || document->editor().behavior().shouldConsiderSelectionAsDirectional();
+    return !frame || frame->editor().behavior().shouldConsiderSelectionAsDirectional();
 }
 
-FrameSelection::FrameSelection(Document* document)
-    : m_document(document)
+FrameSelection::FrameSelection(Frame* frame)
+    : m_frame(frame)
     , m_xPosForVerticalArrowNavigation(NoXPosForVerticalArrowNavigation())
-    , m_granularity(TextGranularity::CharacterGranularity)
+    , m_granularity(CharacterGranularity)
 #if ENABLE(TEXT_CARET)
     , m_caretBlinkTimer(*this, &FrameSelection::caretBlinkTimerFired)
 #endif
@@ -160,7 +155,7 @@ FrameSelection::FrameSelection(Document* document)
     , m_absCaretBoundsDirty(true)
     , m_caretPaint(true)
     , m_isCaretBlinkingSuspended(false)
-    , m_focused(document && document->frame() && document->page() && document->page()->focusController().focusedFrame() == document->frame())
+    , m_focused(frame && frame->page() && frame->page()->focusController().focusedFrame() == frame)
     , m_shouldShowBlockCursor(false)
     , m_pendingSelectionUpdate(false)
     , m_alwaysAlignCursorOnScrollWhenRevealingSelection(false)
@@ -169,24 +164,14 @@ FrameSelection::FrameSelection(Document* document)
     , m_caretBlinks(true)
 #endif
 {
-    if (shouldAlwaysUseDirectionalSelection(m_document))
+    if (shouldAlwaysUseDirectionalSelection(m_frame))
         m_selection.setIsDirectional(true);
-
-    bool activeAndFocused = isFocusedAndActive();
-    if (activeAndFocused)
-        setSelectionFromNone();
-#if USE(UIKIT_EDITING)
-    // Caret blinking (blinks | does not blink)
-    setCaretVisible(activeAndFocused);
-#else
-    setCaretVisibility(activeAndFocused ? Visible : Hidden);
-#endif
 }
 
 Element* FrameSelection::rootEditableElementOrDocumentElement() const
 {
     Element* selectionRoot = m_selection.rootEditableElement();
-    return selectionRoot ? selectionRoot : m_document->documentElement();
+    return selectionRoot ? selectionRoot : m_frame->document()->documentElement();
 }
 
 void FrameSelection::moveTo(const VisiblePosition &pos, EUserTriggered userTriggered, CursorAlignOnScroll align)
@@ -204,6 +189,12 @@ void FrameSelection::moveTo(const VisiblePosition &base, const VisiblePosition &
 void FrameSelection::moveTo(const Position &pos, EAffinity affinity, EUserTriggered userTriggered)
 {
     setSelection(VisibleSelection(pos, affinity, m_selection.isDirectional()), defaultSetSelectionOptions(userTriggered));
+}
+
+void FrameSelection::moveTo(const Range* range)
+{
+    VisibleSelection selection = range ? VisibleSelection(range->startPosition(), range->endPosition()) : VisibleSelection();
+    setSelection(selection);
 }
 
 void FrameSelection::moveTo(const Position &base, const Position &extent, EAffinity affinity, EUserTriggered userTriggered)
@@ -292,13 +283,13 @@ void FrameSelection::setSelectionByMouseIfDifferent(const VisibleSelection& pass
     EndPointsAdjustmentMode endpointsAdjustmentMode)
 {
     VisibleSelection newSelection = passedNewSelection;
-    bool isDirectional = shouldAlwaysUseDirectionalSelection(m_document) || newSelection.isDirectional();
+    bool isDirectional = shouldAlwaysUseDirectionalSelection(m_frame) || newSelection.isDirectional();
 
     VisiblePosition base = m_originalBase.isNotNull() ? m_originalBase : newSelection.visibleBase();
     VisiblePosition newBase = base;
     VisiblePosition extent = newSelection.visibleExtent();
     VisiblePosition newExtent = extent;
-    if (endpointsAdjustmentMode == EndPointsAdjustmentMode::AdjustAtBidiBoundary)
+    if (endpointsAdjustmentMode == AdjustEndpointsAtBidiBoundary)
         adjustEndpointsAtBidiBoundary(newBase, newExtent);
 
     if (newBase != base || newExtent != extent) {
@@ -330,20 +321,20 @@ bool FrameSelection::setSelectionWithoutUpdatingAppearance(const VisibleSelectio
     bool shouldClearTypingStyle = options.contains(ClearTypingStyle);
 
     VisibleSelection newSelection = newSelectionPossiblyWithoutDirection;
-    if (shouldAlwaysUseDirectionalSelection(m_document))
+    if (shouldAlwaysUseDirectionalSelection(m_frame))
         newSelection.setIsDirectional(true);
 
-    if (!m_document || !m_document->frame()) {
+    if (!m_frame) {
         m_selection = newSelection;
         return false;
     }
 
     // <http://bugs.webkit.org/show_bug.cgi?id=23464>: Infinite recursion at FrameSelection::setSelection
-    // if document->frame() == m_document->frame() we can get into an infinite loop
+    // if document->frame() == m_frame we can get into an infinite loop
     if (Document* newSelectionDocument = newSelection.base().document()) {
         if (RefPtr<Frame> newSelectionFrame = newSelectionDocument->frame()) {
-            if (newSelectionFrame != m_document->frame() && newSelectionDocument != m_document) {
-                newSelectionDocument->selection().setSelection(newSelection, options, AXTextStateChangeIntent(), align, granularity);
+            if (newSelectionFrame != m_frame && newSelectionDocument != m_frame->document()) {
+                newSelectionFrame->selection().setSelection(newSelection, options, AXTextStateChangeIntent(), align, granularity);
                 // It's possible that during the above set selection, this FrameSelection has been modified by
                 // selectFrameElementInParentIfFullySelected, but that the selection is no longer valid since
                 // the frame is about to be destroyed. If this is the case, clear our selection.
@@ -357,7 +348,7 @@ bool FrameSelection::setSelectionWithoutUpdatingAppearance(const VisibleSelectio
     m_granularity = granularity;
 
     if (closeTyping)
-        TypingCommand::closeTyping(*m_document);
+        TypingCommand::closeTyping(m_frame);
 
     if (shouldClearTypingStyle)
         clearTypingStyle();
@@ -365,7 +356,7 @@ bool FrameSelection::setSelectionWithoutUpdatingAppearance(const VisibleSelectio
     VisibleSelection oldSelection = m_selection;
     bool didMutateSelection = oldSelection != newSelection;
     if (didMutateSelection)
-        m_document->editor().selectionWillChange();
+        m_frame->editor().selectionWillChange();
 
     m_selection = newSelection;
 
@@ -378,34 +369,29 @@ bool FrameSelection::setSelectionWithoutUpdatingAppearance(const VisibleSelectio
 
     setCaretRectNeedsUpdate();
 
-    if (!newSelection.isNone() && !(options & DoNotSetFocus)) {
-        auto* oldFocusedElement = m_document->focusedElement();
+    if (!newSelection.isNone() && !(options & DoNotSetFocus))
         setFocusedElementIfNeeded();
-        if (!m_document->frame())
-            return false;
-        // FIXME: Should not be needed.
-        if (m_document->focusedElement() != oldFocusedElement)
-            m_document->updateStyleIfNeeded();
-    }
 
     // Always clear the x position used for vertical arrow navigation.
     // It will be restored by the vertical arrow navigation code if necessary.
     m_xPosForVerticalArrowNavigation = NoXPosForVerticalArrowNavigation();
     selectFrameElementInParentIfFullySelected();
-    m_document->editor().respondToChangedSelection(oldSelection, options);
+    m_frame->editor().respondToChangedSelection(oldSelection, options);
     // https://www.w3.org/TR/selection-api/#selectionchange-event
     // FIXME: Spec doesn't specify which task source to use.
-    m_document->queueTaskToDispatchEvent(TaskSource::UserInteraction, Event::create(eventNames().selectionchangeEvent, Event::CanBubble::No, Event::IsCancelable::No));
+    m_frame->document()->queueTaskToDispatchEvent(TaskSource::UserInteraction, Event::create(eventNames().selectionchangeEvent, Event::CanBubble::No, Event::IsCancelable::No));
 
     return true;
 }
 
 void FrameSelection::setSelection(const VisibleSelection& selection, OptionSet<SetSelectionOption> options, AXTextStateChangeIntent intent, CursorAlignOnScroll align, TextGranularity granularity)
 {
-    LOG_WITH_STREAM(Selection, stream << "FrameSelection::setSelection " << selection);
-
-    RefPtr<Document> protector(m_document);
+    RefPtr<Frame> protectedFrame(m_frame);
     if (!setSelectionWithoutUpdatingAppearance(selection, options, align, granularity))
+        return;
+
+    Document* document = m_frame->document();
+    if (!document)
         return;
 
     if (options & RevealSelectionUpToMainFrame)
@@ -419,27 +405,27 @@ void FrameSelection::setSelection(const VisibleSelection& selection, OptionSet<S
     m_selectionRevealIntent = intent;
     m_pendingSelectionUpdate = true;
 
-    if (m_document->hasPendingStyleRecalc())
+    if (document->hasPendingStyleRecalc())
         return;
 
-    FrameView* frameView = m_document->view();
+    FrameView* frameView = document->view();
     if (frameView && frameView->layoutContext().isLayoutPending())
         return;
 
     updateAndRevealSelection(intent);
 
     if (options & IsUserTriggered) {
-        if (auto* client = m_document->editor().client())
+        if (auto* client = m_frame->editor().client())
             client->didEndUserTriggeredSelectionChanges();
     }
 }
 
-static void updateSelectionByUpdatingLayoutOrStyle(Document& document)
+static void updateSelectionByUpdatingLayoutOrStyle(Frame& frame)
 {
 #if ENABLE(TEXT_CARET)
-    document.updateLayoutIgnorePendingStylesheets();
+    frame.document()->updateLayoutIgnorePendingStylesheets();
 #else
-    document.updateStyleIfNeeded();
+    frame.document()->updateStyleIfNeeded();
 #endif
 }
 
@@ -449,8 +435,8 @@ void FrameSelection::setNeedsSelectionUpdate(RevealSelectionAfterUpdate revealMo
     if (revealMode == RevealSelectionAfterUpdate::Forced)
         m_selectionRevealMode = SelectionRevealMode::Reveal;
     m_pendingSelectionUpdate = true;
-    if (RenderView* view = m_document->renderView())
-        view->selection().clearSelection();
+    if (RenderView* view = m_frame->contentRenderer())
+        view->selection().clear();
 }
 
 void FrameSelection::updateAndRevealSelection(const AXTextStateChangeIntent& intent)
@@ -465,7 +451,7 @@ void FrameSelection::updateAndRevealSelection(const AXTextStateChangeIntent& int
     if (m_selectionRevealMode != SelectionRevealMode::DoNotReveal) {
         ScrollAlignment alignment;
 
-        if (m_document->editor().behavior().shouldCenterAlignWhenSelectionIsRevealed())
+        if (m_frame->editor().behavior().shouldCenterAlignWhenSelectionIsRevealed())
             alignment = m_alwaysAlignCursorOnScrollWhenRevealingSelection ? ScrollAlignment::alignCenterAlways : ScrollAlignment::alignCenterIfNeeded;
         else
             alignment = m_alwaysAlignCursorOnScrollWhenRevealingSelection ? ScrollAlignment::alignTopAlways : ScrollAlignment::alignToEdgeIfNeeded;
@@ -479,7 +465,7 @@ void FrameSelection::updateAndRevealSelection(const AXTextStateChangeIntent& int
 void FrameSelection::updateDataDetectorsForSelection()
 {
 #if ENABLE(TELEPHONE_NUMBER_DETECTION) && !PLATFORM(IOS_FAMILY)
-    m_document->editor().scanSelectionForTelephoneNumbers();
+    m_frame->editor().scanSelectionForTelephoneNumbers();
 #endif
 }
 
@@ -506,7 +492,7 @@ void DragCaretController::nodeWillBeRemoved(Node& node)
         return;
 
     if (RenderView* view = node.document().renderView())
-        view->selection().clearSelection();
+        view->selection().clear();
 
     clear();
 }
@@ -554,8 +540,8 @@ void FrameSelection::respondToNodeModification(Node& node, bool baseRemoved, boo
         else
             m_selection.setWithoutValidation(m_selection.end(), m_selection.start());
     } else if (isRange()) {
-        if (auto range = m_selection.firstRange()) {
-            auto compareNodeResult = createLiveRange(*range)->compareNode(node);
+        if (RefPtr<Range> range = m_selection.firstRange()) {
+            auto compareNodeResult = range->compareNode(node);
             if (!compareNodeResult.hasException()) {
                 auto compareResult = compareNodeResult.releaseReturnValue();
                 if (compareResult == Range::NODE_BEFORE_AND_AFTER || compareResult == Range::NODE_INSIDE) {
@@ -571,7 +557,7 @@ void FrameSelection::respondToNodeModification(Node& node, bool baseRemoved, boo
 
     if (clearRenderTreeSelection) {
         if (auto* renderView = node.document().renderView()) {
-            renderView->selection().clearSelection();
+            renderView->selection().clear();
 
             // Trigger a selection update so the selection will be set again.
             m_selectionRevealIntent = AXTextStateChangeIntent();
@@ -676,22 +662,22 @@ void FrameSelection::willBeModified(EAlteration alter, SelectionDirection direct
             baseIsStart = false;
     } else {
         switch (direction) {
-        case SelectionDirection::Right:
+        case DirectionRight:
             if (directionOfSelection() == TextDirection::LTR)
                 baseIsStart = true;
             else
                 baseIsStart = false;
             break;
-        case SelectionDirection::Forward:
+        case DirectionForward:
             baseIsStart = true;
             break;
-        case SelectionDirection::Left:
+        case DirectionLeft:
             if (directionOfSelection() == TextDirection::LTR)
                 baseIsStart = false;
             else
                 baseIsStart = true;
             break;
-        case SelectionDirection::Backward:
+        case DirectionBackward:
             baseIsStart = false;
             break;
         }
@@ -711,7 +697,7 @@ VisiblePosition FrameSelection::positionForPlatform(bool isGetStart) const
     // base/extent always point to the same nodes as start/end, but which points
     // to which depends on the value of isBaseFirst. Then this can be changed
     // to just return m_sel.extent().
-    if (m_document && m_document->editor().behavior().shouldAlwaysExtendSelectionFromExtentEndpoint())
+    if (m_frame && m_frame->editor().behavior().shouldAlwaysExtendSelectionFromExtentEndpoint())
         return m_selection.isBaseFirst() ? m_selection.visibleEnd() : m_selection.visibleStart();
 
     return isGetStart ? m_selection.visibleStart() : m_selection.visibleEnd();
@@ -731,7 +717,7 @@ VisiblePosition FrameSelection::nextWordPositionForPlatform(const VisiblePositio
 {
     VisiblePosition positionAfterCurrentWord = nextWordPosition(originalPosition);
 
-    if (m_document && m_document->editor().behavior().shouldSkipSpaceWhenMovingRight()) {
+    if (m_frame && m_frame->editor().behavior().shouldSkipSpaceWhenMovingRight()) {
         // In order to skip spaces when moving right, we advance one
         // word further and then move one word back. Given the
         // semantics of previousWordPosition() this will put us at the
@@ -765,34 +751,34 @@ VisiblePosition FrameSelection::modifyExtendingRight(TextGranularity granularity
     // it extends forward logically if the enclosing block is TextDirection::LTR,
     // but it extends backward logically if the enclosing block is TextDirection::RTL.
     switch (granularity) {
-    case TextGranularity::CharacterGranularity:
+    case CharacterGranularity:
         if (directionOfEnclosingBlock() == TextDirection::LTR)
             pos = pos.next(CannotCrossEditingBoundary);
         else
             pos = pos.previous(CannotCrossEditingBoundary);
         break;
-    case TextGranularity::WordGranularity:
+    case WordGranularity:
         if (directionOfEnclosingBlock() == TextDirection::LTR)
             pos = nextWordPositionForPlatform(pos);
         else
             pos = previousWordPosition(pos);
         break;
-    case TextGranularity::LineBoundary:
+    case LineBoundary:
         if (directionOfEnclosingBlock() == TextDirection::LTR)
             pos = modifyExtendingForward(granularity);
         else
             pos = modifyExtendingBackward(granularity);
         break;
-    case TextGranularity::SentenceGranularity:
-    case TextGranularity::LineGranularity:
-    case TextGranularity::ParagraphGranularity:
-    case TextGranularity::SentenceBoundary:
-    case TextGranularity::ParagraphBoundary:
-    case TextGranularity::DocumentBoundary:
+    case SentenceGranularity:
+    case LineGranularity:
+    case ParagraphGranularity:
+    case SentenceBoundary:
+    case ParagraphBoundary:
+    case DocumentBoundary:
         // FIXME: implement all of the above?
         pos = modifyExtendingForward(granularity);
         break;
-    case TextGranularity::DocumentGranularity:
+    case DocumentGranularity:
         ASSERT_NOT_REACHED();
         break;
     }
@@ -806,34 +792,34 @@ VisiblePosition FrameSelection::modifyExtendingForward(TextGranularity granulari
 {
     VisiblePosition pos(m_selection.extent(), m_selection.affinity());
     switch (granularity) {
-    case TextGranularity::CharacterGranularity:
+    case CharacterGranularity:
         pos = pos.next(CannotCrossEditingBoundary);
         break;
-    case TextGranularity::WordGranularity:
+    case WordGranularity:
         pos = nextWordPositionForPlatform(pos);
         break;
-    case TextGranularity::SentenceGranularity:
+    case SentenceGranularity:
         pos = nextSentencePosition(pos);
         break;
-    case TextGranularity::LineGranularity:
+    case LineGranularity:
         pos = nextLinePosition(pos, lineDirectionPointForBlockDirectionNavigation(EXTENT));
         break;
-    case TextGranularity::ParagraphGranularity:
+    case ParagraphGranularity:
         pos = nextParagraphPosition(pos, lineDirectionPointForBlockDirectionNavigation(EXTENT));
         break;
-    case TextGranularity::DocumentGranularity:
+    case DocumentGranularity:
         ASSERT_NOT_REACHED();
         break;
-    case TextGranularity::SentenceBoundary:
+    case SentenceBoundary:
         pos = endOfSentence(endForPlatform());
         break;
-    case TextGranularity::LineBoundary:
+    case LineBoundary:
         pos = logicalEndOfLine(endForPlatform());
         break;
-    case TextGranularity::ParagraphBoundary:
+    case ParagraphBoundary:
         pos = endOfParagraph(endForPlatform());
         break;
-    case TextGranularity::DocumentBoundary:
+    case DocumentBoundary:
         pos = endForPlatform();
         if (isEditablePosition(pos.deepEquivalent()))
             pos = endOfEditableContent(pos);
@@ -853,7 +839,7 @@ VisiblePosition FrameSelection::modifyMovingRight(TextGranularity granularity, b
         *reachedBoundary = false;
     VisiblePosition pos;
     switch (granularity) {
-    case TextGranularity::CharacterGranularity:
+    case CharacterGranularity:
         if (isRange()) {
             if (directionOfSelection() == TextDirection::LTR)
                 pos = VisiblePosition(m_selection.end(), m_selection.affinity());
@@ -862,27 +848,27 @@ VisiblePosition FrameSelection::modifyMovingRight(TextGranularity granularity, b
         } else
             pos = VisiblePosition(m_selection.extent(), m_selection.affinity()).right(true, reachedBoundary);
         break;
-    case TextGranularity::WordGranularity: {
-        bool skipsSpaceWhenMovingRight = m_document && m_document->editor().behavior().shouldSkipSpaceWhenMovingRight();
+    case WordGranularity: {
+        bool skipsSpaceWhenMovingRight = m_frame && m_frame->editor().behavior().shouldSkipSpaceWhenMovingRight();
         VisiblePosition currentPosition(m_selection.extent(), m_selection.affinity());
         pos = rightWordPosition(currentPosition, skipsSpaceWhenMovingRight);
         if (reachedBoundary)
             *reachedBoundary = pos == currentPosition;
         break;
     }
-    case TextGranularity::SentenceGranularity:
-    case TextGranularity::LineGranularity:
-    case TextGranularity::ParagraphGranularity:
-    case TextGranularity::SentenceBoundary:
-    case TextGranularity::ParagraphBoundary:
-    case TextGranularity::DocumentBoundary:
+    case SentenceGranularity:
+    case LineGranularity:
+    case ParagraphGranularity:
+    case SentenceBoundary:
+    case ParagraphBoundary:
+    case DocumentBoundary:
         // FIXME: Implement all of the above.
         pos = modifyMovingForward(granularity, reachedBoundary);
         break;
-    case TextGranularity::LineBoundary:
+    case LineBoundary:
         pos = rightBoundaryOfLine(startForPlatform(), directionOfEnclosingBlock(), reachedBoundary);
         break;
-    case TextGranularity::DocumentGranularity:
+    case DocumentGranularity:
         ASSERT_NOT_REACHED();
         break;
     }
@@ -895,15 +881,15 @@ VisiblePosition FrameSelection::modifyMovingForward(TextGranularity granularity,
         *reachedBoundary = false;
     VisiblePosition currentPosition;
     switch (granularity) {
-    case TextGranularity::WordGranularity:
-    case TextGranularity::SentenceGranularity:
+    case WordGranularity:
+    case SentenceGranularity:
         currentPosition = VisiblePosition(m_selection.extent(), m_selection.affinity());
         break;
-    case TextGranularity::LineGranularity:
-    case TextGranularity::ParagraphGranularity:
-    case TextGranularity::SentenceBoundary:
-    case TextGranularity::ParagraphBoundary:
-    case TextGranularity::DocumentBoundary:
+    case LineGranularity:
+    case ParagraphGranularity:
+    case SentenceBoundary:
+    case ParagraphBoundary:
+    case DocumentBoundary:
         currentPosition = endForPlatform();
         break;
     default:
@@ -912,19 +898,19 @@ VisiblePosition FrameSelection::modifyMovingForward(TextGranularity granularity,
     VisiblePosition pos;
     // FIXME: Stay in editable content for the less common granularities.
     switch (granularity) {
-    case TextGranularity::CharacterGranularity:
+    case CharacterGranularity:
         if (isRange())
             pos = VisiblePosition(m_selection.end(), m_selection.affinity());
         else
             pos = VisiblePosition(m_selection.extent(), m_selection.affinity()).next(CannotCrossEditingBoundary, reachedBoundary);
         break;
-    case TextGranularity::WordGranularity:
+    case WordGranularity:
         pos = nextWordPositionForPlatform(currentPosition);
         break;
-    case TextGranularity::SentenceGranularity:
+    case SentenceGranularity:
         pos = nextSentencePosition(currentPosition);
         break;
-    case TextGranularity::LineGranularity: {
+    case LineGranularity: {
         // down-arrowing from a range selection that ends at the start of a line needs
         // to leave the selection at that line start (no need to call nextLinePosition!)
         pos = currentPosition;
@@ -932,22 +918,22 @@ VisiblePosition FrameSelection::modifyMovingForward(TextGranularity granularity,
             pos = nextLinePosition(pos, lineDirectionPointForBlockDirectionNavigation(START));
         break;
     }
-    case TextGranularity::ParagraphGranularity:
+    case ParagraphGranularity:
         pos = nextParagraphPosition(currentPosition, lineDirectionPointForBlockDirectionNavigation(START));
         break;
-    case TextGranularity::DocumentGranularity:
+    case DocumentGranularity:
         ASSERT_NOT_REACHED();
         break;
-    case TextGranularity::SentenceBoundary:
+    case SentenceBoundary:
         pos = endOfSentence(currentPosition);
         break;
-    case TextGranularity::LineBoundary:
+    case LineBoundary:
         pos = logicalEndOfLine(endForPlatform(), reachedBoundary);
         break;
-    case TextGranularity::ParagraphBoundary:
+    case ParagraphBoundary:
         pos = endOfParagraph(currentPosition);
         break;
-    case TextGranularity::DocumentBoundary:
+    case DocumentBoundary:
         pos = currentPosition;
         if (isEditablePosition(pos.deepEquivalent()))
             pos = endOfEditableContent(pos);
@@ -956,13 +942,13 @@ VisiblePosition FrameSelection::modifyMovingForward(TextGranularity granularity,
         break;
     }
     switch (granularity) {
-    case TextGranularity::WordGranularity:
-    case TextGranularity::SentenceGranularity:
-    case TextGranularity::LineGranularity:
-    case TextGranularity::ParagraphGranularity:
-    case TextGranularity::SentenceBoundary:
-    case TextGranularity::ParagraphBoundary:
-    case TextGranularity::DocumentBoundary:
+    case WordGranularity:
+    case SentenceGranularity:
+    case LineGranularity:
+    case ParagraphGranularity:
+    case SentenceBoundary:
+    case ParagraphBoundary:
+    case DocumentBoundary:
         if (reachedBoundary)
             *reachedBoundary = pos == currentPosition;
         break;
@@ -982,33 +968,33 @@ VisiblePosition FrameSelection::modifyExtendingLeft(TextGranularity granularity)
     // it extends backward logically if the enclosing block is TextDirection::LTR,
     // but it extends forward logically if the enclosing block is TextDirection::RTL.
     switch (granularity) {
-    case TextGranularity::CharacterGranularity:
+    case CharacterGranularity:
         if (directionOfEnclosingBlock() == TextDirection::LTR)
             pos = pos.previous(CannotCrossEditingBoundary);
         else
             pos = pos.next(CannotCrossEditingBoundary);
         break;
-    case TextGranularity::WordGranularity:
+    case WordGranularity:
         if (directionOfEnclosingBlock() == TextDirection::LTR)
             pos = previousWordPosition(pos);
         else
             pos = nextWordPositionForPlatform(pos);
         break;
-    case TextGranularity::LineBoundary:
+    case LineBoundary:
         if (directionOfEnclosingBlock() == TextDirection::LTR)
             pos = modifyExtendingBackward(granularity);
         else
             pos = modifyExtendingForward(granularity);
         break;
-    case TextGranularity::SentenceGranularity:
-    case TextGranularity::LineGranularity:
-    case TextGranularity::ParagraphGranularity:
-    case TextGranularity::SentenceBoundary:
-    case TextGranularity::ParagraphBoundary:
-    case TextGranularity::DocumentBoundary:
+    case SentenceGranularity:
+    case LineGranularity:
+    case ParagraphGranularity:
+    case SentenceBoundary:
+    case ParagraphBoundary:
+    case DocumentBoundary:
         pos = modifyExtendingBackward(granularity);
         break;
-    case TextGranularity::DocumentGranularity:
+    case DocumentGranularity:
         ASSERT_NOT_REACHED();
         break;
     }
@@ -1027,38 +1013,38 @@ VisiblePosition FrameSelection::modifyExtendingBackward(TextGranularity granular
     // It was done here instead of in VisiblePosition because we want VPs to iterate
     // over everything.
     switch (granularity) {
-    case TextGranularity::CharacterGranularity:
+    case CharacterGranularity:
         pos = pos.previous(CannotCrossEditingBoundary);
         break;
-    case TextGranularity::WordGranularity:
+    case WordGranularity:
         pos = previousWordPosition(pos);
         break;
-    case TextGranularity::SentenceGranularity:
+    case SentenceGranularity:
         pos = previousSentencePosition(pos);
         break;
-    case TextGranularity::LineGranularity:
+    case LineGranularity:
         pos = previousLinePosition(pos, lineDirectionPointForBlockDirectionNavigation(EXTENT));
         break;
-    case TextGranularity::ParagraphGranularity:
+    case ParagraphGranularity:
         pos = previousParagraphPosition(pos, lineDirectionPointForBlockDirectionNavigation(EXTENT));
         break;
-    case TextGranularity::SentenceBoundary:
+    case SentenceBoundary:
         pos = startOfSentence(startForPlatform());
         break;
-    case TextGranularity::LineBoundary:
+    case LineBoundary:
         pos = logicalStartOfLine(startForPlatform());
         break;
-    case TextGranularity::ParagraphBoundary:
+    case ParagraphBoundary:
         pos = startOfParagraph(startForPlatform());
         break;
-    case TextGranularity::DocumentBoundary:
+    case DocumentBoundary:
         pos = startForPlatform();
         if (isEditablePosition(pos.deepEquivalent()))
             pos = startOfEditableContent(pos);
         else
             pos = startOfDocument(pos);
         break;
-    case TextGranularity::DocumentGranularity:
+    case DocumentGranularity:
         ASSERT_NOT_REACHED();
         break;
     }
@@ -1074,7 +1060,7 @@ VisiblePosition FrameSelection::modifyMovingLeft(TextGranularity granularity, bo
         *reachedBoundary = false;
     VisiblePosition pos;
     switch (granularity) {
-    case TextGranularity::CharacterGranularity:
+    case CharacterGranularity:
         if (isRange())
             if (directionOfSelection() == TextDirection::LTR)
                 pos = VisiblePosition(m_selection.start(), m_selection.affinity());
@@ -1083,27 +1069,27 @@ VisiblePosition FrameSelection::modifyMovingLeft(TextGranularity granularity, bo
         else
             pos = VisiblePosition(m_selection.extent(), m_selection.affinity()).left(true, reachedBoundary);
         break;
-    case TextGranularity::WordGranularity: {
-        bool skipsSpaceWhenMovingRight = m_document && m_document->editor().behavior().shouldSkipSpaceWhenMovingRight();
+    case WordGranularity: {
+        bool skipsSpaceWhenMovingRight = m_frame && m_frame->editor().behavior().shouldSkipSpaceWhenMovingRight();
         VisiblePosition currentPosition(m_selection.extent(), m_selection.affinity());
         pos = leftWordPosition(currentPosition, skipsSpaceWhenMovingRight);
         if (reachedBoundary)
             *reachedBoundary = pos == currentPosition;
         break;
     }
-    case TextGranularity::SentenceGranularity:
-    case TextGranularity::LineGranularity:
-    case TextGranularity::ParagraphGranularity:
-    case TextGranularity::SentenceBoundary:
-    case TextGranularity::ParagraphBoundary:
-    case TextGranularity::DocumentBoundary:
+    case SentenceGranularity:
+    case LineGranularity:
+    case ParagraphGranularity:
+    case SentenceBoundary:
+    case ParagraphBoundary:
+    case DocumentBoundary:
         // FIXME: Implement all of the above.
         pos = modifyMovingBackward(granularity, reachedBoundary);
         break;
-    case TextGranularity::LineBoundary:
+    case LineBoundary:
         pos = leftBoundaryOfLine(startForPlatform(), directionOfEnclosingBlock(), reachedBoundary);
         break;
-    case TextGranularity::DocumentGranularity:
+    case DocumentGranularity:
         ASSERT_NOT_REACHED();
         break;
     }
@@ -1116,15 +1102,15 @@ VisiblePosition FrameSelection::modifyMovingBackward(TextGranularity granularity
         *reachedBoundary = false;
     VisiblePosition currentPosition;
     switch (granularity) {
-    case TextGranularity::WordGranularity:
-    case TextGranularity::SentenceGranularity:
+    case WordGranularity:
+    case SentenceGranularity:
         currentPosition = VisiblePosition(m_selection.extent(), m_selection.affinity());
         break;
-    case TextGranularity::LineGranularity:
-    case TextGranularity::ParagraphGranularity:
-    case TextGranularity::SentenceBoundary:
-    case TextGranularity::ParagraphBoundary:
-    case TextGranularity::DocumentBoundary:
+    case LineGranularity:
+    case ParagraphGranularity:
+    case SentenceBoundary:
+    case ParagraphBoundary:
+    case DocumentBoundary:
         currentPosition = startForPlatform();
         break;
     default:
@@ -1132,52 +1118,52 @@ VisiblePosition FrameSelection::modifyMovingBackward(TextGranularity granularity
     }
     VisiblePosition pos;
     switch (granularity) {
-    case TextGranularity::CharacterGranularity:
+    case CharacterGranularity:
         if (isRange())
             pos = VisiblePosition(m_selection.start(), m_selection.affinity());
         else
             pos = VisiblePosition(m_selection.extent(), m_selection.affinity()).previous(CannotCrossEditingBoundary, reachedBoundary);
         break;
-    case TextGranularity::WordGranularity:
+    case WordGranularity:
         pos = previousWordPosition(currentPosition);
         break;
-    case TextGranularity::SentenceGranularity:
+    case SentenceGranularity:
         pos = previousSentencePosition(currentPosition);
         break;
-    case TextGranularity::LineGranularity:
+    case LineGranularity:
         pos = previousLinePosition(currentPosition, lineDirectionPointForBlockDirectionNavigation(START));
         break;
-    case TextGranularity::ParagraphGranularity:
+    case ParagraphGranularity:
         pos = previousParagraphPosition(currentPosition, lineDirectionPointForBlockDirectionNavigation(START));
         break;
-    case TextGranularity::SentenceBoundary:
+    case SentenceBoundary:
         pos = startOfSentence(currentPosition);
         break;
-    case TextGranularity::LineBoundary:
+    case LineBoundary:
         pos = logicalStartOfLine(startForPlatform(), reachedBoundary);
         break;
-    case TextGranularity::ParagraphBoundary:
+    case ParagraphBoundary:
         pos = startOfParagraph(currentPosition);
         break;
-    case TextGranularity::DocumentBoundary:
+    case DocumentBoundary:
         pos = currentPosition;
         if (isEditablePosition(pos.deepEquivalent()))
             pos = startOfEditableContent(pos);
         else
             pos = startOfDocument(pos);
         break;
-    case TextGranularity::DocumentGranularity:
+    case DocumentGranularity:
         ASSERT_NOT_REACHED();
         break;
     }
     switch (granularity) {
-    case TextGranularity::WordGranularity:
-    case TextGranularity::SentenceGranularity:
-    case TextGranularity::LineGranularity:
-    case TextGranularity::ParagraphGranularity:
-    case TextGranularity::SentenceBoundary:
-    case TextGranularity::ParagraphBoundary:
-    case TextGranularity::DocumentBoundary:
+    case WordGranularity:
+    case SentenceGranularity:
+    case LineGranularity:
+    case ParagraphGranularity:
+    case SentenceBoundary:
+    case ParagraphBoundary:
+    case DocumentBoundary:
         if (reachedBoundary)
             *reachedBoundary = pos == currentPosition;
         break;
@@ -1189,7 +1175,7 @@ VisiblePosition FrameSelection::modifyMovingBackward(TextGranularity granularity
 
 static bool isBoundary(TextGranularity granularity)
 {
-    return granularity == TextGranularity::LineBoundary || granularity == TextGranularity::ParagraphBoundary || granularity == TextGranularity::DocumentBoundary;
+    return granularity == LineBoundary || granularity == ParagraphBoundary || granularity == DocumentBoundary;
 }
 
 AXTextStateChangeIntent FrameSelection::textSelectionIntent(EAlteration alter, SelectionDirection direction, TextGranularity granularity)
@@ -1202,55 +1188,55 @@ AXTextStateChangeIntent FrameSelection::textSelectionIntent(EAlteration alter, S
     } else
         intent.type = AXTextStateChangeTypeSelectionExtend;
     switch (granularity) {
-    case TextGranularity::CharacterGranularity:
+    case CharacterGranularity:
         intent.selection.granularity = AXTextSelectionGranularityCharacter;
         break;
-    case TextGranularity::WordGranularity:
+    case WordGranularity:
         intent.selection.granularity = AXTextSelectionGranularityWord;
         break;
-    case TextGranularity::SentenceGranularity:
-    case TextGranularity::SentenceBoundary:
+    case SentenceGranularity:
+    case SentenceBoundary:
         intent.selection.granularity = AXTextSelectionGranularitySentence;
         break;
-    case TextGranularity::LineGranularity:
-    case TextGranularity::LineBoundary:
+    case LineGranularity:
+    case LineBoundary:
         intent.selection.granularity = AXTextSelectionGranularityLine;
         break;
-    case TextGranularity::ParagraphGranularity:
-    case TextGranularity::ParagraphBoundary:
+    case ParagraphGranularity:
+    case ParagraphBoundary:
         intent.selection.granularity = AXTextSelectionGranularityParagraph;
         break;
-    case TextGranularity::DocumentGranularity:
-    case TextGranularity::DocumentBoundary:
+    case DocumentGranularity:
+    case DocumentBoundary:
         intent.selection.granularity = AXTextSelectionGranularityDocument;
         break;
     }
     bool boundary = false;
     switch (granularity) {
-    case TextGranularity::CharacterGranularity:
-    case TextGranularity::WordGranularity:
-    case TextGranularity::SentenceGranularity:
-    case TextGranularity::LineGranularity:
-    case TextGranularity::ParagraphGranularity:
-    case TextGranularity::DocumentGranularity:
+    case CharacterGranularity:
+    case WordGranularity:
+    case SentenceGranularity:
+    case LineGranularity:
+    case ParagraphGranularity:
+    case DocumentGranularity:
         break;
-    case TextGranularity::SentenceBoundary:
-    case TextGranularity::LineBoundary:
-    case TextGranularity::ParagraphBoundary:
-    case TextGranularity::DocumentBoundary:
+    case SentenceBoundary:
+    case LineBoundary:
+    case ParagraphBoundary:
+    case DocumentBoundary:
         boundary = true;
         break;
     }
     switch (direction) {
-    case SelectionDirection::Right:
-    case SelectionDirection::Forward:
+    case DirectionRight:
+    case DirectionForward:
         if (boundary)
             intent.selection.direction = flip ? AXTextSelectionDirectionBeginning : AXTextSelectionDirectionEnd;
         else
             intent.selection.direction = flip ? AXTextSelectionDirectionPrevious : AXTextSelectionDirectionNext;
         break;
-    case SelectionDirection::Left:
-    case SelectionDirection::Backward:
+    case DirectionLeft:
+    case DirectionBackward:
         if (boundary)
             intent.selection.direction = flip ? AXTextSelectionDirectionEnd : AXTextSelectionDirectionBeginning;
         else
@@ -1262,58 +1248,58 @@ AXTextStateChangeIntent FrameSelection::textSelectionIntent(EAlteration alter, S
 
 static AXTextSelection textSelectionWithDirectionAndGranularity(SelectionDirection direction, TextGranularity granularity)
 {
-    // FIXME: Account for BIDI in SelectionDirection::Right & SelectionDirection::Left. (In a RTL block, Right would map to Previous/Beginning and Left to Next/End.)
+    // FIXME: Account for BIDI in DirectionRight & DirectionLeft. (In a RTL block, Right would map to Previous/Beginning and Left to Next/End.)
     AXTextSelectionDirection intentDirection = AXTextSelectionDirectionUnknown;
     switch (direction) {
-    case SelectionDirection::Forward:
+    case DirectionForward:
         intentDirection = AXTextSelectionDirectionNext;
         break;
-    case SelectionDirection::Right:
+    case DirectionRight:
         intentDirection = AXTextSelectionDirectionNext;
         break;
-    case SelectionDirection::Backward:
+    case DirectionBackward:
         intentDirection = AXTextSelectionDirectionPrevious;
         break;
-    case SelectionDirection::Left:
+    case DirectionLeft:
         intentDirection = AXTextSelectionDirectionPrevious;
         break;
     }
     AXTextSelectionGranularity intentGranularity = AXTextSelectionGranularityUnknown;
     switch (granularity) {
-    case TextGranularity::CharacterGranularity:
+    case CharacterGranularity:
         intentGranularity = AXTextSelectionGranularityCharacter;
         break;
-    case TextGranularity::WordGranularity:
+    case WordGranularity:
         intentGranularity = AXTextSelectionGranularityWord;
         break;
-    case TextGranularity::SentenceGranularity:
-    case TextGranularity::SentenceBoundary: // FIXME: Boundary should affect direction.
+    case SentenceGranularity:
+    case SentenceBoundary: // FIXME: Boundary should affect direction.
         intentGranularity = AXTextSelectionGranularitySentence;
         break;
-    case TextGranularity::LineGranularity:
+    case LineGranularity:
         intentGranularity = AXTextSelectionGranularityLine;
         break;
-    case TextGranularity::ParagraphGranularity:
-    case TextGranularity::ParagraphBoundary: // FIXME: Boundary should affect direction.
+    case ParagraphGranularity:
+    case ParagraphBoundary: // FIXME: Boundary should affect direction.
         intentGranularity = AXTextSelectionGranularityParagraph;
         break;
-    case TextGranularity::DocumentGranularity:
-    case TextGranularity::DocumentBoundary: // FIXME: Boundary should affect direction.
+    case DocumentGranularity:
+    case DocumentBoundary: // FIXME: Boundary should affect direction.
         intentGranularity = AXTextSelectionGranularityDocument;
         break;
-    case TextGranularity::LineBoundary:
+    case LineBoundary:
         intentGranularity = AXTextSelectionGranularityLine;
         switch (direction) {
-        case SelectionDirection::Forward:
+        case DirectionForward:
             intentDirection = AXTextSelectionDirectionEnd;
             break;
-        case SelectionDirection::Right:
+        case DirectionRight:
             intentDirection = AXTextSelectionDirectionEnd;
             break;
-        case SelectionDirection::Backward:
+        case DirectionBackward:
             intentDirection = AXTextSelectionDirectionBeginning;
             break;
-        case SelectionDirection::Left:
+        case DirectionLeft:
             intentDirection = AXTextSelectionDirectionBeginning;
             break;
         }
@@ -1344,25 +1330,25 @@ bool FrameSelection::modify(EAlteration alter, SelectionDirection direction, Tex
     Position originalStartPosition = m_selection.start();
     VisiblePosition position;
     switch (direction) {
-    case SelectionDirection::Right:
+    case DirectionRight:
         if (alter == AlterationMove)
             position = modifyMovingRight(granularity, &reachedBoundary);
         else
             position = modifyExtendingRight(granularity);
         break;
-    case SelectionDirection::Forward:
+    case DirectionForward:
         if (alter == AlterationExtend)
             position = modifyExtendingForward(granularity);
         else
             position = modifyMovingForward(granularity, &reachedBoundary);
         break;
-    case SelectionDirection::Left:
+    case DirectionLeft:
         if (alter == AlterationMove)
             position = modifyMovingLeft(granularity, &reachedBoundary);
         else
             position = modifyExtendingLeft(granularity);
         break;
-    case SelectionDirection::Backward:
+    case DirectionBackward:
         if (alter == AlterationExtend)
             position = modifyExtendingBackward(granularity);
         else
@@ -1370,7 +1356,7 @@ bool FrameSelection::modify(EAlteration alter, SelectionDirection direction, Tex
         break;
     }
 
-    if (reachedBoundary && !isRange() && userTriggered == UserTriggered && m_document && AXObjectCache::accessibilityEnabled()) {
+    if (reachedBoundary && !isRange() && userTriggered == UserTriggered && m_frame && AXObjectCache::accessibilityEnabled()) {
         notifyAccessibilityForSelectionChange({ AXTextStateChangeTypeSelectionBoundary, textSelectionWithDirectionAndGranularity(direction, granularity) });
         return true;
     }
@@ -1378,13 +1364,12 @@ bool FrameSelection::modify(EAlteration alter, SelectionDirection direction, Tex
     if (position.isNull())
         return false;
 
-    if (m_document && isSpatialNavigationEnabled(m_document->frame())) {
+    if (isSpatialNavigationEnabled(m_frame))
         if (!wasRange && alter == AlterationMove && position == originalStartPosition)
             return false;
-    }
 
-    if (m_document && AXObjectCache::accessibilityEnabled()) {
-        if (AXObjectCache* cache = m_document->existingAXObjectCache())
+    if (m_frame && AXObjectCache::accessibilityEnabled()) {
+        if (AXObjectCache* cache = m_frame->document()->existingAXObjectCache())
             cache->setTextSelectionIntent(textSelectionIntent(alter, direction, granularity));
     }
 
@@ -1393,7 +1378,7 @@ bool FrameSelection::modify(EAlteration alter, SelectionDirection direction, Tex
     // Note: the START position type is arbitrary because it is unused, it would be
     // the requested position type if there were no xPosForVerticalArrowNavigation set.
     LayoutUnit x = lineDirectionPointForBlockDirectionNavigation(START);
-    m_selection.setIsDirectional(shouldAlwaysUseDirectionalSelection(m_document) || alter == AlterationExtend);
+    m_selection.setIsDirectional(shouldAlwaysUseDirectionalSelection(m_frame) || alter == AlterationExtend);
 
     switch (alter) {
     case AlterationMove:
@@ -1402,8 +1387,8 @@ bool FrameSelection::modify(EAlteration alter, SelectionDirection direction, Tex
     case AlterationExtend:
 
         if (!m_selection.isCaret()
-            && (granularity == TextGranularity::WordGranularity || granularity == TextGranularity::ParagraphGranularity || granularity == TextGranularity::LineGranularity)
-            && m_document && !m_document->editor().behavior().shouldExtendSelectionByWordOrLineAcrossCaret()) {
+            && (granularity == WordGranularity || granularity == ParagraphGranularity || granularity == LineGranularity)
+            && m_frame && !m_frame->editor().behavior().shouldExtendSelectionByWordOrLineAcrossCaret()) {
             // Don't let the selection go across the base position directly. Needed to match mac
             // behavior when, for instance, word-selecting backwards starting with the caret in
             // the middle of a word and then word-selecting forward, leaving the caret in the
@@ -1416,11 +1401,11 @@ bool FrameSelection::modify(EAlteration alter, SelectionDirection direction, Tex
 
         // Standard Mac behavior when extending to a boundary is grow the selection rather than leaving the
         // base in place and moving the extent. Matches NSTextView.
-        if (!m_document || !m_document->editor().behavior().shouldAlwaysGrowSelectionWhenExtendingToBoundary() || m_selection.isCaret() || !isBoundary(granularity))
+        if (!m_frame || !m_frame->editor().behavior().shouldAlwaysGrowSelectionWhenExtendingToBoundary() || m_selection.isCaret() || !isBoundary(granularity))
             setExtent(position, userTriggered);
         else {
             TextDirection textDirection = directionOfEnclosingBlock();
-            if (direction == SelectionDirection::Forward || (textDirection == TextDirection::LTR && direction == SelectionDirection::Right) || (textDirection == TextDirection::RTL && direction == SelectionDirection::Left))
+            if (direction == DirectionForward || (textDirection == TextDirection::LTR && direction == DirectionRight) || (textDirection == TextDirection::RTL && direction == DirectionLeft))
                 setEnd(position, userTriggered);
             else
                 setStart(position, userTriggered);
@@ -1428,11 +1413,11 @@ bool FrameSelection::modify(EAlteration alter, SelectionDirection direction, Tex
         break;
     }
 
-    if (granularity == TextGranularity::LineGranularity || granularity == TextGranularity::ParagraphGranularity)
+    if (granularity == LineGranularity || granularity == ParagraphGranularity)
         m_xPosForVerticalArrowNavigation = x;
 
     if (userTriggered == UserTriggered)
-        m_granularity = TextGranularity::CharacterGranularity;
+        m_granularity = CharacterGranularity;
 
     setCaretRectNeedsUpdate();
 
@@ -1464,7 +1449,7 @@ bool FrameSelection::modify(EAlteration alter, unsigned verticalDistance, Vertic
             return false;
     }
 
-    willBeModified(alter, direction == DirectionUp ? SelectionDirection::Backward : SelectionDirection::Forward);
+    willBeModified(alter, direction == DirectionUp ? DirectionBackward : DirectionForward);
 
     VisiblePosition pos;
     LayoutUnit xPos;
@@ -1524,9 +1509,9 @@ bool FrameSelection::modify(EAlteration alter, unsigned verticalDistance, Vertic
     }
 
     if (userTriggered == UserTriggered)
-        m_granularity = TextGranularity::CharacterGranularity;
+        m_granularity = CharacterGranularity;
 
-    m_selection.setIsDirectional(shouldAlwaysUseDirectionalSelection(m_document) || alter == AlterationExtend);
+    m_selection.setIsDirectional(shouldAlwaysUseDirectionalSelection(m_frame) || alter == AlterationExtend);
 
     return true;
 }
@@ -1572,22 +1557,22 @@ LayoutUnit FrameSelection::lineDirectionPointForBlockDirectionNavigation(EPositi
 
 void FrameSelection::clear()
 {
-    m_granularity = TextGranularity::CharacterGranularity;
+    m_granularity = CharacterGranularity;
     setSelection(VisibleSelection());
 }
 
-void FrameSelection::willBeRemovedFromFrame()
+void FrameSelection::prepareForDestruction()
 {
-    m_granularity = TextGranularity::CharacterGranularity;
+    m_granularity = CharacterGranularity;
 
 #if ENABLE(TEXT_CARET)
     m_caretBlinkTimer.stop();
 #endif
 
-    if (auto* view = m_document->renderView())
-        view->selection().clearSelection();
+    if (auto* view = m_frame->contentRenderer())
+        view->selection().clear();
 
-    setSelectionWithoutUpdatingAppearance(VisibleSelection(), defaultSetSelectionOptions(), AlignCursorOnScrollIfNeeded, TextGranularity::CharacterGranularity);
+    setSelectionWithoutUpdatingAppearance(VisibleSelection(), defaultSetSelectionOptions(), AlignCursorOnScrollIfNeeded, CharacterGranularity);
     m_previousCaretNode = nullptr;
     m_typingStyle = nullptr;
     m_appearanceUpdateTimer.stop();
@@ -1664,9 +1649,9 @@ static bool isNonOrphanedCaret(const VisibleSelection& selection)
 
 IntRect FrameSelection::absoluteCaretBounds(bool* insideFixed)
 {
-    if (!m_document)
+    if (!m_frame)
         return IntRect();
-    updateSelectionByUpdatingLayoutOrStyle(*m_document);
+    updateSelectionByUpdatingLayoutOrStyle(*m_frame);
     recomputeCaretRect();
     if (insideFixed)
         *insideFixed = m_caretInsidePositionFixed;
@@ -1684,10 +1669,10 @@ bool FrameSelection::recomputeCaretRect()
     if (!shouldUpdateCaretRect())
         return false;
 
-    if (!m_document)
+    if (!m_frame)
         return false;
 
-    FrameView* v = m_document->view();
+    FrameView* v = m_frame->document()->view();
     if (!v)
         return false;
 
@@ -1699,7 +1684,7 @@ bool FrameSelection::recomputeCaretRect()
             clearCaretRect();
         else {
             VisiblePosition visibleStart = m_selection.visibleStart();
-            if (updateCaretRect(m_document, visibleStart)) {
+            if (updateCaretRect(m_frame->document(), visibleStart)) {
                 caretNode = visibleStart.deepEquivalent().deprecatedNode();
                 m_absCaretBoundsDirty = true;
             }
@@ -1724,7 +1709,7 @@ bool FrameSelection::recomputeCaretRect()
         return false;
 
 #if ENABLE(TEXT_CARET)
-    if (RenderView* view = m_document->renderView()) {
+    if (RenderView* view = m_frame->document()->renderView()) {
         bool previousOrNewCaretNodeIsContentEditable = m_selection.isContentEditable() || (m_previousCaretNode && m_previousCaretNode->isContentEditable());
         if (shouldRepaintCaret(view, previousOrNewCaretNodeIsContentEditable)) {
             if (m_previousCaretNode)
@@ -1779,52 +1764,44 @@ void CaretBase::invalidateCaretRect(Node* node, bool caretRectChanged)
 
 void FrameSelection::paintCaret(GraphicsContext& context, const LayoutPoint& paintOffset, const LayoutRect& clipRect)
 {
-    if (m_selection.isCaret() && m_caretPaint && m_selection.start().deprecatedNode())
-        CaretBase::paintCaret(*m_selection.start().deprecatedNode(), context, paintOffset, clipRect);
+    if (m_selection.isCaret() && m_caretPaint)
+        CaretBase::paintCaret(m_selection.start().deprecatedNode(), context, paintOffset, clipRect);
 }
 
-Color CaretBase::computeCaretColor(const RenderStyle& elementStyle, const Node* node)
-{
-    // On iOS, we want to fall back to the tintColor, and only override if CSS has explicitly specified a custom color.
-#if PLATFORM(IOS_FAMILY) && !PLATFORM(MACCATALYST)
-    UNUSED_PARAM(node);
-    return elementStyle.caretColor();
-#else
-    auto* rootEditableElement = node ? node->rootEditableElement() : nullptr;
-    auto* rootEditableStyle = rootEditableElement && rootEditableElement->renderer() ? &rootEditableElement->renderer()->style() : nullptr;
-    // CSS value "auto" is treated as an invalid color.
-    if (!elementStyle.caretColor().isValid() && rootEditableStyle) {
-        auto rootEditableBackgroundColor = rootEditableStyle->visitedDependentColorWithColorFilter(CSSPropertyBackgroundColor);
-        auto elementBackgroundColor = elementStyle.visitedDependentColorWithColorFilter(CSSPropertyBackgroundColor);
-        auto disappearsIntoBackground = blendSourceOver(rootEditableBackgroundColor, elementBackgroundColor) == rootEditableBackgroundColor;
-        if (disappearsIntoBackground)
-            return rootEditableStyle->visitedDependentColorWithColorFilter(CSSPropertyCaretColor);
-    }
-    return elementStyle.visitedDependentColorWithColorFilter(CSSPropertyCaretColor);
-#endif
-}
-
-void CaretBase::paintCaret(const Node& node, GraphicsContext& context, const LayoutPoint& paintOffset, const LayoutRect& clipRect) const
+void CaretBase::paintCaret(Node* node, GraphicsContext& context, const LayoutPoint& paintOffset, const LayoutRect& clipRect) const
 {
 #if ENABLE(TEXT_CARET)
     if (m_caretVisibility == Hidden)
         return;
 
-    auto drawingRect = localCaretRectWithoutUpdate();
-    if (auto* renderer = rendererForCaretPainting(&node))
+    LayoutRect drawingRect = localCaretRectWithoutUpdate();
+    if (auto* renderer = rendererForCaretPainting(node))
         renderer->flipForWritingMode(drawingRect);
-    drawingRect.moveBy(paintOffset);
-    auto caret = intersection(drawingRect, clipRect);
+    drawingRect.moveBy(roundedIntPoint(paintOffset));
+    LayoutRect caret = intersection(drawingRect, clipRect);
     if (caret.isEmpty())
         return;
 
     Color caretColor = Color::black;
-    auto* element = is<Element>(node) ? downcast<Element>(&node) : node.parentElement();
-    if (element && element->renderer())
-        caretColor = CaretBase::computeCaretColor(element->renderer()->style(), &node);
+    Element* element = is<Element>(*node) ? downcast<Element>(node) : node->parentElement();
+    if (element && element->renderer()) {
+        auto computeCaretColor = [] (const RenderStyle& elementStyle, const RenderStyle* rootEditableStyle) {
+            // CSS value "auto" is treated as an invalid color.
+            if (!elementStyle.caretColor().isValid() && rootEditableStyle) {
+                auto rootEditableBackgroundColor = rootEditableStyle->visitedDependentColorWithColorFilter(CSSPropertyBackgroundColor);
+                auto elementBackgroundColor = elementStyle.visitedDependentColorWithColorFilter(CSSPropertyBackgroundColor);
+                auto disappearsIntoBackground = rootEditableBackgroundColor.blend(elementBackgroundColor) == rootEditableBackgroundColor;
+                if (disappearsIntoBackground)
+                    return rootEditableStyle->visitedDependentColorWithColorFilter(CSSPropertyCaretColor);
+            }
+            return elementStyle.visitedDependentColorWithColorFilter(CSSPropertyCaretColor);
+        };
+        auto* rootEditableElement = node->rootEditableElement();
+        auto* rootEditableStyle = rootEditableElement && rootEditableElement->renderer() ? &rootEditableElement->renderer()->style() : nullptr;
+        caretColor = computeCaretColor(element->renderer()->style(), rootEditableStyle);
+    }
 
-    auto pixelSnappedCaretRect = snapRectToDevicePixels(caret, node.document().deviceScaleFactor());
-    context.fillRect(pixelSnappedCaretRect, caretColor);
+    context.fillRect(caret, caretColor);
 #else
     UNUSED_PARAM(node);
     UNUSED_PARAM(context);
@@ -1904,11 +1881,12 @@ bool FrameSelection::contains(const LayoutPoint& point) const
     if (!isRange())
         return false;
 
-    if (!m_document)
+    auto* document = m_frame->document();
+    if (!document)
         return false;
 
     HitTestResult result(point);
-    m_document->hitTest(HitTestRequest(), result);
+    document->hitTest(HitTestRequest(), result);
     Node* innerNode = result.innerNode();
     if (!innerNode || !innerNode->renderer())
         return false;
@@ -1935,10 +1913,10 @@ bool FrameSelection::contains(const LayoutPoint& point) const
 void FrameSelection::selectFrameElementInParentIfFullySelected()
 {
     // Find the parent frame; if there is none, then we have nothing to do.
-    Frame* parent = m_document->frame()->tree().parent();
+    Frame* parent = m_frame->tree().parent();
     if (!parent)
         return;
-    Page* page = m_document->page();
+    Page* page = m_frame->page();
     if (!page)
         return;
 
@@ -1951,7 +1929,7 @@ void FrameSelection::selectFrameElementInParentIfFullySelected()
         return;
 
     // Get to the <iframe> or <frame> (or even <object>) element in the parent frame.
-    Element* ownerElement = m_document->ownerElement();
+    Element* ownerElement = m_frame->ownerElement();
     if (!ownerElement)
         return;
     ContainerNode* ownerElementParent = ownerElement->parentNode();
@@ -1977,7 +1955,9 @@ void FrameSelection::selectFrameElementInParentIfFullySelected()
 
 void FrameSelection::selectAll()
 {
-    Element* focusedElement = m_document->focusedElement();
+    Document* document = m_frame->document();
+
+    Element* focusedElement = document->focusedElement();
     if (is<HTMLSelectElement>(focusedElement)) {
         HTMLSelectElement& selectElement = downcast<HTMLSelectElement>(*focusedElement);
         if (selectElement.canSelectAll()) {
@@ -2007,8 +1987,8 @@ void FrameSelection::selectAll()
         if (root)
             selectStartTarget = root->shadowHost();
         else {
-            root = m_document->documentElement();
-            selectStartTarget = m_document->bodyOrFrameset();
+            root = document->documentElement();
+            selectStartTarget = document->bodyOrFrameset();
         }
     }
     if (!root)
@@ -2029,13 +2009,11 @@ void FrameSelection::selectAll()
     }
 }
 
-bool FrameSelection::setSelectedRange(const Optional<SimpleRange>& range, EAffinity affinity, ShouldCloseTyping closeTyping, EUserTriggered userTriggered)
+bool FrameSelection::setSelectedRange(Range* range, EAffinity affinity, ShouldCloseTyping closeTyping, EUserTriggered userTriggered)
 {
     if (!range)
         return false;
-
-    if (&range->start.container->document() != &range->end.container->document())
-        return false;
+    ASSERT(&range->startContainer().document() == &range->endContainer().document());
 
     VisibleSelection newSelection(*range, affinity);
 
@@ -2067,8 +2045,9 @@ bool FrameSelection::setSelectedRange(const Optional<SimpleRange>& range, EAffin
 void FrameSelection::focusedOrActiveStateChanged()
 {
     bool activeAndFocused = isFocusedAndActive();
+    Ref<Document> document(*m_frame->document());
 
-    m_document->updateStyleIfNeeded();
+    document->updateStyleIfNeeded();
 
 #if USE(UIKIT_EDITING)
     // Caret blinking (blinks | does not blink)
@@ -2079,7 +2058,7 @@ void FrameSelection::focusedOrActiveStateChanged()
     // Because RenderObject::selectionBackgroundColor() and
     // RenderObject::selectionForegroundColor() check if the frame is active,
     // we have to update places those colors were painted.
-    if (RenderView* view = m_document->renderView())
+    if (RenderView* view = document->renderView())
         view->selection().repaint();
 
     // Caret appears in the active frame.
@@ -2090,7 +2069,7 @@ void FrameSelection::focusedOrActiveStateChanged()
     // Because Style::Resolver::checkOneSelector() and
     // RenderTheme::isFocused() check if the frame is active, we have to
     // update style and theme state that depended on those.
-    if (Element* element = m_document->focusedElement()) {
+    if (Element* element = document->focusedElement()) {
         element->invalidateStyleForSubtree();
         if (RenderObject* renderer = element->renderer())
             if (renderer && renderer->style().hasAppearance())
@@ -2115,13 +2094,13 @@ void FrameSelection::setFocused(bool flag)
 
 bool FrameSelection::isFocusedAndActive() const
 {
-    return m_focused && m_document->page() && m_document->page()->focusController().isActive();
+    return m_focused && m_frame->page() && m_frame->page()->focusController().isActive();
 }
 
 #if ENABLE(TEXT_CARET)
-inline static bool shouldStopBlinkingDueToTypingCommand(Document* document)
+inline static bool shouldStopBlinkingDueToTypingCommand(Frame* frame)
 {
-    return document->editor().lastEditCommand() && document->editor().lastEditCommand()->shouldStopCaretBlinking();
+    return frame->editor().lastEditCommand() && frame->editor().lastEditCommand()->shouldStopCaretBlinking();
 }
 #endif
 
@@ -2140,12 +2119,12 @@ void FrameSelection::updateAppearance()
     bool paintBlockCursor = m_shouldShowBlockCursor && m_selection.isCaret() && !isLogicalEndOfLine(m_selection.visibleEnd());
     bool caretRectChangedOrCleared = recomputeCaretRect();
 
-    bool caretBrowsing = m_document->settings().caretBrowsingEnabled();
+    bool caretBrowsing = m_frame->settings().caretBrowsingEnabled();
     bool shouldBlink = !paintBlockCursor && caretIsVisible() && isCaret() && (oldSelection.isContentEditable() || caretBrowsing);
 
     // If the caret moved, stop the blink timer so we can restart with a
     // black caret in the new location.
-    if (caretRectChangedOrCleared || !shouldBlink || shouldStopBlinkingDueToTypingCommand(m_document))
+    if (caretRectChangedOrCleared || !shouldBlink || shouldStopBlinkingDueToTypingCommand(m_frame))
         m_caretBlinkTimer.stop();
 
     // Start blinking with a black caret. Be sure not to restart if we're
@@ -2161,21 +2140,21 @@ void FrameSelection::updateAppearance()
     }
 #endif
 
-    RenderView* view = m_document->renderView();
+    RenderView* view = m_frame->contentRenderer();
     if (!view)
         return;
 
     // Construct a new VisibleSolution, since m_selection is not necessarily valid, and the following steps
     // assume a valid selection. See <https://bugs.webkit.org/show_bug.cgi?id=69563> and <rdar://problem/10232866>.
 #if ENABLE(TEXT_CARET)
-    VisiblePosition endVisiblePosition = paintBlockCursor ? modifyExtendingForward(TextGranularity::CharacterGranularity) : oldSelection.visibleEnd();
+    VisiblePosition endVisiblePosition = paintBlockCursor ? modifyExtendingForward(CharacterGranularity) : oldSelection.visibleEnd();
     VisibleSelection selection(oldSelection.visibleStart(), endVisiblePosition);
 #else
     VisibleSelection selection(oldSelection.visibleStart(), oldSelection.visibleEnd());
 #endif
 
     if (!selection.isRange()) {
-        view->selection().clearSelection();
+        view->selection().clear();
         return;
     }
 
@@ -2200,7 +2179,7 @@ void FrameSelection::updateAppearance()
         RenderObject* endRenderer = endPos.deprecatedNode()->renderer();
         int endOffset = endPos.deprecatedEditingOffset();
         ASSERT(startOffset >= 0 && endOffset >= 0);
-        view->selection().setSelection({ startRenderer, endRenderer, static_cast<unsigned>(startOffset), static_cast<unsigned>(endOffset) });
+        view->selection().set({ startRenderer, endRenderer, static_cast<unsigned>(startOffset), static_cast<unsigned>(endOffset) });
     }
 }
 
@@ -2210,8 +2189,8 @@ void FrameSelection::setCaretVisibility(CaretVisibility visibility)
         return;
 
     // FIXME: We shouldn't trigger a synchronous layout here.
-    if (m_document)
-        updateSelectionByUpdatingLayoutOrStyle(*m_document);
+    if (m_frame)
+        updateSelectionByUpdatingLayoutOrStyle(*m_frame);
 
 #if ENABLE(TEXT_CARET)
     if (m_caretPaint) {
@@ -2227,9 +2206,8 @@ void FrameSelection::setCaretVisibility(CaretVisibility visibility)
 void FrameSelection::caretBlinkTimerFired()
 {
 #if ENABLE(TEXT_CARET)
-    if (!isCaret())
-        return;
     ASSERT(caretIsVisible());
+    ASSERT(isCaret());
     bool caretPaint = m_caretPaint;
     if (isCaretBlinkingSuspended() && caretPaint)
         return;
@@ -2256,10 +2234,10 @@ void FrameSelection::setFocusedElementIfNeeded()
     if (isNone() || !isFocused())
         return;
 
-    bool caretBrowsing = m_document->settings().caretBrowsingEnabled();
+    bool caretBrowsing = m_frame->settings().caretBrowsingEnabled();
     if (caretBrowsing) {
         if (Element* anchor = enclosingAnchorElement(m_selection.base())) {
-            m_document->page()->focusController().setFocusedElement(anchor, *m_document->frame());
+            m_frame->page()->focusController().setFocusedElement(anchor, *m_frame);
             return;
         }
     }
@@ -2271,23 +2249,23 @@ void FrameSelection::setFocusedElementIfNeeded()
             // so add the !isFrameElement check here. There's probably a better way to make this
             // work in the long term, but this is the safest fix at this time.
             if (target->isMouseFocusable() && !isFrameElement(target)) {
-                m_document->page()->focusController().setFocusedElement(target, *m_document->frame());
+                m_frame->page()->focusController().setFocusedElement(target, *m_frame);
                 return;
             }
             target = target->parentOrShadowHostElement();
         }
-        m_document->setFocusedElement(nullptr);
+        m_frame->document()->setFocusedElement(nullptr);
     }
 
     if (caretBrowsing)
-        m_document->page()->focusController().setFocusedElement(nullptr, *m_document->frame());
+        m_frame->page()->focusController().setFocusedElement(nullptr, *m_frame);
 }
 
 void DragCaretController::paintDragCaret(Frame* frame, GraphicsContext& p, const LayoutPoint& paintOffset, const LayoutRect& clipRect) const
 {
 #if ENABLE(TEXT_CARET)
-    if (m_position.deepEquivalent().deprecatedNode() && m_position.deepEquivalent().deprecatedNode()->document().frame() == frame)
-        paintCaret(*m_position.deepEquivalent().deprecatedNode(), p, paintOffset, clipRect);
+    if (m_position.deepEquivalent().deprecatedNode()->document().frame() == frame)
+        paintCaret(m_position.deepEquivalent().deprecatedNode(), p, paintOffset, clipRect);
 #else
     UNUSED_PARAM(frame);
     UNUSED_PARAM(p);
@@ -2306,19 +2284,19 @@ RefPtr<MutableStyleProperties> FrameSelection::copyTypingStyle() const
 bool FrameSelection::shouldDeleteSelection(const VisibleSelection& selection) const
 {
 #if PLATFORM(IOS_FAMILY)
-    if (m_document->frame() && m_document->frame()->selectionChangeCallbacksDisabled())
+    if (m_frame->selectionChangeCallbacksDisabled())
         return true;
 #endif
-    return m_document->editor().client()->shouldDeleteRange(selection.toNormalizedRange());
+    return m_frame->editor().client()->shouldDeleteRange(selection.toNormalizedRange().get());
 }
 
 FloatRect FrameSelection::selectionBounds(ClipToVisibleContent clipToVisibleContent) const
 {
-    if (!m_document)
+    if (!m_frame->document())
         return LayoutRect();
 
-    updateSelectionByUpdatingLayoutOrStyle(*m_document);
-    auto* renderView = m_document->renderView();
+    updateSelectionByUpdatingLayoutOrStyle(*m_frame);
+    auto* renderView = m_frame->contentRenderer();
     if (!renderView)
         return LayoutRect();
 
@@ -2334,19 +2312,33 @@ FloatRect FrameSelection::selectionBounds(ClipToVisibleContent clipToVisibleCont
 
 void FrameSelection::getClippedVisibleTextRectangles(Vector<FloatRect>& rectangles, TextRectangleHeight textRectHeight) const
 {
-    if (!m_document->renderView())
+    RenderView* root = m_frame->contentRenderer();
+    if (!root)
         return;
 
-    auto range = selection().toNormalizedRange();
-    if (!range)
-        return;
+    Vector<FloatRect> textRects;
+    getTextRectangles(textRects, textRectHeight);
 
-    auto visibleContentRect = m_document->view()->visibleContentRect(ScrollableArea::LegacyIOSDocumentVisibleRect);
-    for (auto& rect : boundingBoxes(RenderObject::absoluteTextQuads(*range, textRectHeight == TextRectangleHeight::SelectionHeight))) {
-        auto intersectionRect = intersection(rect, visibleContentRect);
+    FloatRect visibleContentRect = m_frame->view()->visibleContentRect(ScrollableArea::LegacyIOSDocumentVisibleRect);
+
+    for (const auto& rect : textRects) {
+        FloatRect intersectionRect = intersection(rect, visibleContentRect);
         if (!intersectionRect.isEmpty())
             rectangles.append(intersectionRect);
     }
+}
+
+void FrameSelection::getTextRectangles(Vector<FloatRect>& rectangles, TextRectangleHeight textRectHeight) const
+{
+    RefPtr<Range> range = toNormalizedRange();
+    if (!range)
+        return;
+
+    Vector<FloatQuad> quads;
+    range->absoluteTextQuads(quads, textRectHeight == TextRectangleHeight::SelectionHeight);
+
+    for (const auto& quad : quads)
+        rectangles.append(quad.boundingBox());
 }
 
 // Scans logically forward from "start", including any child frames.
@@ -2354,16 +2346,20 @@ static HTMLFormElement* scanForForm(Element* start)
 {
     if (!start)
         return nullptr;
-    for (auto& element : descendantsOfType<HTMLElement>(start->document())) {
+
+    auto descendants = descendantsOfType<HTMLElement>(start->document());
+    for (auto it = descendants.from(*start), end = descendants.end(); it != end; ++it) {
+        HTMLElement& element = *it;
         if (is<HTMLFormElement>(element))
             return &downcast<HTMLFormElement>(element);
         if (is<HTMLFormControlElement>(element))
             return downcast<HTMLFormControlElement>(element).form();
         if (is<HTMLFrameElementBase>(element)) {
-            if (auto* contentDocument = downcast<HTMLFrameElementBase>(element).contentDocument()) {
-                if (auto* frameResult = scanForForm(contentDocument->documentElement()))
-                    return frameResult;
-            }
+            Document* contentDocument = downcast<HTMLFrameElementBase>(element).contentDocument();
+            if (!contentDocument)
+                continue;
+            if (HTMLFormElement* frameResult = scanForForm(contentDocument->documentElement()))
+                return frameResult;
         }
     }
     return nullptr;
@@ -2373,7 +2369,7 @@ static HTMLFormElement* scanForForm(Element* start)
 HTMLFormElement* FrameSelection::currentForm() const
 {
     // Start looking either at the active (first responder) node, or where the selection is.
-    Element* start = m_document->focusedElement();
+    Element* start = m_frame->document()->focusedElement();
     if (!start)
         start = m_selection.start().element();
     if (!start)
@@ -2416,8 +2412,8 @@ void FrameSelection::revealSelection(SelectionRevealMode revealMode, const Scrol
                 layer->scrollRectToVisible(rect, insideFixed, { revealMode, alignment, alignment, ShouldAllowCrossOriginScrolling::Yes });
                 layer->setAdjustForIOSCaretWhenScrolling(false);
                 updateAppearance();
-                if (m_document->page())
-                    m_document->page()->chrome().client().notifyRevealedSelectionByScrollingFrame(*m_document->frame());
+                if (m_frame->page())
+                    m_frame->page()->chrome().client().notifyRevealedSelectionByScrollingFrame(*m_frame);
             }
         }
 #else
@@ -2434,22 +2430,28 @@ void FrameSelection::setSelectionFromNone()
 {
     // Put a caret inside the body if the entire frame is editable (either the
     // entire WebView is editable or designMode is on for this document).
-    bool caretBrowsing = m_document->settings().caretBrowsingEnabled();
 
-    if (!m_document || !isNone() || !(m_document->hasEditableStyle() || caretBrowsing))
+    Document* document = m_frame->document();
+#if !PLATFORM(IOS_FAMILY)
+    bool caretBrowsing = m_frame->settings().caretBrowsingEnabled();
+    if (!isNone() || !(document->hasEditableStyle() || caretBrowsing))
         return;
+#else
+    if (!document || !(isNone() || isStartOfDocument(VisiblePosition(m_selection.start(), m_selection.affinity()))) || !document->hasEditableStyle())
+        return;
+#endif
 
-    if (auto* body = m_document->body())
+    if (auto* body = document->body())
         setSelection(VisibleSelection(firstPositionInOrBeforeNode(body), DOWNSTREAM));
 }
 
 bool FrameSelection::shouldChangeSelection(const VisibleSelection& newSelection) const
 {
 #if PLATFORM(IOS_FAMILY)
-    if (m_document->frame() && m_document->frame()->selectionChangeCallbacksDisabled())
+    if (m_frame->selectionChangeCallbacksDisabled())
         return true;
 #endif
-    return m_document->editor().shouldChangeSelection(selection(), newSelection, newSelection.affinity(), false);
+    return m_frame->editor().shouldChangeSelection(selection(), newSelection, newSelection.affinity(), false);
 }
 
 bool FrameSelection::dispatchSelectStart()
@@ -2467,7 +2469,7 @@ void FrameSelection::setShouldShowBlockCursor(bool shouldShowBlockCursor)
 {
     m_shouldShowBlockCursor = shouldShowBlockCursor;
 
-    m_document->updateLayoutIgnorePendingStylesheets();
+    m_frame->document()->updateLayoutIgnorePendingStylesheets();
 
     updateAppearance();
 }
@@ -2485,13 +2487,13 @@ void FrameSelection::scheduleAppearanceUpdateAfterStyleChange()
 
 void FrameSelection::appearanceUpdateTimerFired()
 {
-    Ref<Document> protector(*m_document);
+    Ref<Frame> protectedFrame(*m_frame);
     updateAppearanceAfterLayoutOrStyleChange();
 }
 
 void FrameSelection::updateAppearanceAfterLayoutOrStyleChange()
 {
-    if (auto* client = m_document->editor().client())
+    if (auto* client = m_frame->editor().client())
         client->updateEditorStateAfterLayoutIfEditabilityChanged();
 
     setCaretRectNeedsUpdate();
@@ -2514,29 +2516,44 @@ void FrameSelection::showTreeForThis() const
 #endif
 
 #if PLATFORM(IOS_FAMILY)
-
 void FrameSelection::expandSelectionToElementContainingCaretSelection()
 {
-    auto range = elementRangeContainingCaretSelection();
+    RefPtr<Range> range = elementRangeContainingCaretSelection();
     if (!range)
         return;
-    setSelection(VisibleSelection(*range, DOWNSTREAM));
+    VisibleSelection selection(*range, DOWNSTREAM);
+    setSelection(selection);
 }
 
-Optional<SimpleRange> FrameSelection::elementRangeContainingCaretSelection() const
+RefPtr<Range> FrameSelection::elementRangeContainingCaretSelection() const
 {
-    auto element = deprecatedEnclosingBlockFlowElement(VisiblePosition(m_selection.start(), VP_DEFAULT_AFFINITY).deepEquivalent().deprecatedNode());
+    if (m_selection.isNone())
+        return nullptr;
+
+    VisibleSelection selection = m_selection;
+    if (selection.isNone())
+        return nullptr;
+
+    VisiblePosition visiblePos(selection.start(), VP_DEFAULT_AFFINITY);
+    if (visiblePos.isNull())
+        return nullptr;
+
+    Node* node = visiblePos.deepEquivalent().deprecatedNode();
+    Element* element = deprecatedEnclosingBlockFlowElement(node);
     if (!element)
-        return WTF::nullopt;
+        return nullptr;
 
-    auto start = VisiblePosition(createLegacyEditingPosition(element, 0), VP_DEFAULT_AFFINITY);
-    auto end = VisiblePosition(createLegacyEditingPosition(element, element->countChildNodes()), VP_DEFAULT_AFFINITY);
-    if (start.isNull() || end.isNull())
-        return WTF::nullopt;
+    Position startPos = createLegacyEditingPosition(element, 0);
+    Position endPos = createLegacyEditingPosition(element, element->countChildNodes());
 
-    auto selection = m_selection;
-    selection.setBase(start);
-    selection.setExtent(end);
+    VisiblePosition startVisiblePos(startPos, VP_DEFAULT_AFFINITY);
+    VisiblePosition endVisiblePos(endPos, VP_DEFAULT_AFFINITY);
+    if (startVisiblePos.isNull() || endVisiblePos.isNull())
+        return nullptr;
+
+    selection.setBase(startVisiblePos);
+    selection.setExtent(endVisiblePos);
+
     return selection.toNormalizedRange();
 }
 
@@ -2547,7 +2564,7 @@ void FrameSelection::expandSelectionToWordContainingCaretSelection()
         setSelection(selection);
 }
 
-Optional<SimpleRange> FrameSelection::wordRangeContainingCaretSelection()
+RefPtr<Range> FrameSelection::wordRangeContainingCaretSelection()
 {
     return wordSelectionContainingCaretSelection(m_selection).toNormalizedRange();
 }
@@ -2615,6 +2632,34 @@ UChar FrameSelection::characterAfterCaretSelection() const
     return visiblePosition.characterAfter();
 }
 
+int FrameSelection::wordOffsetInRange(const Range *range) const
+{
+    if (!range)
+        return -1;
+
+    VisibleSelection selection = m_selection;
+    if (!selection.isCaret())
+        return -1;
+
+    // FIXME: This will only work in cases where the selection remains in
+    // the same node after it is expanded. Improve to handle more complicated
+    // cases.
+    int result = selection.start().deprecatedEditingOffset() - range->startOffset();
+    if (result < 0)
+        result = 0;
+    return result;
+}
+
+bool FrameSelection::spaceFollowsWordInRange(const Range *range) const
+{
+    if (!range)
+        return false;
+    Node& node = range->endContainer();
+    int endOffset = range->endOffset();
+    VisiblePosition pos(createLegacyEditingPosition(&node, endOffset), VP_DEFAULT_AFFINITY);
+    return isSpaceOrNewline(pos.characterAfter());
+}
+
 bool FrameSelection::selectionAtDocumentStart() const
 {
     VisibleSelection selection = m_selection;
@@ -2627,6 +2672,15 @@ bool FrameSelection::selectionAtDocumentStart() const
         return false;
 
     return isStartOfDocument(pos);
+}
+
+bool FrameSelection::selectionAtSentenceStart() const
+{
+    VisibleSelection selection = m_selection;
+    if (selection.isNone())
+        return false;
+
+    return actualSelectionAtSentenceStart(selection);
 }
 
 bool FrameSelection::selectionAtWordStart() const
@@ -2662,20 +2716,22 @@ bool FrameSelection::selectionAtWordStart() const
     return result;
 }
 
-Optional<SimpleRange> FrameSelection::rangeByMovingCurrentSelection(int amount) const
+RefPtr<Range> FrameSelection::rangeByMovingCurrentSelection(int amount) const
 {
     return rangeByAlteringCurrentSelection(AlterationMove, amount);
 }
 
-Optional<SimpleRange> FrameSelection::rangeByExtendingCurrentSelection(int amount) const
+RefPtr<Range> FrameSelection::rangeByExtendingCurrentSelection(int amount) const
 {
     return rangeByAlteringCurrentSelection(AlterationExtend, amount);
 }
 
 void FrameSelection::selectRangeOnElement(unsigned location, unsigned length, Node& node)
 {
-    auto selection = VisibleSelection { SimpleRange { { node, location }, { node, location + length } } };
-
+    RefPtr<Range> resultRange = m_frame->document()->createRange();
+    resultRange->setStart(node, location);
+    resultRange->setEnd(node, location + length);
+    VisibleSelection selection = VisibleSelection(*resultRange, SEL_DEFAULT_AFFINITY);
     // FIXME: The second argument was "true" which implicitly converted to option "FireSelectEvent". Is this correct?
     setSelection(selection, { FireSelectEvent });
 }
@@ -2708,10 +2764,10 @@ VisibleSelection FrameSelection::wordSelectionContainingCaretSelection(const Vis
     // This has the effect of selecting the word on the line (which is
     // what we want, rather than selecting past the end of the line).
     if (isEndOfParagraph(endVisiblePosBeforeExpansion) && !isStartOfParagraph(endVisiblePosBeforeExpansion))
-        frameSelection.modify(FrameSelection::AlterationMove, SelectionDirection::Backward, TextGranularity::CharacterGranularity);
+        frameSelection.modify(FrameSelection::AlterationMove, DirectionBackward, CharacterGranularity);
 
     VisibleSelection newSelection = frameSelection.selection();
-    newSelection.expandUsingGranularity(TextGranularity::WordGranularity);
+    newSelection.expandUsingGranularity(WordGranularity);
     frameSelection.setSelection(newSelection, defaultSetSelectionOptions(), AXTextStateChangeIntent(), AlignCursorOnScrollIfNeeded, frameSelection.granularity());
 
     Position startPos(frameSelection.selection().start());
@@ -2761,7 +2817,7 @@ VisibleSelection FrameSelection::wordSelectionContainingCaretSelection(const Vis
             return VisibleSelection();
         }
         frameSelection.moveTo(startVisiblePos);
-        frameSelection.modify(FrameSelection::AlterationExtend, SelectionDirection::Backward, TextGranularity::WordGranularity);
+        frameSelection.modify(FrameSelection::AlterationExtend, DirectionBackward, WordGranularity);
         startPos = frameSelection.selection().start();
         endPos = frameSelection.selection().end();
         startVisiblePos = VisiblePosition(startPos, VP_DEFAULT_AFFINITY);
@@ -2792,12 +2848,9 @@ VisibleSelection FrameSelection::wordSelectionContainingCaretSelection(const Vis
     return VisibleSelection(startVisiblePos, endVisiblePos);
 }
 
-bool FrameSelection::selectionAtSentenceStart() const
+bool FrameSelection::actualSelectionAtSentenceStart(const VisibleSelection& sel) const
 {
-    if (m_selection.isNone())
-        return false;
-
-    Position startPos(m_selection.start());
+    Position startPos(sel.start());
     VisiblePosition pos(createLegacyEditingPosition(startPos.deprecatedNode(), startPos.deprecatedEditingOffset()), VP_DEFAULT_AFFINITY);
     if (pos.isNull())
         return false;
@@ -2830,20 +2883,20 @@ bool FrameSelection::selectionAtSentenceStart() const
     return result;
 }
 
-Optional<SimpleRange> FrameSelection::rangeByAlteringCurrentSelection(EAlteration alteration, int amount) const
+RefPtr<Range> FrameSelection::rangeByAlteringCurrentSelection(EAlteration alteration, int amount) const
 {
     if (m_selection.isNone())
-        return WTF::nullopt;
+        return nullptr;
 
     if (!amount)
-        return m_selection.toNormalizedRange();
+        return toNormalizedRange();
 
     FrameSelection frameSelection;
     frameSelection.setSelection(m_selection);
-    SelectionDirection direction = amount > 0 ? SelectionDirection::Forward : SelectionDirection::Backward;
+    SelectionDirection direction = amount > 0 ? DirectionForward : DirectionBackward;
     for (int i = 0; i < abs(amount); i++)
-        frameSelection.modify(alteration, direction, TextGranularity::CharacterGranularity);
-    return frameSelection.selection().toNormalizedRange();
+        frameSelection.modify(alteration, direction, CharacterGranularity);
+    return frameSelection.toNormalizedRange();
 }
 
 void FrameSelection::clearCurrentSelection()
@@ -2856,7 +2909,7 @@ void FrameSelection::setCaretBlinks(bool caretBlinks)
     if (m_caretBlinks == caretBlinks)
         return;
 #if ENABLE(TEXT_CARET)
-    m_document->updateLayoutIgnorePendingStylesheets();
+    m_frame->document()->updateLayoutIgnorePendingStylesheets();
     if (m_caretPaint) {
         m_caretPaint = false;
         invalidateCaretRect();

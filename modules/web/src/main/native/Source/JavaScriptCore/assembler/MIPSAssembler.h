@@ -165,7 +165,7 @@ public:
     using CopyFunction = void*(&)(void*, const void*, size_t);
 
     template <CopyFunction copy>
-    ALWAYS_INLINE static void fillNops(void* base, size_t size)
+    static void fillNops(void* base, size_t size)
     {
         UNUSED_PARAM(copy);
         RELEASE_ASSERT(!(size % sizeof(int32_t)));

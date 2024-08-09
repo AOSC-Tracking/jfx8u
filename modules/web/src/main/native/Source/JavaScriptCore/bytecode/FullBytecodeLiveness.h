@@ -41,13 +41,12 @@ class FullBytecodeLiveness {
 public:
     const FastBitVector& getLiveness(BytecodeIndex bytecodeIndex, LivenessCalculationPoint point) const
     {
-        // We don't have to worry about overflowing into the next bytecodeoffset in our vectors because we
-        // static assert that bytecode length is greater than the number of checkpoints in BytecodeStructs.h
+        // FIXME: What should this do when we have checkpoints?
         switch (point) {
         case LivenessCalculationPoint::BeforeUse:
-            return m_usesBefore[toIndex(bytecodeIndex)];
+            return m_beforeUseVector[bytecodeIndex.offset()];
         case LivenessCalculationPoint::AfterUse:
-            return m_usesAfter[toIndex(bytecodeIndex)];
+            return m_afterUseVector[bytecodeIndex.offset()];
         }
         RELEASE_ASSERT_NOT_REACHED();
     }
@@ -60,12 +59,10 @@ public:
 private:
     friend class BytecodeLivenessAnalysis;
 
-    static size_t toIndex(BytecodeIndex bytecodeIndex) { return bytecodeIndex.offset() + bytecodeIndex.checkpoint(); }
-
     // FIXME: Use FastBitVector's view mechanism to make them compact.
-    // https://bugs.webkit.org/show_bug.cgi?id=204427
-    Vector<FastBitVector, 0, UnsafeVectorOverflow> m_usesBefore;
-    Vector<FastBitVector, 0, UnsafeVectorOverflow> m_usesAfter;
+    // https://bugs.webkit.org/show_bug.cgi?id=204427<Paste>
+    Vector<FastBitVector, 0, UnsafeVectorOverflow> m_beforeUseVector;
+    Vector<FastBitVector, 0, UnsafeVectorOverflow> m_afterUseVector;
 };
 
 } // namespace JSC

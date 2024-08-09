@@ -33,11 +33,7 @@ namespace JSC {
 struct CheckpointOSRExitSideState {
     WTF_MAKE_FAST_ALLOCATED;
 public:
-    CheckpointOSRExitSideState(CallFrame* frame)
-        : associatedCallFrame(frame)
-    { }
 
-    CallFrame* associatedCallFrame;
     BytecodeIndex bytecodeIndex;
     JSValue tmps[maxNumCheckpointTmps] { };
 };

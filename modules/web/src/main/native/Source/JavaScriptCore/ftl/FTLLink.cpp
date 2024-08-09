@@ -30,11 +30,14 @@
 
 #include "CCallHelpers.h"
 #include "CodeBlockWithJITType.h"
+#include "DFGCommon.h"
 #include "FTLJITCode.h"
 #include "JITOperations.h"
 #include "LinkBuffer.h"
+#include "JSCInlines.h"
 #include "ProfilerCompilation.h"
 #include "ThunkGenerators.h"
+#include "VirtualRegister.h"
 
 namespace JSC { namespace FTL {
 
@@ -77,7 +80,7 @@ void link(State& state)
 
         DumpContext dumpContext;
         StringPrintStream out;
-        Node* lastNode = nullptr;
+        Node* lastNode = 0;
         for (size_t blockIndex = 0; blockIndex < graph.numBlocks(); ++blockIndex) {
             BasicBlock* block = graph.block(blockIndex);
             if (!block)

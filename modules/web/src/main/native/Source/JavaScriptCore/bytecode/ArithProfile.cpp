@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2016 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -27,15 +27,15 @@
 #include "ArithProfile.h"
 
 #include "CCallHelpers.h"
-#include "JSCJSValueInlines.h"
+#include "JSCInlines.h"
 
 namespace JSC {
 
 #if ENABLE(JIT)
 template<typename BitfieldType>
-void ArithProfile<BitfieldType>::emitObserveResult(CCallHelpers& jit, JSValueRegs regs, GPRReg tempGPR, TagRegistersMode mode)
+void ArithProfile<BitfieldType>::emitObserveResult(CCallHelpers& jit, JSValueRegs regs, TagRegistersMode mode)
 {
-    if (!shouldEmitSetDouble() && !shouldEmitSetNonNumeric() && !shouldEmitSetHeapBigInt() && !shouldEmitSetBigInt32())
+    if (!shouldEmitSetDouble() && !shouldEmitSetNonNumeric() && !shouldEmitSetBigInt())
         return;
 
     CCallHelpers::JumpList done;
@@ -48,18 +48,9 @@ void ArithProfile<BitfieldType>::emitObserveResult(CCallHelpers& jit, JSValueReg
 
     notDouble.link(&jit);
 
-#if USE(BIGINT32)
-    CCallHelpers::Jump notBigInt32 = jit.branchIfNotBigInt32(regs, tempGPR, mode);
-    emitSetBigInt32(jit);
-    done.append(jit.jump());
-    notBigInt32.link(&jit);
-#else
-    UNUSED_PARAM(tempGPR);
-#endif
-
     nonNumeric.append(jit.branchIfNotCell(regs, mode));
-    nonNumeric.append(jit.branchIfNotHeapBigInt(regs.payloadGPR()));
-    emitSetHeapBigInt(jit);
+    nonNumeric.append(jit.branchIfNotBigInt(regs.payloadGPR()));
+    emitSetBigInt(jit);
     done.append(jit.jump());
 
     nonNumeric.link(&jit);
@@ -97,38 +88,18 @@ void ArithProfile<BitfieldType>::emitSetNonNumeric(CCallHelpers& jit) const
 }
 
 template<typename BitfieldType>
-bool ArithProfile<BitfieldType>::shouldEmitSetBigInt32() const
+bool ArithProfile<BitfieldType>::shouldEmitSetBigInt() const
 {
-#if USE(BIGINT32)
-    BitfieldType mask = ObservedResults::BigInt32;
-    return (m_bits & mask) != mask;
-#else
-    return false;
-#endif
-}
-
-template<typename BitfieldType>
-bool ArithProfile<BitfieldType>::shouldEmitSetHeapBigInt() const
-{
-    BitfieldType mask = ObservedResults::HeapBigInt;
+    BitfieldType mask = ObservedResults::BigInt;
     return (m_bits & mask) != mask;
 }
 
 template<typename BitfieldType>
-void ArithProfile<BitfieldType>::emitSetHeapBigInt(CCallHelpers& jit) const
+void ArithProfile<BitfieldType>::emitSetBigInt(CCallHelpers& jit) const
 {
-    if (shouldEmitSetHeapBigInt())
-        emitUnconditionalSet(jit, ObservedResults::HeapBigInt);
+    if (shouldEmitSetBigInt())
+        emitUnconditionalSet(jit, ObservedResults::BigInt);
 }
-
-#if USE(BIGINT32)
-template<typename BitfieldType>
-void ArithProfile<BitfieldType>::emitSetBigInt32(CCallHelpers& jit) const
-{
-    if (shouldEmitSetBigInt32())
-        emitUnconditionalSet(jit, ObservedResults::BigInt32);
-}
-#endif
 
 template<typename BitfieldType>
 void ArithProfile<BitfieldType>::emitUnconditionalSet(CCallHelpers& jit, BitfieldType mask) const
@@ -178,12 +149,8 @@ void printInternal(PrintStream& out, const ArithProfile<T>& profile)
             out.print(separator, "Int52Overflow");
             separator = "|";
         }
-        if (profile.didObserveHeapBigInt()) {
-            out.print(separator, "HeapBigInt");
-            separator = "|";
-        }
-        if (profile.didObserveBigInt32()) {
-            out.print(separator, "BigInt32");
+        if (profile.didObserveBigInt()) {
+            out.print(separator, "BigInt");
             separator = "|";
         }
     }

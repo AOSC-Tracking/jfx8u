@@ -24,11 +24,10 @@
 */
 
 [
+    Constructor,
     Exposed=(Window,Worker),
     ImplementationLacksVTable
 ] interface TextEncoder {
-    constructor();
-
     readonly attribute DOMString encoding;
 
     // FIXME: This should have [NewObject]

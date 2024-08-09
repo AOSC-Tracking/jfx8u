@@ -43,27 +43,16 @@ namespace WebCore {
 
 WTF_MAKE_ISO_ALLOCATED_IMPL(ChannelMergerNode);
 
-ExceptionOr<Ref<ChannelMergerNode>> ChannelMergerNode::create(BaseAudioContext& context, const ChannelMergerOptions& options)
+RefPtr<ChannelMergerNode> ChannelMergerNode::create(AudioContext& context, float sampleRate, unsigned numberOfInputs)
 {
-    if (context.isStopped())
-        return Exception { InvalidStateError };
+    if (!numberOfInputs || numberOfInputs > AudioContext::maxNumberOfChannels())
+        return nullptr;
 
-    context.lazyInitialize();
-
-    if (options.numberOfInputs > AudioContext::maxNumberOfChannels() || !options.numberOfInputs)
-        return Exception { IndexSizeError, "Number of inputs is not in the allowed range."_s };
-
-    auto merger = adoptRef(*new ChannelMergerNode(context, options.numberOfInputs));
-
-    auto result = merger->handleAudioNodeOptions(options, { 1, ChannelCountMode::Explicit, ChannelInterpretation::Speakers });
-    if (result.hasException())
-        return result.releaseException();
-
-    return merger;
+    return adoptRef(*new ChannelMergerNode(context, sampleRate, numberOfInputs));
 }
 
-ChannelMergerNode::ChannelMergerNode(BaseAudioContext& context, unsigned numberOfInputs)
-    : AudioNode(context)
+ChannelMergerNode::ChannelMergerNode(AudioContext& context, float sampleRate, unsigned numberOfInputs)
+    : AudioNode(context, sampleRate)
     , m_desiredNumberOfOutputChannels(DefaultNumberOfOutputChannels)
 {
     setNodeType(NodeTypeChannelMerger);
@@ -138,22 +127,6 @@ void ChannelMergerNode::checkNumberOfChannelsForInput(AudioNodeInput* input)
     m_desiredNumberOfOutputChannels = numberOfOutputChannels;
 
     AudioNode::checkNumberOfChannelsForInput(input);
-}
-
-ExceptionOr<void> ChannelMergerNode::setChannelCount(unsigned channelCount)
-{
-    if (channelCount != 1)
-        return Exception { InvalidStateError, "Channel count cannot be changed from 1."_s };
-
-    return AudioNode::setChannelCount(channelCount);
-}
-
-ExceptionOr<void> ChannelMergerNode::setChannelCountMode(ChannelCountMode mode)
-{
-    if (mode != ChannelCountMode::Explicit)
-        return Exception { InvalidStateError, "Channel count mode cannot be changed from explicit."_s };
-
-    return AudioNode::setChannelCountMode(mode);
 }
 
 } // namespace WebCore

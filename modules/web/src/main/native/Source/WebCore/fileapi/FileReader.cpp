@@ -31,11 +31,8 @@
 #include "config.h"
 #include "FileReader.h"
 
-#include "DOMException.h"
 #include "EventLoop.h"
 #include "EventNames.h"
-#include "Exception.h"
-#include "ExceptionCode.h"
 #include "File.h"
 #include "Logging.h"
 #include "ProgressEvent.h"
@@ -84,9 +81,9 @@ void FileReader::stop()
     m_state = DONE;
 }
 
-bool FileReader::virtualHasPendingActivity() const
+bool FileReader::hasPendingActivity() const
 {
-    return m_state == LOADING;
+    return m_state == LOADING || ActiveDOMObject::hasPendingActivity();
 }
 
 ExceptionOr<void> FileReader::readAsArrayBuffer(Blob* blob)
@@ -165,7 +162,7 @@ void FileReader::abort()
         stop();
         m_aborting = false;
 
-        m_error = DOMException::create(Exception { AbortError });
+        m_error = FileError::create(FileError::ABORT_ERR);
 
         fireEvent(eventNames().errorEvent);
         fireEvent(eventNames().abortEvent);
@@ -210,7 +207,7 @@ void FileReader::didFinishLoading()
     });
 }
 
-void FileReader::didFail(ExceptionCode errorCode)
+void FileReader::didFail(int errorCode)
 {
     // If we're aborting, do not proceed with normal error handling since it is covered in aborting code.
     if (m_aborting)
@@ -220,8 +217,7 @@ void FileReader::didFail(ExceptionCode errorCode)
         ASSERT(m_state != DONE);
         m_state = DONE;
 
-        m_error = DOMException::create(Exception { errorCode });
-
+        m_error = FileError::create(static_cast<FileError::ErrorCode>(errorCode));
         fireEvent(eventNames().errorEvent);
         fireEvent(eventNames().loadendEvent);
     });

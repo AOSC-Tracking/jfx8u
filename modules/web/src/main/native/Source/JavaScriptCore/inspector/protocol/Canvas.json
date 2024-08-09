@@ -11,7 +11,6 @@
         },
         {
             "id": "ProgramId",
-            "condition": "(defined(ENABLE_WEBGL) && ENABLE_WEBGL) || (defined(ENABLE_WEBGPU) && ENABLE_WEBGPU)",
             "type": "string",
             "description": "Unique shader program identifier."
         },
@@ -23,13 +22,11 @@
         },
         {
             "id": "ProgramType",
-            "condition": "(defined(ENABLE_WEBGL) && ENABLE_WEBGL) || (defined(ENABLE_WEBGPU) && ENABLE_WEBGPU)",
             "type": "string",
             "enum": ["compute", "render"]
         },
         {
             "id": "ShaderType",
-            "condition": "(defined(ENABLE_WEBGL) && ENABLE_WEBGL) || (defined(ENABLE_WEBGPU) && ENABLE_WEBGPU)",
             "type": "string",
             "enum": ["compute", "fragment", "vertex"]
         },
@@ -64,9 +61,8 @@
         },
         {
             "id": "ShaderProgram",
-            "description": "Information about a WebGL/WebGL2 shader program or WebGPU shader pipeline.",
-            "condition": "(defined(ENABLE_WEBGL) && ENABLE_WEBGL) || (defined(ENABLE_WEBGPU) && ENABLE_WEBGPU)",
             "type": "object",
+            "description": "Information about a WebGL/WebGL2 shader program or WebGPU shader pipeline.",
             "properties": [
                 { "name": "programId", "$ref": "ProgramId" },
                 { "name": "programType", "$ref": "ProgramType" },
@@ -151,7 +147,6 @@
         {
             "name": "requestShaderSource",
             "description": "Requests the source of the shader of the given type from the program with the given id.",
-            "condition": "(defined(ENABLE_WEBGL) && ENABLE_WEBGL) || (defined(ENABLE_WEBGPU) && ENABLE_WEBGPU)",
             "parameters": [
                 { "name": "programId", "$ref": "ProgramId" },
                 { "name": "shaderType", "$ref": "ShaderType" }
@@ -163,7 +158,6 @@
         {
             "name": "updateShader",
             "description": "Compiles and links the shader with identifier and type with the given source code.",
-            "condition": "(defined(ENABLE_WEBGL) && ENABLE_WEBGL) || (defined(ENABLE_WEBGPU) && ENABLE_WEBGPU)",
             "parameters": [
                 { "name": "programId", "$ref": "ProgramId" },
                 { "name": "shaderType", "$ref": "ShaderType" },
@@ -173,7 +167,6 @@
         {
             "name": "setShaderProgramDisabled",
             "description": "Enable/disable the visibility of the given shader program.",
-            "condition": "defined(ENABLE_WEBGL) && ENABLE_WEBGL",
             "parameters": [
                 { "name": "programId", "$ref": "ProgramId" },
                 { "name": "disabled", "type": "boolean" }
@@ -182,7 +175,6 @@
         {
             "name": "setShaderProgramHighlighted",
             "description": "Enable/disable highlighting of the given shader program.",
-            "condition": "defined(ENABLE_WEBGL) && ENABLE_WEBGL",
             "parameters": [
                 { "name": "programId", "$ref": "ProgramId" },
                 { "name": "highlighted", "type": "boolean" }
@@ -246,14 +238,12 @@
         },
         {
             "name": "programCreated",
-            "condition": "(defined(ENABLE_WEBGL) && ENABLE_WEBGL) || (defined(ENABLE_WEBGPU) && ENABLE_WEBGPU)",
             "parameters": [
                 { "name": "shaderProgram", "$ref": "ShaderProgram" }
             ]
         },
         {
             "name": "programDeleted",
-            "condition": "(defined(ENABLE_WEBGL) && ENABLE_WEBGL) || (defined(ENABLE_WEBGPU) && ENABLE_WEBGPU)",
             "parameters": [
                 { "name": "programId", "$ref": "ProgramId" }
             ]

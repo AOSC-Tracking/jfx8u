@@ -38,13 +38,13 @@ namespace DFG {
 class CompilationKey {
 public:
     CompilationKey()
-        : m_profiledBlock(nullptr)
+        : m_profiledBlock(0)
         , m_mode(InvalidCompilationMode)
     {
     }
 
     CompilationKey(WTF::HashTableDeletedValueType)
-        : m_profiledBlock(nullptr)
+        : m_profiledBlock(0)
         , m_mode(DFGMode)
     {
     }
@@ -97,7 +97,9 @@ struct CompilationKeyHash {
 namespace WTF {
 
 template<typename T> struct DefaultHash;
-template<> struct DefaultHash<JSC::DFG::CompilationKey> : JSC::DFG::CompilationKeyHash { };
+template<> struct DefaultHash<JSC::DFG::CompilationKey> {
+    typedef JSC::DFG::CompilationKeyHash Hash;
+};
 
 template<typename T> struct HashTraits;
 template<> struct HashTraits<JSC::DFG::CompilationKey> : SimpleClassHashTraits<JSC::DFG::CompilationKey> { };

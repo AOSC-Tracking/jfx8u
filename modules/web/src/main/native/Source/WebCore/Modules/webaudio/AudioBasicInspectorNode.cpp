@@ -36,11 +36,12 @@ namespace WebCore {
 
 WTF_MAKE_ISO_ALLOCATED_IMPL(AudioBasicInspectorNode);
 
-AudioBasicInspectorNode::AudioBasicInspectorNode(BaseAudioContext& context)
-    : AudioNode(context)
+AudioBasicInspectorNode::AudioBasicInspectorNode(AudioContext& context, float sampleRate, unsigned outputChannelCount)
+    : AudioNode(context, sampleRate)
 {
     setNodeType(NodeTypeBasicInspector);
     addInput(makeUnique<AudioNodeInput>(this));
+    addOutput(makeUnique<AudioNodeOutput>(this, outputChannelCount));
 }
 
 // We override pullInputs() as an optimization allowing this node to take advantage of in-place processing,
@@ -49,8 +50,7 @@ AudioBasicInspectorNode::AudioBasicInspectorNode(BaseAudioContext& context)
 void AudioBasicInspectorNode::pullInputs(size_t framesToProcess)
 {
     // Render input stream - try to render directly into output bus for pass-through processing where process() doesn't need to do anything...
-    auto* output = this->output(0);
-    input(0)->pull(output ? output->bus() : nullptr, framesToProcess);
+    input(0)->pull(output(0)->bus(), framesToProcess);
 }
 
 ExceptionOr<void> AudioBasicInspectorNode::connect(AudioNode& destination, unsigned outputIndex, unsigned inputIndex)
@@ -83,13 +83,11 @@ void AudioBasicInspectorNode::checkNumberOfChannelsForInput(AudioNodeInput* inpu
     if (input != this->input(0))
         return;
 
-    if (auto* output = this->output(0)) {
-        unsigned numberOfChannels = input->numberOfChannels();
+    unsigned numberOfChannels = input->numberOfChannels();
 
-        if (numberOfChannels != output->numberOfChannels()) {
-            // This will propagate the channel count to any nodes connected further downstream in the graph.
-            output->setNumberOfChannels(numberOfChannels);
-        }
+    if (numberOfChannels != output(0)->numberOfChannels()) {
+        // This will propagate the channel count to any nodes connected further downstream in the graph.
+        output(0)->setNumberOfChannels(numberOfChannels);
     }
 
     AudioNode::checkNumberOfChannelsForInput(input);
@@ -101,8 +99,7 @@ void AudioBasicInspectorNode::updatePullStatus()
 {
     ASSERT(context().isGraphOwner());
 
-    auto output = this->output(0);
-    if (output && output->isConnected()) {
+    if (output(0)->isConnected()) {
         // When an AudioBasicInspectorNode is connected to a downstream node, it will get pulled by the
         // downstream node, thus remove it from the context's automatic pull list.
         if (m_needAutomaticPull) {

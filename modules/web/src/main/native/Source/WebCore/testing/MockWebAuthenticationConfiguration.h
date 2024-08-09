@@ -61,19 +61,13 @@ struct MockWebAuthenticationConfiguration {
         MaliciousPayload
     };
 
-    enum class UserVerification : uint8_t {
-        No,
-        Yes,
-        Cancel
-    };
-
     struct LocalConfiguration {
-        UserVerification userVerification { UserVerification::No };
+        bool acceptAuthentication { false };
         bool acceptAttestation { false };
         String privateKeyBase64;
         String userCertificateBase64;
         String intermediateCACertificateBase64;
-        String preferredCredentialIdBase64;
+        String preferredUserhandleBase64;
 
         template<class Encoder> void encode(Encoder&) const;
         template<class Decoder> static Optional<LocalConfiguration> decode(Decoder&);
@@ -118,7 +112,7 @@ struct MockWebAuthenticationConfiguration {
 template<class Encoder>
 void MockWebAuthenticationConfiguration::LocalConfiguration::encode(Encoder& encoder) const
 {
-    encoder << userVerification << acceptAttestation << privateKeyBase64 << userCertificateBase64 << intermediateCACertificateBase64 << preferredCredentialIdBase64;
+    encoder << acceptAuthentication << acceptAttestation << privateKeyBase64 << userCertificateBase64 << intermediateCACertificateBase64 << preferredUserhandleBase64;
 }
 
 template<class Decoder>
@@ -126,11 +120,11 @@ Optional<MockWebAuthenticationConfiguration::LocalConfiguration> MockWebAuthenti
 {
     MockWebAuthenticationConfiguration::LocalConfiguration result;
 
-    Optional<UserVerification> userVerification;
-    decoder >> userVerification;
-    if (!userVerification)
+    Optional<bool> acceptAuthentication;
+    decoder >> acceptAuthentication;
+    if (!acceptAuthentication)
         return WTF::nullopt;
-    result.userVerification = *userVerification;
+    result.acceptAuthentication = *acceptAuthentication;
 
     Optional<bool> acceptAttestation;
     decoder >> acceptAttestation;
@@ -156,11 +150,11 @@ Optional<MockWebAuthenticationConfiguration::LocalConfiguration> MockWebAuthenti
         return WTF::nullopt;
     result.intermediateCACertificateBase64 = WTFMove(*intermediateCACertificateBase64);
 
-    Optional<String> preferredCredentialIdBase64;
-    decoder >> preferredCredentialIdBase64;
-    if (!preferredCredentialIdBase64)
+    Optional<String> preferredUserhandleBase64;
+    decoder >> preferredUserhandleBase64;
+    if (!preferredUserhandleBase64)
         return WTF::nullopt;
-    result.preferredCredentialIdBase64 = WTFMove(*preferredCredentialIdBase64);
+    result.preferredUserhandleBase64 = WTFMove(*preferredUserhandleBase64);
 
     return result;
 }
@@ -177,11 +171,11 @@ Optional<MockWebAuthenticationConfiguration::HidConfiguration> MockWebAuthentica
     MockWebAuthenticationConfiguration::HidConfiguration result;
     if (!decoder.decode(result.payloadBase64))
         return WTF::nullopt;
-    if (!decoder.decode(result.stage))
+    if (!decoder.decodeEnum(result.stage))
         return WTF::nullopt;
-    if (!decoder.decode(result.subStage))
+    if (!decoder.decodeEnum(result.subStage))
         return WTF::nullopt;
-    if (!decoder.decode(result.error))
+    if (!decoder.decodeEnum(result.error))
         return WTF::nullopt;
     if (!decoder.decode(result.isU2f))
         return WTF::nullopt;
@@ -210,7 +204,7 @@ template<class Decoder>
 Optional<MockWebAuthenticationConfiguration::NfcConfiguration> MockWebAuthenticationConfiguration::NfcConfiguration::decode(Decoder& decoder)
 {
     MockWebAuthenticationConfiguration::NfcConfiguration result;
-    if (!decoder.decode(result.error))
+    if (!decoder.decodeEnum(result.error))
         return WTF::nullopt;
     if (!decoder.decode(result.payloadBase64))
         return WTF::nullopt;
@@ -300,15 +294,6 @@ template<> struct EnumTraits<WebCore::MockWebAuthenticationConfiguration::NfcErr
         WebCore::MockWebAuthenticationConfiguration::NfcError::WrongTagType,
         WebCore::MockWebAuthenticationConfiguration::NfcError::NoConnections,
         WebCore::MockWebAuthenticationConfiguration::NfcError::MaliciousPayload
-    >;
-};
-
-template<> struct EnumTraits<WebCore::MockWebAuthenticationConfiguration::UserVerification> {
-    using values = EnumValues<
-        WebCore::MockWebAuthenticationConfiguration::UserVerification,
-        WebCore::MockWebAuthenticationConfiguration::UserVerification::No,
-        WebCore::MockWebAuthenticationConfiguration::UserVerification::Yes,
-        WebCore::MockWebAuthenticationConfiguration::UserVerification::Cancel
     >;
 };
 

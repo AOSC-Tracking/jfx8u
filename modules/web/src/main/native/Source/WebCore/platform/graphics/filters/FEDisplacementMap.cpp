@@ -24,15 +24,16 @@
 #include "config.h"
 #include "FEDisplacementMap.h"
 
+#include "ColorUtilities.h"
 #include "Filter.h"
 #include "GraphicsContext.h"
-#include "ImageData.h"
+#include <JavaScriptCore/Uint8ClampedArray.h>
 #include <wtf/text/TextStream.h>
 
 namespace WebCore {
 
 FEDisplacementMap::FEDisplacementMap(Filter& filter, ChannelSelectorType xChannelSelector, ChannelSelectorType yChannelSelector, float scale)
-    : FilterEffect(filter, Type::DisplacementMap)
+    : FilterEffect(filter)
     , m_xChannelSelector(xChannelSelector)
     , m_yChannelSelector(yChannelSelector)
     , m_scale(scale)
@@ -85,12 +86,6 @@ void FEDisplacementMap::transformResultColorSpace(FilterEffect* in, const int in
         in->transformResultColorSpace(operatingColorSpace());
 }
 
-static inline unsigned byteOffsetOfPixel(unsigned x, unsigned y, unsigned rowBytes)
-{
-    const unsigned bytesPerPixel = 4;
-    return x * bytesPerPixel + y * rowBytes;
-}
-
 void FEDisplacementMap::platformApplySoftware()
 {
     FilterEffect* in = inputEffect(0);
@@ -99,8 +94,7 @@ void FEDisplacementMap::platformApplySoftware()
     ASSERT(m_xChannelSelector != CHANNEL_UNKNOWN);
     ASSERT(m_yChannelSelector != CHANNEL_UNKNOWN);
 
-    auto* resultImage = createPremultipliedImageResult();
-    auto* dstPixelArray = resultImage ? resultImage->data() : nullptr;
+    Uint8ClampedArray* dstPixelArray = createPremultipliedImageResult();
     if (!dstPixelArray)
         return;
 

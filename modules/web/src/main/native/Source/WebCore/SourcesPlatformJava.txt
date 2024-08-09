@@ -76,7 +76,7 @@ platform/graphics/java/FontPlatformDataJava.cpp
 platform/graphics/java/GlyphPageTreeNodeJava.cpp
 platform/graphics/java/GraphicsContextJava.cpp
 platform/graphics/java/IconJava.cpp
-platform/graphics/java/ImageBufferJavaBackend.cpp
+platform/graphics/java/ImageBufferJava.cpp
 platform/graphics/java/ImageJava.cpp
 platform/graphics/java/ImageDecoderJava.cpp
 platform/graphics/java/MediaPlayerPrivateJava.cpp
@@ -88,6 +88,7 @@ platform/graphics/texmap/TextureMapperJava.cpp
 platform/graphics/texmap/BitmapTextureJava.cpp
 
 platform/ScrollAnimationKinetic.cpp
+platform/ScrollAnimationSmooth.cpp
 platform/generic/ScrollAnimatorGeneric.cpp
 
 platform/text/LocaleNone.cpp

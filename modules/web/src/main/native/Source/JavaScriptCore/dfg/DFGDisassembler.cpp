@@ -30,9 +30,12 @@
 
 #include "CodeBlockWithJITType.h"
 #include "DFGGraph.h"
+#include "DFGJITCode.h"
 #include "Disassembler.h"
-#include "JSCJSValueInlines.h"
+#include "JSCInlines.h"
 #include "LinkBuffer.h"
+#include "ProfilerDatabase.h"
+#include <wtf/StdLibExtras.h>
 
 namespace JSC { namespace DFG {
 
@@ -98,7 +101,7 @@ Vector<Disassembler::DumpedOp> Disassembler::createDumpList(LinkBuffer& linkBuff
     const char* prefix = "    ";
     const char* disassemblyPrefix = "        ";
 
-    Node* lastNode = nullptr;
+    Node* lastNode = 0;
     MacroAssembler::Label previousLabel = m_startOfCode;
     for (size_t blockIndex = 0; blockIndex < m_graph.numBlocks(); ++blockIndex) {
         BasicBlock* block = m_graph.block(blockIndex);
@@ -140,7 +143,7 @@ Vector<Disassembler::DumpedOp> Disassembler::createDumpList(LinkBuffer& linkBuff
     append(result, out, previousOrigin);
     out.print(prefix, "(End Of Main Path)\n");
     append(result, out, previousOrigin);
-    dumpDisassembly(out, disassemblyPrefix, linkBuffer, previousLabel, m_endOfCode, nullptr);
+    dumpDisassembly(out, disassemblyPrefix, linkBuffer, previousLabel, m_endOfCode, 0);
     append(result, out, previousOrigin);
     m_dumpContext.dump(out, prefix);
     append(result, out, previousOrigin);

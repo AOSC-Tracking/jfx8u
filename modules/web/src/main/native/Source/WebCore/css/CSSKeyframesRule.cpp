@@ -59,16 +59,6 @@ StyleRuleKeyframes::StyleRuleKeyframes(const StyleRuleKeyframes& o)
         m_keyframes.uncheckedAppend(keyframe.copyRef());
 }
 
-Ref<StyleRuleKeyframes> StyleRuleKeyframes::create(const AtomString& name)
-{
-    return adoptRef(*new StyleRuleKeyframes(name));
-}
-
-Ref<StyleRuleKeyframes> StyleRuleKeyframes::create(const AtomString& name, std::unique_ptr<DeferredStyleGroupRuleList>&& deferredRules)
-{
-    return adoptRef(*new StyleRuleKeyframes(name, WTFMove(deferredRules)));
-}
-
 StyleRuleKeyframes::~StyleRuleKeyframes() = default;
 
 void StyleRuleKeyframes::parseDeferredRulesIfNeeded() const
@@ -105,17 +95,21 @@ void StyleRuleKeyframes::wrapperRemoveKeyframe(unsigned index)
     m_keyframes.remove(index);
 }
 
-Optional<size_t> StyleRuleKeyframes::findKeyframeIndex(const String& key) const
+size_t StyleRuleKeyframes::findKeyframeIndex(const String& key) const
 {
     parseDeferredRulesIfNeeded();
+
     auto keys = CSSParser::parseKeyframeKeyList(key);
-    if (keys.isEmpty())
-        return WTF::nullopt;
-    for (auto i = m_keyframes.size(); i--; ) {
-        if (m_keyframes[i]->keys() == keys)
+
+    if (!keys)
+        return notFound;
+
+    for (size_t i = m_keyframes.size(); i--; ) {
+        if (m_keyframes[i]->keys() == *keys)
             return i;
     }
-    return WTF::nullopt;
+
+    return notFound;
 }
 
 CSSKeyframesRule::CSSKeyframesRule(StyleRuleKeyframes& keyframesRule, CSSStyleSheet* parent)
@@ -171,23 +165,23 @@ void CSSKeyframesRule::deleteRule(const String& s)
 {
     ASSERT(m_childRuleCSSOMWrappers.size() == m_keyframesRule->keyframes().size());
 
-    auto i = m_keyframesRule->findKeyframeIndex(s);
-    if (!i)
+    size_t i = m_keyframesRule->findKeyframeIndex(s);
+    if (i == notFound)
         return;
 
     CSSStyleSheet::RuleMutationScope mutationScope(this);
 
-    m_keyframesRule->wrapperRemoveKeyframe(*i);
+    m_keyframesRule->wrapperRemoveKeyframe(i);
 
-    if (m_childRuleCSSOMWrappers[*i])
-        m_childRuleCSSOMWrappers[*i]->setParentRule(nullptr);
-    m_childRuleCSSOMWrappers.remove(*i);
+    if (m_childRuleCSSOMWrappers[i])
+        m_childRuleCSSOMWrappers[i]->setParentRule(0);
+    m_childRuleCSSOMWrappers.remove(i);
 }
 
 CSSKeyframeRule* CSSKeyframesRule::findRule(const String& s)
 {
-    auto i = m_keyframesRule->findKeyframeIndex(s);
-    return i ? item(*i) : nullptr;
+    size_t i = m_keyframesRule->findKeyframeIndex(s);
+    return i != notFound ? item(i) : nullptr;
 }
 
 String CSSKeyframesRule::cssText() const

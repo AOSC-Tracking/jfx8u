@@ -69,7 +69,7 @@ String WebSocketExtensionDeflateFrame::handshakeString()
 
 bool WebSocketExtensionDeflateFrame::processResponse(const HashMap<String, String>& serverParameters)
 {
-#if !PLATFORM(JAVA)
+#if USE(ZLIB)
     if (m_responseProcessed) {
         m_failureReason = "Received duplicate deflate-frame response";
         return false;
@@ -107,6 +107,7 @@ bool WebSocketExtensionDeflateFrame::processResponse(const HashMap<String, Strin
     m_framer->enableDeflate(windowBits, mode);
     return true;
 #else
+    ASSERT_NOT_REACHED();
     return false;
 #endif
 }
@@ -157,7 +158,16 @@ std::unique_ptr<WebSocketExtensionProcessor> WebSocketDeflateFramer::createExten
     return makeUnique<WebSocketExtensionDeflateFrame>(this);
 }
 
-#if !PLATFORM(JAVA)
+bool WebSocketDeflateFramer::canDeflate() const
+{
+#if USE(ZLIB)
+    return true;
+#else
+    return false;
+#endif
+}
+
+#if USE(ZLIB)
 void WebSocketDeflateFramer::enableDeflate(int windowBits, WebSocketDeflater::ContextTakeOverMode mode)
 {
     m_deflater = makeUnique<WebSocketDeflater>(windowBits, mode);
@@ -173,7 +183,7 @@ void WebSocketDeflateFramer::enableDeflate(int windowBits, WebSocketDeflater::Co
 
 std::unique_ptr<DeflateResultHolder> WebSocketDeflateFramer::deflate(WebSocketFrame& frame)
 {
-#if !PLATFORM(JAVA)
+#if USE(ZLIB)
     auto result = makeUnique<DeflateResultHolder>(this);
     if (!enabled() || !WebSocketFrame::isNonControlOpCode(frame.opCode) || !frame.payloadLength)
         return result;
@@ -192,7 +202,7 @@ std::unique_ptr<DeflateResultHolder> WebSocketDeflateFramer::deflate(WebSocketFr
 
 void WebSocketDeflateFramer::resetDeflateContext()
 {
-#if !PLATFORM(JAVA)
+#if USE(ZLIB)
     if (m_deflater)
         m_deflater->reset();
 #endif
@@ -205,7 +215,7 @@ std::unique_ptr<InflateResultHolder> WebSocketDeflateFramer::inflate(WebSocketFr
         result->fail("Compressed bit must be 0 if no negotiated deflate-frame extension");
         return result;
     }
-#if !PLATFORM(JAVA)
+#if USE(ZLIB)
     if (!frame.compress)
         return result;
     if (!WebSocketFrame::isNonControlOpCode(frame.opCode)) {
@@ -227,7 +237,7 @@ std::unique_ptr<InflateResultHolder> WebSocketDeflateFramer::inflate(WebSocketFr
 
 void WebSocketDeflateFramer::resetInflateContext()
 {
-#if !PLATFORM(JAVA)
+#if USE(ZLIB)
     if (m_inflater)
         m_inflater->reset();
 #endif

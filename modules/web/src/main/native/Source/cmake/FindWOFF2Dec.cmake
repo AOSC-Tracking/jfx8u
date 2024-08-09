@@ -1,11 +1,11 @@
-# - Try to find OpenXR.
+# - Try to find WOFF2Dec.
 # Once done, this will define
 #
-#  OPENXR_FOUND - system has WPE.
-#  OPENXR_INCLUDE_DIRS - the WPE include directories
-#  OPENXR_LIBRARIES - link these to use WPE.
+#  WOFF2DEC_FOUND - system has WOFF2Dec.
+#  WOFF2DEC_INCLUDE_DIRS - the WOFF2Dec include directories
+#  WOFF2DEC_LIBRARIES - link these to use WOFF2Dec.
 #
-# Copyright (C) 2019 Igalia S.L.
+# Copyright (C) 2017 Igalia S.L.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -29,19 +29,25 @@
 # ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 find_package(PkgConfig)
-pkg_check_modules(PC_OPENXR QUIET openxr)
+pkg_check_modules(PC_WOFF2DEC libwoff2dec)
 
-find_path(OPENXR_INCLUDE_DIRS
-    NAMES openxr/openxr.h
-    HINTS ${PC_OPENXR_INCLUDEDIR} ${PC_OPENXR_INCLUDE_DIRS}
+find_path(WOFF2DEC_INCLUDE_DIRS
+    NAMES woff2/decode.h
+    HINTS ${PC_WOFF2DEC_INCLUDEDIR}
 )
 
-find_library(OPENXR_LIBRARIES
-    NAMES openxr_loader
-    HINTS ${PC_OPENXR_LIBDIR} ${PC_OPENXR_LIBRARY_DIRS}
+find_library(WOFF2DEC_LIBRARIES
+    NAMES woff2dec
+    HINTS ${PC_WOFF2DEC_LIBDIR}
 )
-
-mark_as_advanced(OPENXR_INCLUDE_DIRS OPENXR_LIBRARIES)
 
 include(FindPackageHandleStandardArgs)
-find_package_handle_standard_args(OpenXR REQUIRED_VARS OPENXR_INCLUDE_DIRS OPENXR_LIBRARIES)
+find_package_handle_standard_args(WOFF2Dec
+    REQUIRED_VARS WOFF2DEC_INCLUDE_DIRS WOFF2DEC_LIBRARIES
+    FOUND_VAR WOFF2DEC_FOUND
+    VERSION_VAR PC_WOFF2DEC_VERSION)
+
+mark_as_advanced(
+    WOFF2DEC_INCLUDE_DIRS
+    WOFF2DEC_LIBRARIES
+)

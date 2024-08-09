@@ -78,7 +78,7 @@ RenderTreeUpdater::Parent::Parent(Element& element, const Style::ElementUpdates*
 {
 }
 
-RenderTreeUpdater::RenderTreeUpdater(Document& document, Style::PostResolutionCallbackDisabler&)
+RenderTreeUpdater::RenderTreeUpdater(Document& document)
     : m_document(document)
     , m_generatedContent(makeUnique<GeneratedContent>(*this))
     , m_builder(renderView())
@@ -120,6 +120,8 @@ void RenderTreeUpdater::commit(std::unique_ptr<const Style::Update> styleUpdate)
         return;
 
     TraceScope scope(RenderTreeBuildStart, RenderTreeBuildEnd);
+
+    Style::PostResolutionCallbackDisabler callbackDisabler(m_document);
 
     m_styleUpdate = WTFMove(styleUpdate);
 
@@ -300,10 +302,7 @@ void RenderTreeUpdater::updateRendererStyle(RenderElement& renderer, RenderStyle
     if (RuntimeEnabledFeatures::sharedFeatures().layoutFormattingContextEnabled()) {
         if (!m_document.view() || !m_document.view()->layoutContext().layoutTreeContent())
             return;
-        auto& layoutContext = m_document.view()->layoutContext();
-        if (minimalStyleDifference >= StyleDifference::LayoutPositionedMovementOnly || renderer.needsLayout())
-            layoutContext.invalidateLayoutState();
-        if (auto* layoutBox = layoutContext.layoutTreeContent()->layoutBoxForRenderer(renderer))
+        if (auto* layoutBox = m_document.view()->layoutContext().layoutTreeContent()->layoutBoxForRenderer(renderer))
             layoutBox->updateStyle(renderer.style());
     }
 #endif
@@ -398,7 +397,7 @@ void RenderTreeUpdater::createRenderer(Element& element, RenderStyle&& style)
     }
 #endif
 
-    m_builder.attach(insertionPosition.parent(), WTFMove(newRenderer), insertionPosition.nextSibling());
+    m_builder.attach(insertionPosition, WTFMove(newRenderer));
 
     auto* textManipulationController = m_document.textManipulationControllerIfExists();
     if (UNLIKELY(textManipulationController))
@@ -425,7 +424,9 @@ bool RenderTreeUpdater::textRendererIsNeeded(const Text& textNode)
     if (is<RenderText>(renderingParent.previousChildRenderer))
         return true;
     // This text node has nothing but white space. We may still need a renderer in some cases.
-    if (parentRenderer.isTable() || parentRenderer.isTableRow() || parentRenderer.isTableSection() || parentRenderer.isRenderTableCol() || parentRenderer.isFrameSet() || parentRenderer.isRenderGrid() || (parentRenderer.isFlexibleBox() && !parentRenderer.isRenderButton()))
+    if (parentRenderer.isTable() || parentRenderer.isTableRow() || parentRenderer.isTableSection() || parentRenderer.isRenderTableCol() || parentRenderer.isFrameSet())
+        return false;
+    if (parentRenderer.isFlexibleBox() && !parentRenderer.isRenderButton())
         return false;
     if (parentRenderer.style().preserveNewline()) // pre/pre-wrap/pre-line always make renderers.
         return true;
@@ -474,18 +475,14 @@ void RenderTreeUpdater::createTextRenderer(Text& textNode, const Style::TextUpda
         auto newDisplayContentsAnonymousWrapper = WebCore::createRenderer<RenderInline>(textNode.document(), RenderStyle::clone(**textUpdate->inheritedDisplayContentsStyle));
         newDisplayContentsAnonymousWrapper->initializeStyle();
         auto& displayContentsAnonymousWrapper = *newDisplayContentsAnonymousWrapper;
-        m_builder.attach(renderTreePosition.parent(), WTFMove(newDisplayContentsAnonymousWrapper), renderTreePosition.nextSibling());
+        m_builder.attach(renderTreePosition, WTFMove(newDisplayContentsAnonymousWrapper));
 
         textRenderer->setInlineWrapperForDisplayContents(&displayContentsAnonymousWrapper);
         m_builder.attach(displayContentsAnonymousWrapper, WTFMove(textRenderer));
         return;
     }
 
-    m_builder.attach(renderTreePosition.parent(), WTFMove(textRenderer), renderTreePosition.nextSibling());
-
-    auto* textManipulationController = m_document.textManipulationControllerIfExists();
-    if (UNLIKELY(textManipulationController))
-        textManipulationController->didCreateRendererForTextNode(textNode);
+    m_builder.attach(renderTreePosition, WTFMove(textRenderer));
 }
 
 void RenderTreeUpdater::updateTextRenderer(Text& text, const Style::TextUpdate* textUpdate)
@@ -546,6 +543,8 @@ void RenderTreeUpdater::tearDownRenderer(Text& text)
 
 void RenderTreeUpdater::tearDownRenderers(Element& root, TeardownType teardownType, RenderTreeBuilder& builder)
 {
+    WidgetHierarchyUpdatesSuspensionScope suspendWidgetHierarchyUpdates;
+
     Vector<Element*, 30> teardownStack;
 
     auto push = [&] (Element& element) {
@@ -556,7 +555,7 @@ void RenderTreeUpdater::tearDownRenderers(Element& root, TeardownType teardownTy
 
     auto& document = root.document();
     auto* timeline = document.existingTimeline();
-    auto& animationController = document.frame()->legacyAnimation();
+    auto& animationController = document.frame()->animation();
 
     auto pop = [&] (unsigned depth) {
         while (teardownStack.size() > depth) {
@@ -571,9 +570,9 @@ void RenderTreeUpdater::tearDownRenderers(Element& root, TeardownType teardownTy
             case TeardownType::RendererUpdateCancelingAnimations:
                 if (timeline) {
                     if (document.renderTreeBeingDestroyed())
-                        timeline->cancelDeclarativeAnimationsForElement(element, WebAnimation::Silently::Yes);
+                        timeline->willDestroyRendererForElement(element);
                     else if (teardownType == TeardownType::RendererUpdateCancelingAnimations)
-                        timeline->cancelDeclarativeAnimationsForElement(element, WebAnimation::Silently::No);
+                        timeline->cancelDeclarativeAnimationsForElement(element);
                 }
                 animationController.cancelAnimations(element);
                 break;

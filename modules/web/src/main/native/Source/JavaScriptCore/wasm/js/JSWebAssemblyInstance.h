@@ -101,11 +101,12 @@ public:
     static size_t offsetOfGlobalObject() { return OBJECT_OFFSETOF(JSWebAssemblyInstance, m_globalObject); }
     static size_t offsetOfVM() { return OBJECT_OFFSETOF(JSWebAssemblyInstance, m_vm); }
 
-private:
+protected:
     JSWebAssemblyInstance(VM&, Structure*, Ref<Wasm::Instance>&&);
     void finishCreation(VM&, JSWebAssemblyModule*, JSModuleNamespaceObject*);
     static void visitChildren(JSCell*, SlotVisitor&);
 
+private:
     Ref<Wasm::Instance> m_instance;
     VM* m_vm;
 

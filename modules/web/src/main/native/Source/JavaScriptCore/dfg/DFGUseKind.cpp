@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2013-2016 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -27,6 +27,8 @@
 #include "DFGUseKind.h"
 
 #if ENABLE(DFG_JIT)
+
+#include "JSCInlines.h"
 
 namespace WTF {
 
@@ -143,14 +145,8 @@ void printInternal(PrintStream& out, UseKind useKind)
     case SymbolUse:
         out.print("Symbol");
         return;
-    case AnyBigIntUse:
-        out.print("AnyBigInt");
-        return;
-    case HeapBigIntUse:
-        out.print("HeapBigInt");
-        return;
-    case BigInt32Use:
-        out.print("BigInt32");
+    case BigIntUse:
+        out.print("BigInt");
         return;
     case StringObjectUse:
         out.print("StringObject");
@@ -166,9 +162,6 @@ void printInternal(PrintStream& out, UseKind useKind)
         return;
     case NotCellUse:
         out.print("NotCell");
-        return;
-    case NotCellNorBigIntUse:
-        out.print("NotCellNorBigInt");
         return;
     case KnownOtherUse:
         out.print("KnownOther");

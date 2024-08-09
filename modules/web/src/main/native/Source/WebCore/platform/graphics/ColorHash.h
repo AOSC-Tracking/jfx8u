@@ -36,7 +36,9 @@ struct ColorHash {
     static const bool safeToCompareToEmptyOrDeleted = true;
 };
 
-template<> struct DefaultHash<WebCore::Color> : ColorHash { };
+template<> struct DefaultHash<WebCore::Color> {
+    using Hash = ColorHash;
+};
 
 template<> struct HashTraits<WebCore::Color> : GenericHashTraits<WebCore::Color> {
     static const bool emptyValueIsZero = false;

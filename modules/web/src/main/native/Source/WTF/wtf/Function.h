@@ -58,8 +58,6 @@ private:
 
 template<typename> class Function;
 
-template<typename Out, typename... In> Function<Out(In...)> adopt(Detail::CallableWrapperBase<Out, In...>*);
-
 template <typename Out, typename... In>
 class Function<Out(In...)> {
     WTF_MAKE_FAST_ALLOCATED;
@@ -68,6 +66,9 @@ public:
 
     Function() = default;
     Function(std::nullptr_t) { }
+    Function(Impl* impl)
+        : m_callableWrapper(impl)
+    { }
 
     template<typename CallableType, class = typename std::enable_if<!(std::is_pointer<CallableType>::value && std::is_function<typename std::remove_pointer<CallableType>::type>::value) && std::is_rvalue_reference<CallableType&&>::value>::type>
     Function(CallableType&& callable)
@@ -105,27 +106,14 @@ public:
         return *this;
     }
 
-    Impl* leak()
+    Impl* leakImpl()
     {
         return m_callableWrapper.release();
     }
 
 private:
-    enum AdoptTag { Adopt };
-    Function(Impl* impl, AdoptTag)
-        : m_callableWrapper(impl)
-    {
-    }
-
-    friend Function adopt<Out, In...>(Impl*);
-
     std::unique_ptr<Impl> m_callableWrapper;
 };
-
-template<typename Out, typename... In> Function<Out(In...)> adopt(Detail::CallableWrapperBase<Out, In...>* impl)
-{
-    return Function<Out(In...)>(impl, Function<Out(In...)>::Adopt);
-}
 
 } // namespace WTF
 

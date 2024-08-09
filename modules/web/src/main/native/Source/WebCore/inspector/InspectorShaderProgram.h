@@ -25,8 +25,6 @@
 
 #pragma once
 
-#if ENABLE(WEBGL) || ENABLE(WEBGPU)
-
 #include <JavaScriptCore/InspectorProtocolObjects.h>
 #include <wtf/Forward.h>
 #include <wtf/RefCounted.h>
@@ -101,5 +99,3 @@ private:
 };
 
 } // namespace WebCore
-
-#endif // ENABLE(WEBGL) || ENABLE(WEBGPU)

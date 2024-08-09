@@ -24,9 +24,8 @@
  */
 // https://gpuweb.github.io/gpuweb
 
-typedef [EnforceRange] unsigned long GPUIntegerCoordinate;
-typedef [EnforceRange] unsigned long GPUSize32;
-typedef [EnforceRange] unsigned long GPUTextureUsageFlags;
+typedef unsigned long u32;
+typedef unsigned long GPUTextureUsageFlags;
 
 [
     ImplementedAs=GPUTextureDimension
@@ -41,8 +40,9 @@ typedef [EnforceRange] unsigned long GPUTextureUsageFlags;
     EnabledAtRuntime=WebGPU
 ] dictionary GPUTextureDescriptor {
     required GPUExtent3D size;
-    GPUIntegerCoordinate mipLevelCount = 1;
-    GPUSize32 sampleCount = 1;
+    u32 arrayLayerCount = 1;
+    u32 mipLevelCount = 1;
+    u32 sampleCount = 1;
     GPUTextureDimension dimension = "2d";
     required GPUTextureFormat format;
     required GPUTextureUsageFlags usage;

@@ -26,7 +26,7 @@
 #include "config.h"
 #include "DirectEvalCodeCache.h"
 
-#include "JSCellInlines.h"
+#include "JSCInlines.h"
 
 namespace JSC {
 

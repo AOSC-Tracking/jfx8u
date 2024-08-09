@@ -175,10 +175,11 @@ void RenderTextControlSingleLine::layout()
 
     HTMLElement* placeholderElement = inputElement().placeholderElement();
     if (RenderBox* placeholderBox = placeholderElement ? placeholderElement->renderBox() : 0) {
-        auto innerTextWidth = LayoutUnit { };
+        LayoutSize innerTextSize;
         if (innerTextRenderer)
-            innerTextWidth = innerTextRenderer->logicalWidth();
-        placeholderBox->mutableStyle().setWidth(Length(innerTextWidth - placeholderBox->horizontalBorderAndPaddingExtent(), Fixed));
+            innerTextSize = innerTextRenderer->size();
+        placeholderBox->mutableStyle().setWidth(Length(innerTextSize.width() - placeholderBox->horizontalBorderAndPaddingExtent(), Fixed));
+        placeholderBox->mutableStyle().setHeight(Length(innerTextSize.height() - placeholderBox->verticalBorderAndPaddingExtent(), Fixed));
         bool neededLayout = placeholderBox->needsLayout();
         bool placeholderBoxHadLayout = placeholderBox->everHadLayout();
         if (innerTextSizeChanged) {
@@ -186,20 +187,15 @@ void RenderTextControlSingleLine::layout()
             placeholderBox->setChildNeedsLayout(MarkOnlyThis);
         }
         placeholderBox->layoutIfNeeded();
-        auto placeholderTopLeft = containerRenderer ? containerRenderer->location() : LayoutPoint { };
-        auto* innerBlockRenderer = innerBlockElement() ? innerBlockElement()->renderBox() : nullptr;
-        if (innerBlockRenderer)
-            placeholderTopLeft += toLayoutSize(innerBlockRenderer->location());
+        LayoutPoint textOffset;
         if (innerTextRenderer)
-            placeholderTopLeft += toLayoutSize(innerTextRenderer->location());
-        placeholderBox->setLogicalLeft(placeholderTopLeft.x());
-        // Here the container box indicates the renderer that the placeholder content is aligned with (no parent and/or containing block relationship).
-        auto* containerBox = innerTextRenderer ? innerTextRenderer : innerBlockRenderer ? innerBlockRenderer : containerRenderer;
-        if (containerBox) {
-            // Center vertical align the placeholder content.
-            auto logicalTop = placeholderTopLeft.y() + (containerBox->logicalHeight() / 2 - placeholderBox->logicalHeight() / 2);
-            placeholderBox->setLogicalTop(logicalTop);
-        }
+            textOffset = innerTextRenderer->location();
+        if (innerBlockElement() && innerBlockElement()->renderBox())
+            textOffset += toLayoutSize(innerBlockElement()->renderBox()->location());
+        if (containerRenderer)
+            textOffset += toLayoutSize(containerRenderer->location());
+        placeholderBox->setLocation(textOffset);
+
         if (!placeholderBoxHadLayout && placeholderBox->checkForRepaintDuringLayout()) {
             // This assumes a shadow tree without floats. If floats are added, the
             // logic should be shared with RenderBlock::layoutBlockChild.
@@ -306,7 +302,7 @@ float RenderTextControlSingleLine::getAverageCharWidth()
 
 LayoutUnit RenderTextControlSingleLine::preferredContentLogicalWidth(float charWidth) const
 {
-    int factor = 0;
+    int factor;
     bool includesDecoration = inputElement().sizeShouldIncludeDecoration(factor);
     if (factor <= 0)
         factor = 20;
@@ -334,9 +330,6 @@ LayoutUnit RenderTextControlSingleLine::preferredContentLogicalWidth(float charW
     if (includesDecoration)
         result += inputElement().decorationWidth();
 
-    if (auto* innerRenderer = innerTextElement()->renderer())
-        result += innerRenderer->endPaddingWidthForCaret();
-
     return result;
 }
 
@@ -357,39 +350,39 @@ void RenderTextControlSingleLine::autoscroll(const IntPoint& position)
 
 int RenderTextControlSingleLine::scrollWidth() const
 {
-    if (auto innerTextElement = this->innerTextElement(); innerTextElement && innerTextElement->renderer())
-        return innerTextElement->renderer()->scrollWidth();
+    if (innerTextElement())
+        return innerTextElement()->scrollWidth();
     return RenderBlockFlow::scrollWidth();
 }
 
 int RenderTextControlSingleLine::scrollHeight() const
 {
-    if (auto innerTextElement = this->innerTextElement(); innerTextElement && innerTextElement->renderer())
-        return innerTextElement->renderer()->scrollHeight();
+    if (innerTextElement())
+        return innerTextElement()->scrollHeight();
     return RenderBlockFlow::scrollHeight();
 }
 
 int RenderTextControlSingleLine::scrollLeft() const
 {
-    if (auto innerTextElement = this->innerTextElement(); innerTextElement && innerTextElement->renderer())
-        return innerTextElement->renderer()->scrollLeft();
+    if (innerTextElement())
+        return innerTextElement()->scrollLeft();
     return RenderBlockFlow::scrollLeft();
 }
 
 int RenderTextControlSingleLine::scrollTop() const
 {
-    if (auto innerTextElement = this->innerTextElement(); innerTextElement && innerTextElement->renderer())
-        return innerTextElement->renderer()->scrollTop();
+    if (innerTextElement())
+        return innerTextElement()->scrollTop();
     return RenderBlockFlow::scrollTop();
 }
 
-void RenderTextControlSingleLine::setScrollLeft(int newLeft, ScrollType, ScrollClamping, AnimatedScroll)
+void RenderTextControlSingleLine::setScrollLeft(int newLeft, ScrollType, ScrollClamping)
 {
     if (innerTextElement())
         innerTextElement()->setScrollLeft(newLeft);
 }
 
-void RenderTextControlSingleLine::setScrollTop(int newTop, ScrollType, ScrollClamping, AnimatedScroll)
+void RenderTextControlSingleLine::setScrollTop(int newTop, ScrollType, ScrollClamping)
 {
     if (innerTextElement())
         innerTextElement()->setScrollTop(newTop);

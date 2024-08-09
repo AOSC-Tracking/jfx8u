@@ -1,6 +1,5 @@
 /*
- * Copyright (C) 2020 Metrological Group B.V.
- * Copyright (C) 2020 Igalia S.L.
+ * Copyright (C) 2018 Igalia S.L.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -26,23 +25,29 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#pragma once
+#include "config.h"
+#include "ScrollingThread.h"
 
-#if ENABLE(ENCRYPTED_MEDIA)
-
-#include <wtf/JSONValues.h>
-#include <wtf/RefPtr.h>
+#if ENABLE(ASYNC_SCROLLING)
 
 namespace WebCore {
 
-class SharedBuffer;
+void ScrollingThread::initializeRunLoop()
+{
+    {
+        std::lock_guard<Lock> lock(m_initializeRunLoopMutex);
+        m_runLoop = &RunLoop::current();
+        m_initializeRunLoopConditionVariable.notifyAll();
+    }
 
-namespace CDMUtilities {
+    m_runLoop->run();
+}
 
-RefPtr<JSON::Object> parseJSONObject(const SharedBuffer&);
+void ScrollingThread::wakeUpRunLoop()
+{
+    m_runLoop->dispatch([this] { dispatchFunctionsFromScrollingThread(); });
+}
 
-};
+} // namespace WebCore
 
-};
-
-#endif // ENABLE(ENCRYPTED_MEDIA)
+#endif // ENABLE(ASYNC_SCROLLING)

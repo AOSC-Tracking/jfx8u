@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2013-2019 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -25,7 +25,6 @@
 
 #pragma once
 
-#include "EnsureStillAliveHere.h"
 #include "UnusedPointer.h"
 #include <wtf/UniqueArray.h>
 #include <wtf/Vector.h>
@@ -92,8 +91,7 @@ public:
 
     void** base() { return reinterpret_cast<void**>(&m_table); }
 
-    ALWAYS_INLINE void validate(StructureID);
-
+    bool isValid(StructureID);
     Structure* get(StructureID);
     void deallocateID(Structure*, StructureID);
     StructureID allocateID(Structure*);
@@ -110,7 +108,7 @@ private:
         WTF_MAKE_FAST_ALLOCATED;
     public:
         EncodedStructureBits encodedStructureBits;
-        uintptr_t offset;
+        StructureID offset;
     };
 
     StructureOrOffset* table() const { return m_table.get(); }
@@ -145,16 +143,16 @@ public:
     // 2. For each StructureID, the StructureIDTable stores encodedStructureBits
     //    which are encoded from the structure pointer as such:
     //
-    //    -----------------------------------------------------------------
-    //    | 9 low index bits | 7 entropy bits | 48 structure pointer bits |
-    //    -----------------------------------------------------------------
+    //    ----------------------------------------------------------------
+    //    | 7 entropy bits |                   57 structure pointer bits |
+    //    ----------------------------------------------------------------
     //
     //    The entropy bits here are the same 7 bits used in the encoding of the
     //    StructureID for this structure entry in the StructureIDTable.
 
     static constexpr uint32_t s_numberOfNukeBits = 1;
     static constexpr uint32_t s_numberOfEntropyBits = 7;
-    static constexpr uint32_t s_entropyBitsShiftForStructurePointer = (sizeof(EncodedStructureBits) * 8) - 16;
+    static constexpr uint32_t s_entropyBitsShiftForStructurePointer = (sizeof(intptr_t) * 8) - s_numberOfEntropyBits;
 
     static constexpr uint32_t s_maximumNumberOfStructures = 1 << (32 - s_numberOfEntropyBits - s_numberOfNukeBits);
 };
@@ -178,12 +176,19 @@ inline Structure* StructureIDTable::get(StructureID structureID)
     return decode(table()[structureIndex].encodedStructureBits, structureID);
 }
 
-ALWAYS_INLINE void StructureIDTable::validate(StructureID structureID)
+inline bool StructureIDTable::isValid(StructureID structureID)
 {
+    if (!structureID)
+        return false;
     uint32_t structureIndex = structureID >> s_numberOfEntropyBits;
+    if (structureIndex >= m_capacity)
+        return false;
+#if CPU(ADDRESS64)
     Structure* structure = decode(table()[structureIndex].encodedStructureBits, structureID);
-    RELEASE_ASSERT(structureIndex < m_capacity);
-    *bitwise_cast<volatile uint64_t*>(structure);
+    if (reinterpret_cast<uintptr_t>(structure) >> s_entropyBitsShiftForStructurePointer)
+        return false;
+#endif
+    return true;
 }
 
 #else // not USE(JSVALUE64)
@@ -202,7 +207,6 @@ public:
     };
 
     void flushOldTables() { }
-    void validate(StructureID) { }
 };
 
 #endif // not USE(JSVALUE64)

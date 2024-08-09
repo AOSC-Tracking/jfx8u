@@ -25,38 +25,39 @@
 
 #pragma once
 
-#include "AccessibilityObject.h"
+#include "AccessibilityMockObject.h"
 
 namespace WebCore {
 
-class HTMLOptionElement;
+class HTMLElement;
 
-class AccessibilityMenuListOption final : public AccessibilityObject {
+class AccessibilityMenuListOption final : public AccessibilityMockObject {
 public:
-    static Ref<AccessibilityMenuListOption> create(HTMLOptionElement&);
+    static Ref<AccessibilityMenuListOption> create() { return adoptRef(*new AccessibilityMenuListOption); }
+
+    void setElement(HTMLElement*);
 
 private:
-    explicit AccessibilityMenuListOption(HTMLOptionElement&);
+    AccessibilityMenuListOption();
 
-    bool isMenuListOption() const final { return true; }
+    bool isMenuListOption() const override { return true; }
 
-    AccessibilityRole roleValue() const final { return AccessibilityRole::MenuListOption; }
-    bool canHaveChildren() const final { return false; }
+    AccessibilityRole roleValue() const override { return AccessibilityRole::MenuListOption; }
+    bool canHaveChildren() const override { return false; }
 
-    Element* actionElement() const final;
-    Node* node() const final;
-    bool isEnabled() const final;
-    bool isVisible() const final;
-    bool isOffScreen() const final;
-    bool isSelected() const final;
-    String nameForMSAA() const final;
-    void setSelected(bool) final;
-    bool canSetSelectedAttribute() const final;
-    LayoutRect elementRect() const final;
-    String stringValue() const final;
-    bool computeAccessibilityIsIgnored() const final;
+    Element* actionElement() const override;
+    bool isEnabled() const override;
+    bool isVisible() const override;
+    bool isOffScreen() const override;
+    bool isSelected() const override;
+    String nameForMSAA() const override;
+    void setSelected(bool) override;
+    bool canSetSelectedAttribute() const override;
+    LayoutRect elementRect() const override;
+    String stringValue() const override;
+    bool computeAccessibilityIsIgnored() const override;
 
-    WeakPtr<HTMLOptionElement> m_element;
+    RefPtr<HTMLElement> m_element;
 };
 
 } // namespace WebCore

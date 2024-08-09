@@ -36,8 +36,7 @@
     ImplementationLacksVTable,
     JSCustomMarkFunction,
     CustomIsReachable,
+    Constructor(UndoItemInit initDict),
 ] interface UndoItem {
-    constructor(UndoItemInit initDict);
-
     readonly attribute DOMString label;
 };

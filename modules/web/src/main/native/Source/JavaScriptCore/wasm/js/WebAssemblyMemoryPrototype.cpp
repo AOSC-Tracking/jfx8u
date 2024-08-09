@@ -28,14 +28,11 @@
 
 #if ENABLE(WEBASSEMBLY)
 
-#include "AuxiliaryBarrierInlines.h"
+#include "FunctionPrototype.h"
 #include "JSArrayBuffer.h"
-#include "JSCJSValueInlines.h"
-#include "JSGlobalObjectInlines.h"
-#include "JSObjectInlines.h"
-#include "JSWebAssemblyHelpers.h"
+#include "JSCInlines.h"
 #include "JSWebAssemblyMemory.h"
-#include "StructureInlines.h"
+#include "JSWebAssemblyHelpers.h"
 
 namespace JSC {
 static EncodedJSValue JSC_HOST_CALL webAssemblyMemoryProtoFuncGrow(JSGlobalObject*, CallFrame*);
@@ -112,7 +109,6 @@ void WebAssemblyMemoryPrototype::finishCreation(VM& vm)
 {
     Base::finishCreation(vm);
     ASSERT(inherits(vm, info()));
-    JSC_TO_STRING_TAG_WITHOUT_TRANSITION();
 }
 
 WebAssemblyMemoryPrototype::WebAssemblyMemoryPrototype(VM& vm, Structure* structure)

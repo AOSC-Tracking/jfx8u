@@ -21,9 +21,10 @@
 #include "config.h"
 #include "StringObject.h"
 
+#include "Error.h"
+#include "JSGlobalObject.h"
 #include "JSCInlines.h"
 #include "PropertyNameArray.h"
-#include "TypeError.h"
 
 namespace JSC {
 
@@ -41,7 +42,6 @@ void StringObject::finishCreation(VM& vm, JSString* string)
     Base::finishCreation(vm);
     ASSERT(inherits(vm, info()));
     setInternalValue(vm, string);
-    ASSERT_WITH_MESSAGE(type() == StringObjectType || type() == DerivedStringObjectType, "Instance inheriting StringObject should have DerivedStringObjectType");
 }
 
 bool StringObject::getOwnPropertySlot(JSObject* cell, JSGlobalObject* globalObject, PropertyName propertyName, PropertySlot& slot)
@@ -125,7 +125,7 @@ bool StringObject::defineOwnProperty(JSObject* object, JSGlobalObject* globalObj
     RELEASE_AND_RETURN(scope, Base::defineOwnProperty(object, globalObject, propertyName, descriptor, throwException));
 }
 
-bool StringObject::deleteProperty(JSCell* cell, JSGlobalObject* globalObject, PropertyName propertyName, DeletePropertySlot& slot)
+bool StringObject::deleteProperty(JSCell* cell, JSGlobalObject* globalObject, PropertyName propertyName)
 {
     VM& vm = globalObject->vm();
     StringObject* thisObject = jsCast<StringObject*>(cell);
@@ -134,7 +134,7 @@ bool StringObject::deleteProperty(JSCell* cell, JSGlobalObject* globalObject, Pr
     Optional<uint32_t> index = parseIndex(propertyName);
     if (index && thisObject->internalValue()->canGetIndex(index.value()))
         return false;
-    return JSObject::deleteProperty(thisObject, globalObject, propertyName, slot);
+    return JSObject::deleteProperty(thisObject, globalObject, propertyName);
 }
 
 bool StringObject::deletePropertyByIndex(JSCell* cell, JSGlobalObject* globalObject, unsigned i)
@@ -164,11 +164,6 @@ void StringObject::getOwnNonIndexPropertyNames(JSObject* object, JSGlobalObject*
     if (mode.includeDontEnumProperties())
         propertyNames.add(vm.propertyNames->length);
     return JSObject::getOwnNonIndexPropertyNames(thisObject, globalObject, propertyNames, mode);
-}
-
-String StringObject::toStringName(const JSObject*, JSGlobalObject*)
-{
-    return "String"_s;
 }
 
 StringObject* constructString(VM& vm, JSGlobalObject* globalObject, JSValue string)

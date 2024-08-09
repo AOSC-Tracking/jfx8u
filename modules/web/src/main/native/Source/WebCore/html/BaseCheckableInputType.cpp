@@ -91,15 +91,17 @@ bool BaseCheckableInputType::canSetStringValue() const
 }
 
 // FIXME: Could share this with BaseClickableWithKeyInputType and RangeInputType if we had a common base class.
-bool BaseCheckableInputType::accessKeyAction(bool sendMouseEvents)
+void BaseCheckableInputType::accessKeyAction(bool sendMouseEvents)
 {
+    InputType::accessKeyAction(sendMouseEvents);
+
     ASSERT(element());
-    return InputType::accessKeyAction(sendMouseEvents) || element()->dispatchSimulatedClick(0, sendMouseEvents ? SendMouseUpDownEvents : SendNoEvents);
+    element()->dispatchSimulatedClick(0, sendMouseEvents ? SendMouseUpDownEvents : SendNoEvents);
 }
 
 String BaseCheckableInputType::fallbackValue() const
 {
-    static MainThreadNeverDestroyed<const AtomString> on("on", AtomString::ConstructFromLiteral);
+    static NeverDestroyed<const AtomString> on("on", AtomString::ConstructFromLiteral);
     return on.get();
 }
 

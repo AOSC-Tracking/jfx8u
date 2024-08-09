@@ -86,7 +86,7 @@ void PingLoader::loadImage(Frame& frame, const URL& url)
     auto& document = *frame.document();
 
     if (!document.securityOrigin().canDisplay(url)) {
-        FrameLoader::reportLocalLoadFailed(&frame, url.string());
+        FrameLoader::reportLocalLoadFailed(&frame, url);
         return;
     }
 
@@ -105,7 +105,7 @@ void PingLoader::loadImage(Frame& frame, const URL& url)
     String referrer = SecurityPolicy::generateReferrerHeader(document.referrerPolicy(), request.url(), frame.loader().outgoingReferrer());
     if (!referrer.isEmpty())
         request.setHTTPReferrer(referrer);
-    frame.loader().addExtraFieldsToRequest(request, IsMainResource::No);
+    frame.loader().addExtraFieldsToSubresourceRequest(request);
 
     startPingLoad(frame, request, WTFMove(originalRequestHeader), ShouldFollowRedirects::Yes, ContentSecurityPolicyImposition::DoPolicyCheck, ReferrerPolicy::EmptyString);
 }
@@ -119,8 +119,6 @@ void PingLoader::sendPing(Frame& frame, const URL& pingURL, const URL& destinati
         return;
 
     ResourceRequest request(pingURL);
-    request.setRequester(ResourceRequest::Requester::Ping);
-
 #if ENABLE(CONTENT_EXTENSIONS)
     if (processContentRuleListsForLoad(frame, request, { ContentExtensions::ResourceType::Raw, ContentExtensions::ResourceType::Ping }))
         return;
@@ -136,13 +134,13 @@ void PingLoader::sendPing(Frame& frame, const URL& pingURL, const URL& destinati
 
     HTTPHeaderMap originalRequestHeader = request.httpHeaderFields();
 
-    auto& sourceOrigin = document.securityOrigin();
-    FrameLoader::addHTTPOriginIfNeeded(request, SecurityPolicy::generateOriginHeader(document.referrerPolicy(), request.url(), sourceOrigin));
+    frame.loader().addExtraFieldsToSubresourceRequest(request);
 
-    frame.loader().addExtraFieldsToRequest(request, IsMainResource::No);
-    request.setHTTPHeaderField(HTTPHeaderName::PingTo, destinationURL.string());
+    auto& sourceOrigin = document.securityOrigin();
+    FrameLoader::addHTTPOriginIfNeeded(request, sourceOrigin.toString());
+    request.setHTTPHeaderField(HTTPHeaderName::PingTo, destinationURL);
     if (!SecurityPolicy::shouldHideReferrer(pingURL, frame.loader().outgoingReferrer()))
-        request.setHTTPHeaderField(HTTPHeaderName::PingFrom, document.url().string());
+        request.setHTTPHeaderField(HTTPHeaderName::PingFrom, document.url());
 
     startPingLoad(frame, request, WTFMove(originalRequestHeader), ShouldFollowRedirects::Yes, ContentSecurityPolicyImposition::DoPolicyCheck, ReferrerPolicy::NoReferrer);
 }
@@ -179,7 +177,7 @@ void PingLoader::sendViolationReport(Frame& frame, const URL& reportURL, Ref<For
 
     HTTPHeaderMap originalRequestHeader = request.httpHeaderFields();
 
-    frame.loader().addExtraFieldsToRequest(request, IsMainResource::No);
+    frame.loader().addExtraFieldsToSubresourceRequest(request);
 
     String referrer = SecurityPolicy::generateReferrerHeader(document.referrerPolicy(), reportURL, frame.loader().outgoingReferrer());
     if (!referrer.isEmpty())

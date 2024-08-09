@@ -36,7 +36,6 @@ namespace WebCore {
 
 class DOMTokenList;
 class HTMLLinkElement;
-class Page;
 struct MediaQueryParserContext;
 
 template<typename T> class EventSender;
@@ -71,7 +70,7 @@ public:
     WEBCORE_EXPORT String as() const;
 
     void dispatchPendingEvent(LinkEventSender*);
-    static void dispatchPendingLoadEvents(Page*);
+    static void dispatchPendingLoadEvents();
 
     WEBCORE_EXPORT DOMTokenList& relList();
 
@@ -80,10 +79,6 @@ public:
 #endif
 
     void allowPrefetchLoadAndErrorForTesting() { m_allowPrefetchLoadAndErrorForTesting = true; }
-
-    void setReferrerPolicyForBindings(const AtomString&);
-    String referrerPolicyForBindings() const;
-    ReferrerPolicy referrerPolicy() const;
 
 private:
     void parseAttribute(const QualifiedName&, const AtomString&) final;

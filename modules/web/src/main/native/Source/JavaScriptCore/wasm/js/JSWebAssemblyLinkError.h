@@ -43,7 +43,7 @@ public:
 
     DECLARE_INFO;
 
-private:
+protected:
     JSWebAssemblyLinkError(VM&, Structure*);
 };
 STATIC_ASSERT_ISO_SUBSPACE_SHARABLE(JSWebAssemblyLinkError, ErrorInstance);

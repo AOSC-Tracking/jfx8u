@@ -42,12 +42,12 @@ PageHeapAgent::~PageHeapAgent() = default;
 void PageHeapAgent::enable(ErrorString& errorString)
 {
     WebHeapAgent::enable(errorString);
-    m_instrumentingAgents.setEnabledPageHeapAgent(this);
+    m_instrumentingAgents.setPageHeapAgent(this);
 }
 
 void PageHeapAgent::disable(ErrorString& errorString)
 {
-    m_instrumentingAgents.setEnabledPageHeapAgent(nullptr);
+    m_instrumentingAgents.setPageHeapAgent(nullptr);
     WebHeapAgent::disable(errorString);
 }
 

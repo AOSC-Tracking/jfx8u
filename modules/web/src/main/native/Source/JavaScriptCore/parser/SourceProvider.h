@@ -32,6 +32,7 @@
 #include "CodeSpecializationKind.h"
 #include "SourceOrigin.h"
 #include <wtf/RefCounted.h>
+#include <wtf/URL.h>
 #include <wtf/text/TextPosition.h>
 #include <wtf/text/WTFString.h>
 
@@ -53,7 +54,7 @@ class UnlinkedFunctionCodeBlock;
     public:
         static const intptr_t nullID = 1;
 
-        JS_EXPORT_PRIVATE SourceProvider(const SourceOrigin&, String&& sourceURL, const TextPosition& startPosition, SourceProviderSourceType);
+        JS_EXPORT_PRIVATE SourceProvider(const SourceOrigin&, URL&&, const TextPosition& startPosition, SourceProviderSourceType);
 
         JS_EXPORT_PRIVATE virtual ~SourceProvider();
 
@@ -70,9 +71,7 @@ class UnlinkedFunctionCodeBlock;
         }
 
         const SourceOrigin& sourceOrigin() const { return m_sourceOrigin; }
-
-        // This is NOT the path that should be used for computing relative paths from a script. Use SourceOrigin's URL for that, the values may or may not be the same...
-        const String& sourceURL() const { return m_sourceURL; }
+        const URL& url() const { return m_url; }
         const String& sourceURLDirective() const { return m_sourceURLDirective; }
         const String& sourceMappingURLDirective() const { return m_sourceMappingURLDirective; }
 
@@ -93,8 +92,8 @@ class UnlinkedFunctionCodeBlock;
         JS_EXPORT_PRIVATE void getID();
 
         SourceProviderSourceType m_sourceType;
+        URL m_url;
         SourceOrigin m_sourceOrigin;
-        String m_sourceURL;
         String m_sourceURLDirective;
         String m_sourceMappingURLDirective;
         TextPosition m_startPosition;
@@ -105,9 +104,9 @@ class UnlinkedFunctionCodeBlock;
     class StringSourceProvider : public SourceProvider {
         WTF_MAKE_FAST_ALLOCATED_WITH_HEAP_IDENTIFIER(StringSourceProvider);
     public:
-        static Ref<StringSourceProvider> create(const String& source, const SourceOrigin& sourceOrigin, String sourceURL, const TextPosition& startPosition = TextPosition(), SourceProviderSourceType sourceType = SourceProviderSourceType::Program)
+        static Ref<StringSourceProvider> create(const String& source, const SourceOrigin& sourceOrigin, URL&& url, const TextPosition& startPosition = TextPosition(), SourceProviderSourceType sourceType = SourceProviderSourceType::Program)
         {
-            return adoptRef(*new StringSourceProvider(source, sourceOrigin, WTFMove(sourceURL), startPosition, sourceType));
+            return adoptRef(*new StringSourceProvider(source, sourceOrigin, WTFMove(url), startPosition, sourceType));
         }
 
         unsigned hash() const override
@@ -121,8 +120,8 @@ class UnlinkedFunctionCodeBlock;
         }
 
     protected:
-        StringSourceProvider(const String& source, const SourceOrigin& sourceOrigin, String&& sourceURL, const TextPosition& startPosition, SourceProviderSourceType sourceType)
-            : SourceProvider(sourceOrigin, WTFMove(sourceURL), startPosition, sourceType)
+        StringSourceProvider(const String& source, const SourceOrigin& sourceOrigin, URL&& url, const TextPosition& startPosition, SourceProviderSourceType sourceType)
+            : SourceProvider(sourceOrigin, WTFMove(url), startPosition, sourceType)
             , m_source(source.isNull() ? *StringImpl::empty() : *source.impl())
         {
         }
@@ -132,19 +131,19 @@ class UnlinkedFunctionCodeBlock;
     };
 
 #if ENABLE(WEBASSEMBLY)
-    class WebAssemblySourceProvider final : public SourceProvider {
+    class WebAssemblySourceProvider : public SourceProvider {
     public:
-        static Ref<WebAssemblySourceProvider> create(Vector<uint8_t>&& data, const SourceOrigin& sourceOrigin, String sourceURL)
+        static Ref<WebAssemblySourceProvider> create(Vector<uint8_t>&& data, const SourceOrigin& sourceOrigin, URL&& url)
         {
-            return adoptRef(*new WebAssemblySourceProvider(WTFMove(data), sourceOrigin, WTFMove(sourceURL)));
+            return adoptRef(*new WebAssemblySourceProvider(WTFMove(data), sourceOrigin, WTFMove(url)));
         }
 
-        unsigned hash() const final
+        unsigned hash() const override
         {
             return m_source.impl()->hash();
         }
 
-        StringView source() const final
+        StringView source() const override
         {
             return m_source;
         }
@@ -155,8 +154,8 @@ class UnlinkedFunctionCodeBlock;
         }
 
     private:
-        WebAssemblySourceProvider(Vector<uint8_t>&& data, const SourceOrigin& sourceOrigin, String&& sourceURL)
-            : SourceProvider(sourceOrigin, WTFMove(sourceURL), TextPosition(), SourceProviderSourceType::WebAssembly)
+        WebAssemblySourceProvider(Vector<uint8_t>&& data, const SourceOrigin& sourceOrigin, URL&& url)
+            : SourceProvider(sourceOrigin, WTFMove(url), TextPosition(), SourceProviderSourceType::WebAssembly)
             , m_source("[WebAssembly source]")
             , m_data(WTFMove(data))
         {

@@ -73,7 +73,7 @@ public:
 
     WEBCORE_EXPORT const Vector<HTMLElement*>& listItems() const;
 
-    bool accessKeyAction(bool sendMouseEvents) final;
+    void accessKeyAction(bool sendMouseEvents) final;
     void accessKeySetSelectedIndex(int);
 
     WEBCORE_EXPORT void setMultiple(bool);

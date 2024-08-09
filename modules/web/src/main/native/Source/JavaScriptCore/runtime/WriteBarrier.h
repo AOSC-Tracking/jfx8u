@@ -195,7 +195,7 @@ class WriteBarrier : public WriteBarrierBase<T, Traits> {
 public:
     WriteBarrier()
     {
-        this->setWithoutWriteBarrier(nullptr);
+        this->setWithoutWriteBarrier(0);
     }
 
     WriteBarrier(VM& vm, const JSCell* owner, T* value)

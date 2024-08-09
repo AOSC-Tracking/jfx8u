@@ -27,7 +27,6 @@
 
 #if ENABLE(LAYOUT_FORMATTING_CONTEXT)
 
-#include "BlockFormattingState.h"
 #include "FormattingContext.h"
 #include <wtf/HashMap.h>
 #include <wtf/IsoMalloc.h>
@@ -38,44 +37,46 @@ class LayoutUnit;
 
 namespace Layout {
 
+class BlockFormattingState;
 class Box;
 class FloatingContext;
 
 // This class implements the layout logic for block formatting contexts.
 // https://www.w3.org/TR/CSS22/visuren.html#block-formatting
-class BlockFormattingContext : public FormattingContext {
+class BlockFormattingContext final : public FormattingContext {
     WTF_MAKE_ISO_ALLOCATED(BlockFormattingContext);
 public:
-    BlockFormattingContext(const ContainerBox& formattingContextRoot, BlockFormattingState&);
+    BlockFormattingContext(const Container& formattingContextRoot, BlockFormattingState&);
 
-    void layoutInFlowContent(InvalidationState&, const ConstraintsForInFlowContent&) override;
+    void layoutInFlowContent(InvalidationState&, const HorizontalConstraints&, const VerticalConstraints&) override;
 
-protected:
+private:
+
+    template<typename T>
     struct ConstraintsPair {
-        ConstraintsForInFlowContent formattingContextRoot;
-        ConstraintsForInFlowContent containingBlock;
+        const T root;
+        const T containingBlock;
     };
-    void placeInFlowPositionedChildren(const ContainerBox&, const HorizontalConstraints&);
+    void placeInFlowPositionedChildren(const Box&, const ConstraintsPair<HorizontalConstraints>&);
 
-    void computeWidthAndMargin(const FloatingContext&, const Box&, const ConstraintsPair&);
-    void computeHeightAndMargin(const Box&, const ConstraintsForInFlowContent&);
+    void computeWidthAndMargin(const FloatingContext&, const Box&, const ConstraintsPair<HorizontalConstraints>&);
+    void computeHeightAndMargin(const Box&, const ConstraintsPair<HorizontalConstraints>&, const ConstraintsPair<VerticalConstraints>&);
 
-    void computeStaticHorizontalPosition(const Box&, const HorizontalConstraints&);
-    void computeStaticVerticalPosition(const Box&, const VerticalConstraints&);
-    void computePositionToAvoidFloats(const FloatingContext&, const Box&, const ConstraintsPair&);
+    void computeStaticHorizontalPosition(const Box&, const ConstraintsPair<HorizontalConstraints>&);
+    void computeStaticVerticalPosition(const Box&, const ConstraintsPair<VerticalConstraints>&);
+    void computePositionToAvoidFloats(const FloatingContext&, const Box&, const ConstraintsPair<HorizontalConstraints>&, const ConstraintsPair<VerticalConstraints>&);
     void computeVerticalPositionForFloatClear(const FloatingContext&, const Box&);
 
-    void precomputeVerticalPositionForBoxAndAncestors(const Box&, const ConstraintsPair&);
+    void precomputeVerticalPosition(const Box&, const HorizontalConstraints&, const VerticalConstraints&);
+    void precomputeVerticalPositionForAncestors(const Box&, const ConstraintsPair<HorizontalConstraints>&, const ConstraintsPair<VerticalConstraints>&);
+    void precomputeVerticalPositionForFormattingRoot(const FloatingContext&, const Box&, const ConstraintsPair<HorizontalConstraints>&, const ConstraintsPair<VerticalConstraints>&);
 
     IntrinsicWidthConstraints computedIntrinsicWidthConstraints() override;
-
     LayoutUnit verticalPositionWithMargin(const Box&, const UsedVerticalMargin&, const VerticalConstraints&) const;
 
     // This class implements positioning and sizing for boxes participating in a block formatting context.
     class Geometry : public FormattingContext::Geometry {
     public:
-        Geometry(const BlockFormattingContext&);
-
         ContentHeightAndMargin inFlowHeightAndMargin(const Box&, const HorizontalConstraints&, const OverrideVerticalValues&);
         ContentWidthAndMargin inFlowWidthAndMargin(const Box&, const HorizontalConstraints&, const OverrideHorizontalValues&);
 
@@ -85,12 +86,14 @@ protected:
 
         IntrinsicWidthConstraints intrinsicWidthConstraints(const Box&);
 
-        ContentWidthAndMargin computedWidthAndMargin(const Box&, const HorizontalConstraints&, Optional<LayoutUnit> availableWidthFloatAvoider);
-
     private:
+        friend class BlockFormattingContext;
+        Geometry(const BlockFormattingContext&);
+
         ContentHeightAndMargin inFlowNonReplacedHeightAndMargin(const Box&, const HorizontalConstraints&, const OverrideVerticalValues&);
-        ContentWidthAndMargin inFlowNonReplacedWidthAndMargin(const Box&, const HorizontalConstraints&, const OverrideHorizontalValues&);
-        ContentWidthAndMargin inFlowReplacedWidthAndMargin(const ReplacedBox&, const HorizontalConstraints&, const OverrideHorizontalValues&);
+        ContentWidthAndMargin inFlowNonReplacedWidthAndMargin(const Box&, const HorizontalConstraints&, const OverrideHorizontalValues&) const;
+        ContentWidthAndMargin inFlowReplacedWidthAndMargin(const Box&, const HorizontalConstraints&, const OverrideHorizontalValues&) const;
+        Point staticPositionForOutOfFlowPositioned(const Box&) const;
 
         const BlockFormattingContext& formattingContext() const { return downcast<BlockFormattingContext>(FormattingContext::Geometry::formattingContext()); }
     };
@@ -99,11 +102,12 @@ protected:
     // This class implements margin collapsing for block formatting context.
     class MarginCollapse {
     public:
-        UsedVerticalMargin collapsedVerticalValues(const Box&, UsedVerticalMargin::NonCollapsedValues);
+        UsedVerticalMargin::CollapsedValues collapsedVerticalValues(const Box&, UsedVerticalMargin::NonCollapsedValues);
 
         PrecomputedMarginBefore precomputedMarginBefore(const Box&, UsedVerticalMargin::NonCollapsedValues);
         LayoutUnit marginBeforeIgnoringCollapsingThrough(const Box&, UsedVerticalMargin::NonCollapsedValues);
         static void updateMarginAfterForPreviousSibling(BlockFormattingContext&, const MarginCollapse&, const Box&);
+        PositiveAndNegativeVerticalMargin resolvedPositiveNegativeMarginValues(const Box&, const UsedVerticalMargin::NonCollapsedValues&);
 
         bool marginBeforeCollapsesWithParentMarginBefore(const Box&) const;
         bool marginBeforeCollapsesWithFirstInFlowChildMarginBefore(const Box&) const;
@@ -123,16 +127,9 @@ protected:
         MarginCollapse(const BlockFormattingContext&);
 
         enum class MarginType { Before, After };
-        UsedVerticalMargin::PositiveAndNegativePair::Values positiveNegativeValues(const Box&, MarginType) const;
-        UsedVerticalMargin::PositiveAndNegativePair::Values positiveNegativeMarginBefore(const Box&, UsedVerticalMargin::NonCollapsedValues) const;
-        UsedVerticalMargin::PositiveAndNegativePair::Values positiveNegativeMarginAfter(const Box&, UsedVerticalMargin::NonCollapsedValues) const;
-
-        UsedVerticalMargin::PositiveAndNegativePair::Values precomputedPositiveNegativeMarginBefore(const Box&, UsedVerticalMargin::NonCollapsedValues) const;
-        UsedVerticalMargin::PositiveAndNegativePair::Values precomputedPositiveNegativeValues(const Box&) const;
-
-        UsedVerticalMargin::PositiveAndNegativePair::Values computedPositiveAndNegativeMargin(UsedVerticalMargin::PositiveAndNegativePair::Values, UsedVerticalMargin::PositiveAndNegativePair::Values) const;
-        Optional<LayoutUnit> marginValue(UsedVerticalMargin::PositiveAndNegativePair::Values) const;
-
+        PositiveAndNegativeVerticalMargin::Values positiveNegativeValues(const Box&, MarginType) const;
+        PositiveAndNegativeVerticalMargin::Values positiveNegativeMarginBefore(const Box&, UsedVerticalMargin::NonCollapsedValues) const;
+        PositiveAndNegativeVerticalMargin::Values positiveNegativeMarginAfter(const Box&, UsedVerticalMargin::NonCollapsedValues) const;
         bool hasClearance(const Box&) const;
 
         LayoutState& layoutState() { return m_blockFormattingContext.layoutState(); }
@@ -145,31 +142,33 @@ protected:
 
     class Quirks : public FormattingContext::Quirks {
     public:
-        Quirks(const BlockFormattingContext&);
-
         bool needsStretching(const Box&) const;
-        LayoutUnit stretchedInFlowHeight(const Box&, ContentHeightAndMargin);
+        ContentHeightAndMargin stretchedInFlowHeight(const Box&, ContentHeightAndMargin);
 
         bool shouldIgnoreCollapsedQuirkMargin(const Box&) const;
-        bool shouldCollapseMarginBeforeWithParentMarginBefore(const Box&) const;
-        bool shouldCollapseMarginAfterWithParentMarginAfter(const Box&) const;
+        bool shouldIgnoreMarginBefore(const Box&) const;
+        bool shouldIgnoreMarginAfter(const Box&) const;
+
+    private:
+        friend class BlockFormattingContext;
+        Quirks(const BlockFormattingContext&);
 
         const BlockFormattingContext& formattingContext() const { return downcast<BlockFormattingContext>(FormattingContext::Quirks::formattingContext()); }
-        BlockFormattingContext::Geometry geometry() const { return formattingContext().geometry(); }
 
     };
     BlockFormattingContext::Quirks quirks() const { return Quirks(*this); }
 
-    Optional<LayoutUnit> usedAvailableWidthForFloatAvoider(const FloatingContext&, const Box&, const ConstraintsPair&);
+    void setPrecomputedMarginBefore(const Box&, const PrecomputedMarginBefore&);
+    void removePrecomputedMarginBefore(const Box& layoutBox) { m_precomputedMarginBeforeList.remove(&layoutBox); }
+    bool hasPrecomputedMarginBefore(const Box&) const;
+    Optional<LayoutUnit> usedAvailableWidthForFloatAvoider(const FloatingContext&, const Box&) const;
+#if ASSERT_ENABLED
+    PrecomputedMarginBefore precomputedMarginBefore(const Box& layoutBox) const { return m_precomputedMarginBeforeList.get(&layoutBox); }
+#endif
 
     const BlockFormattingState& formattingState() const { return downcast<BlockFormattingState>(FormattingContext::formattingState()); }
     BlockFormattingState& formattingState() { return downcast<BlockFormattingState>(FormattingContext::formattingState()); }
 
-#if ASSERT_ENABLED
-    void setPrecomputedMarginBefore(const Box& layoutBox, const PrecomputedMarginBefore& precomputedMarginBefore) { m_precomputedMarginBeforeList.set(&layoutBox, precomputedMarginBefore); }
-    PrecomputedMarginBefore precomputedMarginBefore(const Box& layoutBox) const { return m_precomputedMarginBeforeList.get(&layoutBox); }
-    bool hasPrecomputedMarginBefore(const Box& layoutBox) const { return m_precomputedMarginBeforeList.contains(&layoutBox); }
-#endif
 private:
     HashMap<const Box*, PrecomputedMarginBefore> m_precomputedMarginBeforeList;
 };

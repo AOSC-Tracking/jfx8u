@@ -25,8 +25,6 @@
 
 #pragma once
 
-#include "ExceptionOr.h"
-#include "SVGPropertyTraits.h"
 #include "SVGValueProperty.h"
 
 namespace WebCore {

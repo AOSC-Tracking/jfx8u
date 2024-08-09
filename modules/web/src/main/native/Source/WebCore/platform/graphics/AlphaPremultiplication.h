@@ -34,17 +34,6 @@ enum class AlphaPremultiplication : uint8_t {
     Unpremultiplied
 };
 
-
 WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, AlphaPremultiplication);
 
-}
-
-namespace WTF {
-template<> struct EnumTraits<WebCore::AlphaPremultiplication> {
-    using values = EnumValues<
-        WebCore::AlphaPremultiplication,
-        WebCore::AlphaPremultiplication::Premultiplied,
-        WebCore::AlphaPremultiplication::Unpremultiplied
-    >;
-};
-}
+} // namespace WebCore

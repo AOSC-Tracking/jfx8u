@@ -37,7 +37,7 @@ class TextControlInnerContainer final : public HTMLDivElement {
     WTF_MAKE_ISO_ALLOCATED(TextControlInnerContainer);
 public:
     static Ref<TextControlInnerContainer> create(Document&);
-private:
+protected:
     TextControlInnerContainer(Document&);
     RenderPtr<RenderElement> createElementRenderer(RenderStyle&&, const RenderTreePosition&) override;
     Optional<Style::ElementStyle> resolveCustomStyle(const RenderStyle& parentStyle, const RenderStyle* shadowHostStyle) override;
@@ -48,10 +48,11 @@ class TextControlInnerElement final : public HTMLDivElement {
 public:
     static Ref<TextControlInnerElement> create(Document&);
 
-private:
+protected:
     TextControlInnerElement(Document&);
     Optional<Style::ElementStyle> resolveCustomStyle(const RenderStyle& parentStyle, const RenderStyle* shadowHostStyle) override;
 
+private:
     bool isMouseFocusable() const override { return false; }
 };
 
@@ -111,7 +112,6 @@ public:
 private:
     SearchFieldCancelButtonElement(Document&);
     bool isMouseFocusable() const override { return false; }
-    Optional<Style::ElementStyle> resolveCustomStyle(const RenderStyle& parentStyle, const RenderStyle* shadowHostStyle) override;
 };
 
 } // namespace WebCore

@@ -109,8 +109,10 @@ struct MetaAllocatorPtrHash {
     static constexpr bool safeToCompareToEmptyOrDeleted = true;
 };
 
-template<typename> struct DefaultHash;
-template<PtrTag tag> struct DefaultHash<MetaAllocatorPtr<tag>> : MetaAllocatorPtrHash<tag> { };
+template<typename T> struct DefaultHash;
+template<PtrTag tag> struct DefaultHash<MetaAllocatorPtr<tag>> {
+    typedef MetaAllocatorPtrHash<tag> Hash;
+};
 
 template<PtrTag tag> struct HashTraits<MetaAllocatorPtr<tag>> : public CustomHashTraits<MetaAllocatorPtr<tag>> { };
 

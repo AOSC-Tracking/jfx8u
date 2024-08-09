@@ -46,7 +46,7 @@ public:
     static void* tryReallocate(HeapKind, void*, size_t);
     static void* reallocate(HeapKind, void*, size_t);
 
-    BEXPORT static void scavenge(HeapKind);
+    static void scavenge(HeapKind);
 
     Cache(HeapKind);
 

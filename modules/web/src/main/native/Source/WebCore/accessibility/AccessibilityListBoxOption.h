@@ -29,43 +29,47 @@
 #pragma once
 
 #include "AccessibilityObject.h"
+#include "HTMLElement.h"
+#include <wtf/Forward.h>
 
 namespace WebCore {
 
-class HTMLElement;
+class AccessibilityListBox;
+class Element;
 class HTMLSelectElement;
 
 class AccessibilityListBoxOption final : public AccessibilityObject {
 public:
-    static Ref<AccessibilityListBoxOption> create(HTMLElement&);
+    static Ref<AccessibilityListBoxOption> create();
     virtual ~AccessibilityListBoxOption();
 
-    bool isSelected() const final;
-    void setSelected(bool) final;
+    void setHTMLElement(HTMLElement* element) { m_optionElement = element; }
+
+    AccessibilityRole roleValue() const override { return AccessibilityRole::ListBoxOption; }
+    bool isSelected() const override;
+    bool isEnabled() const override;
+    bool isSelectedOptionActive() const override;
+    String stringValue() const override;
+    Element* actionElement() const override;
+    Node* node() const override { return m_optionElement; }
+    void setSelected(bool) override;
+    bool canSetSelectedAttribute() const override;
+
+    LayoutRect elementRect() const override;
+    AccessibilityObject* parentObject() const override;
 
 private:
-    explicit AccessibilityListBoxOption(HTMLElement&);
+    AccessibilityListBoxOption();
 
-    AccessibilityRole roleValue() const final { return AccessibilityRole::ListBoxOption; }
-    bool isEnabled() const final;
-    bool isSelectedOptionActive() const final;
-    String stringValue() const final;
-    Element* actionElement() const final;
-    Node* node() const final;
-    bool canSetSelectedAttribute() const final;
-
-    LayoutRect elementRect() const final;
-    AccessibilityObject* parentObject() const final;
-
-    bool isListBoxOption() const final { return true; }
-    bool canHaveChildren() const final { return false; }
+    bool isListBoxOption() const override { return true; }
+    bool canHaveChildren() const override { return false; }
     HTMLSelectElement* listBoxOptionParentNode() const;
     int listBoxOptionIndex() const;
     IntRect listBoxOptionRect() const;
     AccessibilityObject* listBoxOptionAccessibilityObject(HTMLElement*) const;
-    bool computeAccessibilityIsIgnored() const final;
+    bool computeAccessibilityIsIgnored() const override;
 
-    WeakPtr<HTMLElement> m_optionElement;
+    HTMLElement* m_optionElement;
 };
 
 } // namespace WebCore

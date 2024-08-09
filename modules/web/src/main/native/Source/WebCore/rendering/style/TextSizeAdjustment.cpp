@@ -79,7 +79,7 @@ bool AutosizeStatus::probablyContainsASmallFixedNumberOfLines(const RenderStyle&
         && approximateNumberOfLines - std::floor(approximateNumberOfLines) <= thresholdForConsideringAnApproximateNumberOfLinesToBeCloseToAnInteger;
 }
 
-auto AutosizeStatus::computeStatus(const RenderStyle& style) -> AutosizeStatus
+void AutosizeStatus::updateStatus(RenderStyle& style)
 {
     auto result = style.autosizeStatus().fields();
 
@@ -113,12 +113,7 @@ auto AutosizeStatus::computeStatus(const RenderStyle& style) -> AutosizeStatus
     if (style.isFloating())
         result.add(Fields::Floating);
 
-    return AutosizeStatus(result);
-}
-
-void AutosizeStatus::updateStatus(RenderStyle& style)
-{
-    style.setAutosizeStatus(AutosizeStatus(computeStatus(style)));
+    style.setAutosizeStatus(result);
 }
 
 float AutosizeStatus::idempotentTextSize(float specifiedSize, float pageScale)

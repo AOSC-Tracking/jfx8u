@@ -47,7 +47,7 @@ struct FetchOptions {
     FetchOptions isolatedCopy() const { return { destination, mode, credentials, cache, redirect, referrerPolicy, integrity.isolatedCopy(), keepAlive }; }
 
     template<class Encoder> void encodePersistent(Encoder&) const;
-    template<class Decoder> static WARN_UNUSED_RETURN bool decodePersistent(Decoder&, FetchOptions&);
+    template<class Decoder> static bool decodePersistent(Decoder&, FetchOptions&);
     template<class Encoder> void encode(Encoder&) const;
     template<class Decoder> static Optional<FetchOptions> decode(Decoder&);
 
@@ -167,8 +167,7 @@ template<> struct EnumTraits<WebCore::FetchOptions::Redirect> {
 
 namespace WebCore {
 
-template<class Encoder>
-inline void FetchOptions::encodePersistent(Encoder& encoder) const
+template<class Encoder> inline void FetchOptions::encodePersistent(Encoder& encoder) const
 {
     // Changes to encoding here should bump NetworkCache Storage format version.
     encoder << destination;
@@ -181,70 +180,59 @@ inline void FetchOptions::encodePersistent(Encoder& encoder) const
     encoder << keepAlive;
 }
 
-template<class Decoder>
-inline bool FetchOptions::decodePersistent(Decoder& decoder, FetchOptions& options)
+template<class Decoder> inline bool FetchOptions::decodePersistent(Decoder& decoder, FetchOptions& options)
 {
-    Optional<FetchOptions::Destination> destination;
-    decoder >> destination;
-    if (!destination)
+    FetchOptions::Destination destination;
+    if (!decoder.decode(destination))
         return false;
 
-    Optional<FetchOptions::Mode> mode;
-    decoder >> mode;
-    if (!mode)
+    FetchOptions::Mode mode;
+    if (!decoder.decode(mode))
         return false;
 
-    Optional<FetchOptions::Credentials> credentials;
-    decoder >> credentials;
-    if (!credentials)
+    FetchOptions::Credentials credentials;
+    if (!decoder.decode(credentials))
         return false;
 
-    Optional<FetchOptions::Cache> cache;
-    decoder >> cache;
-    if (!cache)
+    FetchOptions::Cache cache;
+    if (!decoder.decode(cache))
         return false;
 
-    Optional<FetchOptions::Redirect> redirect;
-    decoder >> redirect;
-    if (!redirect)
+    FetchOptions::Redirect redirect;
+    if (!decoder.decode(redirect))
         return false;
 
-    Optional<ReferrerPolicy> referrerPolicy;
-    decoder >> referrerPolicy;
-    if (!referrerPolicy)
+    ReferrerPolicy referrerPolicy;
+    if (!decoder.decode(referrerPolicy))
         return false;
 
-    Optional<String> integrity;
-    decoder >> integrity;
-    if (!integrity)
+    String integrity;
+    if (!decoder.decode(integrity))
         return false;
 
-    Optional<bool> keepAlive;
-    decoder >> keepAlive;
-    if (!keepAlive)
+    bool keepAlive;
+    if (!decoder.decode(keepAlive))
         return false;
 
-    options.destination = *destination;
-    options.mode = *mode;
-    options.credentials = *credentials;
-    options.cache = *cache;
-    options.redirect = *redirect;
-    options.referrerPolicy = *referrerPolicy;
-    options.integrity = WTFMove(*integrity);
-    options.keepAlive = *keepAlive;
+    options.destination = destination;
+    options.mode = mode;
+    options.credentials = credentials;
+    options.cache = cache;
+    options.redirect = redirect;
+    options.referrerPolicy = referrerPolicy;
+    options.integrity = WTFMove(integrity);
+    options.keepAlive = keepAlive;
 
     return true;
 }
 
-template<class Encoder>
-inline void FetchOptions::encode(Encoder& encoder) const
+template<class Encoder> inline void FetchOptions::encode(Encoder& encoder) const
 {
     encodePersistent(encoder);
     encoder << clientIdentifier.asOptional();
 }
 
-template<class Decoder>
-inline Optional<FetchOptions> FetchOptions::decode(Decoder& decoder)
+template<class Decoder> inline Optional<FetchOptions> FetchOptions::decode(Decoder& decoder)
 {
     FetchOptions options;
     if (!decodePersistent(decoder, options))

@@ -28,11 +28,13 @@
 
 #if ENABLE(DFG_JIT)
 
+#include "DFGBasicBlockInlines.h"
 #include "DFGBlockSet.h"
 #include "DFGGraph.h"
 #include "DFGInsertionSet.h"
 #include "DFGPhase.h"
-#include "JSCJSValueInlines.h"
+#include "FullBytecodeLiveness.h"
+#include "JSCInlines.h"
 
 namespace JSC { namespace DFG {
 

@@ -26,7 +26,7 @@
 #include "HTMLElement.h"
 #include "HTMLNames.h"
 #include "SharedStringHash.h"
-#include "URLDecomposition.h"
+#include "URLUtils.h"
 #include <wtf/OptionSet.h>
 
 namespace WebCore {
@@ -41,7 +41,7 @@ enum class Relation : uint8_t {
     Opener = 1 << 2,
 };
 
-class HTMLAnchorElement : public HTMLElement, public URLDecomposition {
+class HTMLAnchorElement : public HTMLElement, public URLUtils<HTMLAnchorElement> {
     WTF_MAKE_ISO_ALLOCATED(HTMLAnchorElement);
 public:
     static Ref<HTMLAnchorElement> create(Document&);
@@ -67,15 +67,11 @@ public:
 
     SharedStringHash visitedLinkHash() const;
 
-    WEBCORE_EXPORT DOMTokenList& relList();
+    WEBCORE_EXPORT DOMTokenList& relList() const;
 
 #if USE(SYSTEM_PREVIEW)
-    WEBCORE_EXPORT bool isSystemPreviewLink();
+    WEBCORE_EXPORT bool isSystemPreviewLink() const;
 #endif
-
-    void setReferrerPolicyForBindings(const AtomString&);
-    String referrerPolicyForBindings() const;
-    ReferrerPolicy referrerPolicy() const;
 
 protected:
     HTMLAnchorElement(const QualifiedName&, Document&);
@@ -88,7 +84,7 @@ private:
     bool isKeyboardFocusable(KeyboardEvent*) const override;
     void defaultEventHandler(Event&) final;
     void setActive(bool active = true, bool pause = false) final;
-    bool accessKeyAction(bool sendMouseEvents) final;
+    void accessKeyAction(bool sendMouseEvents) final;
     bool isURLAttribute(const Attribute&) const final;
     bool canStartSelection() const final;
     String target() const override;
@@ -116,17 +112,14 @@ private:
     void setRootEditableElementForSelectionOnMouseDown(Element*);
     void clearRootEditableElementForSelectionOnMouseDown();
 
-    URL fullURL() const final { return href(); }
-    void setFullURL(const URL& fullURL) final { setHref(fullURL.string()); }
-
-    bool m_hasRootEditableElementForSelectionOnMouseDown { false };
-    bool m_wasShiftKeyDownOnMouseDown { false };
+    bool m_hasRootEditableElementForSelectionOnMouseDown;
+    bool m_wasShiftKeyDownOnMouseDown;
     OptionSet<Relation> m_linkRelations;
 
     // This is computed only once and must not be affected by subsequent URL changes.
     mutable Markable<SharedStringHash, SharedStringHashMarkableTraits> m_storedVisitedLinkHash;
 
-    std::unique_ptr<DOMTokenList> m_relList;
+    mutable std::unique_ptr<DOMTokenList> m_relList;
 };
 
 inline SharedStringHash HTMLAnchorElement::visitedLinkHash() const

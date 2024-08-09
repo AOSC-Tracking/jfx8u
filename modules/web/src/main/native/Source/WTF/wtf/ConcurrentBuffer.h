@@ -66,9 +66,8 @@ public:
             return;
         Array* newArray = createArray(newSize);
         // This allows us to do ConcurrentBuffer<std::unique_ptr<>>.
-        // static_cast<void*> avoids triggering -Wclass-memaccess.
         if (array)
-            memcpy(static_cast<void*>(newArray->data), array->data, sizeof(T) * array->size);
+            memcpy(newArray->data, array->data, sizeof(T) * array->size);
         for (size_t i = array ? array->size : 0; i < newSize; ++i)
             new (newArray->data + i) T();
         WTF::storeStoreFence();

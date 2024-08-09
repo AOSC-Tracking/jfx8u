@@ -26,8 +26,10 @@
 #include "config.h"
 #include "CodeOrigin.h"
 
+#include "CallFrame.h"
 #include "CodeBlock.h"
 #include "InlineCallFrame.h"
+#include "JSCInlines.h"
 
 namespace JSC {
 

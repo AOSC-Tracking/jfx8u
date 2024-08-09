@@ -95,7 +95,7 @@ protected:
     """${classAndExportMacro} ${domainName}BackendDispatcher final : public SupplementalBackendDispatcher {
 public:
     static Ref<${domainName}BackendDispatcher> create(BackendDispatcher&, ${domainName}BackendDispatcherHandler*);
-    void dispatch(long requestId, const String& method, Ref<JSON::Object>&& message) final;
+    void dispatch(long requestId, const String& method, Ref<JSON::Object>&& message) override;
 ${commandDeclarations}
 private:
     ${domainName}BackendDispatcher(BackendDispatcher&, ${domainName}BackendDispatcherHandler*);
@@ -108,7 +108,7 @@ public:
     void setAlternateDispatcher(Alternate${domainName}BackendDispatcher* alternateDispatcher) { m_alternateDispatcher = alternateDispatcher; }
 private:
     Alternate${domainName}BackendDispatcher* m_alternateDispatcher { nullptr };
-#endif // ENABLE(INSPECTOR_ALTERNATE_DISPATCHERS)""")
+#endif""")
 
     BackendDispatcherHeaderAsyncCommandDeclaration = (
     """    ${classAndExportMacro} ${callbackName} : public BackendDispatcher::CallbackBase {
@@ -127,8 +127,8 @@ private:
     message->getObject("params"_s, parameters);
 
 ${dispatchCases}
-
-    m_backendDispatcher->reportProtocolError(BackendDispatcher::MethodNotFound, "'${domainName}." + method + "' was not found");
+    else
+        m_backendDispatcher->reportProtocolError(BackendDispatcher::MethodNotFound, "'${domainName}." + method + "' was not found");
 }""")
 
     BackendDispatcherImplementationLargeSwitch = (
@@ -139,8 +139,8 @@ ${dispatchCases}
     RefPtr<JSON::Object> parameters;
     message->getObject("params"_s, parameters);
 
-    using CallHandler = void (${domainName}BackendDispatcher::*)(long requestId, RefPtr<JSON::Object>&& message);
-    using DispatchMap = HashMap<String, CallHandler>;
+    typedef void (${domainName}BackendDispatcher::*CallHandler)(long requestId, RefPtr<JSON::Object>&& message);
+    typedef HashMap<String, CallHandler> DispatchMap;
     static NeverDestroyed<DispatchMap> dispatchMap;
     if (dispatchMap.get().isEmpty()) {
         static const struct MethodTable {

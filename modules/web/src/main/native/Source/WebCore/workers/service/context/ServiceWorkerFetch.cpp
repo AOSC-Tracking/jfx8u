@@ -65,7 +65,7 @@ static inline Optional<ResourceError> validateResponse(const ResourceResponse& r
     return { };
 }
 
-static void processResponse(Ref<Client>&& client, Expected<Ref<FetchResponse>, ResourceError>&& result, FetchOptions::Mode mode, FetchOptions::Redirect redirect, const URL& requestURL, CertificateInfo&& certificateInfo)
+static void processResponse(Ref<Client>&& client, Expected<Ref<FetchResponse>, ResourceError>&& result, FetchOptions::Mode mode, FetchOptions::Redirect redirect, const URL& requestURL)
 {
     if (!result.has_value()) {
         client->didFail(result.error());
@@ -97,9 +97,6 @@ static void processResponse(Ref<Client>&& client, Expected<Ref<FetchResponse>, R
             resourceResponse.setMimeType("text/html"_s);
             resourceResponse.setTextEncodingName("UTF-8"_s);
         }
-
-        if (!resourceResponse.certificateInfo())
-            resourceResponse.setCertificateInfo(WTFMove(certificateInfo));
     }
 
     // As per https://fetch.spec.whatwg.org/#main-fetch step 9, copy request's url list in response's url list if empty.
@@ -174,10 +171,8 @@ void dispatchFetchEvent(Ref<Client>&& client, ServiceWorkerGlobalScope& globalSc
     init.cancelable = true;
     auto event = FetchEvent::create(eventNames().fetchEvent, WTFMove(init), Event::IsTrusted::Yes);
 
-    CertificateInfo certificateInfo = globalScope.certificateInfo();
-
-    event->onResponse([client, mode, redirect, requestURL, certificateInfo = WTFMove(certificateInfo)] (auto&& result) mutable {
-        processResponse(WTFMove(client), WTFMove(result), mode, redirect, requestURL, WTFMove(certificateInfo));
+    event->onResponse([client = client.copyRef(), mode, redirect, requestURL] (auto&& result) mutable {
+        processResponse(WTFMove(client), WTFMove(result), mode, redirect, requestURL);
     });
 
     globalScope.dispatchEvent(event);

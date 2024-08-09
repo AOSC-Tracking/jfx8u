@@ -167,7 +167,14 @@ NativeImagePtr BitmapImage::nativeImageForCurrentFrameRespectingOrientation(cons
 #if USE(CG) || USE(DIRECT2D) || USE(CAIRO)
     buffer->context().drawNativeImage(image, rect.size(), rect, rect, { orientation });
 #endif
+
+#if USE(CG) || USE(DIRECT2D)
     return ImageBuffer::sinkIntoNativeImage(WTFMove(buffer));
+#elif USE(CAIRO)
+    return buffer->nativeImage();
+#endif
+
+    return nullptr;
 }
 
 #if USE(CG)
@@ -212,7 +219,7 @@ ImageDrawResult BitmapImage::draw(GraphicsContext& context, const FloatRect& des
         return ImageDrawResult::DidNothing;
 
     FloatSize scaleFactorForDrawing = context.scaleFactorForDrawing(destRect, srcRect);
-    IntSize sizeForDrawing = expandedIntSize(size(ImageOrientation::None) * scaleFactorForDrawing);
+    IntSize sizeForDrawing = expandedIntSize(size() * scaleFactorForDrawing);
     ImageDrawResult result = ImageDrawResult::DidDraw;
 
     m_currentSubsamplingLevel = m_allowSubsampling ? subsamplingLevelForScaleFactor(context, scaleFactorForDrawing) : SubsamplingLevel::Default;
@@ -239,7 +246,7 @@ ImageDrawResult BitmapImage::draw(GraphicsContext& context, const FloatRect& des
 
         if (!frameHasDecodedNativeImageCompatibleWithOptionsAtIndex(m_currentFrame, m_currentSubsamplingLevel, DecodingOptions(DecodingMode::Asynchronous))) {
             if (m_showDebugBackground)
-                fillWithSolidColor(context, destRect, Color::yellow.colorWithAlphaByte(128), options.compositeOperator());
+                fillWithSolidColor(context, destRect, Color(Color::yellow).colorWithAlpha(0.5), options.compositeOperator());
             return result;
         }
 
@@ -250,7 +257,7 @@ ImageDrawResult BitmapImage::draw(GraphicsContext& context, const FloatRect& des
         ASSERT_IMPLIES(status == StartAnimationStatus::DecodingActive, (!m_currentFrame && !m_repetitionsComplete) || frameHasFullSizeNativeImageAtIndex(m_currentFrame, m_currentSubsamplingLevel));
 
         if (status == StartAnimationStatus::DecodingActive && m_showDebugBackground) {
-            fillWithSolidColor(context, destRect, Color::yellow.colorWithAlphaByte(128), options.compositeOperator());
+            fillWithSolidColor(context, destRect, Color(Color::yellow).colorWithAlpha(0.5), options.compositeOperator());
             return result;
         }
 
@@ -268,7 +275,7 @@ ImageDrawResult BitmapImage::draw(GraphicsContext& context, const FloatRect& des
         } else if (frameIsBeingDecoded) {
             // FIXME: instead of showing the yellow rectangle and returning we need to wait for this frame to finish decoding.
             if (m_showDebugBackground) {
-                fillWithSolidColor(context, destRect, Color::yellow.colorWithAlphaByte(128), options.compositeOperator());
+                fillWithSolidColor(context, destRect, Color(Color::yellow).colorWithAlpha(0.5), options.compositeOperator());
                 LOG(Images, "BitmapImage::%s - %p - url: %s [waiting for async decoding to finish]", __FUNCTION__, this, sourceURL().string().utf8().data());
             }
             return ImageDrawResult::DidRequestDecoding;
@@ -291,12 +298,10 @@ ImageDrawResult BitmapImage::draw(GraphicsContext& context, const FloatRect& des
         return result;
     }
 
-    auto orientation = options.orientation();
-    if (orientation == ImageOrientation::FromImage) {
-        orientation = frameOrientationAtIndex(m_currentFrame);
-        drawNativeImage(image, context, destRect, srcRect, IntSize(size(orientation)), { options, orientation });
-    } else
-        drawNativeImage(image, context, destRect, srcRect, IntSize(size(orientation)), options);
+    if (options.orientation() == ImageOrientation::FromImage)
+        drawNativeImage(image, context, destRect, srcRect, IntSize(size()), { options, frameOrientationAtIndex(m_currentFrame) });
+    else
+        drawNativeImage(image, context, destRect, srcRect, IntSize(size()), options);
 
     m_currentFrameDecodingStatus = frameDecodingStatusAtIndex(m_currentFrame);
 

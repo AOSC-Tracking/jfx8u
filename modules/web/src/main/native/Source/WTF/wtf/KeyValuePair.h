@@ -40,12 +40,6 @@ struct KeyValuePair {
     {
     }
 
-    KeyValuePair(KeyTypeArg&& key, ValueTypeArg&& value)
-        : key(WTFMove(key))
-        , value(WTFMove(value))
-    {
-    }
-
     template<typename K, typename V>
     KeyValuePair(K&& key, V&& value)
         : key(std::forward<K>(key))

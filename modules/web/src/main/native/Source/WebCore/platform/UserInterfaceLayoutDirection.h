@@ -25,10 +25,8 @@
 
 #pragma once
 
-#include <wtf/EnumTraits.h>
-
 namespace WebCore {
 
-enum class UserInterfaceLayoutDirection : bool { LTR, RTL };
+enum class UserInterfaceLayoutDirection : uint8_t { LTR, RTL };
 
 } // namespace WebCore

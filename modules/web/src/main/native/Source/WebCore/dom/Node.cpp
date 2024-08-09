@@ -47,6 +47,7 @@
 #include "FrameView.h"
 #include "HTMLAreaElement.h"
 #include "HTMLBodyElement.h"
+#include "HTMLCollection.h"
 #include "HTMLElement.h"
 #include "HTMLImageElement.h"
 #include "HTMLSlotElement.h"
@@ -59,11 +60,11 @@
 #include "NodeRenderStyle.h"
 #include "ProcessingInstruction.h"
 #include "ProgressEvent.h"
+#include "Range.h"
 #include "RenderBlock.h"
 #include "RenderBox.h"
 #include "RenderTextControl.h"
 #include "RenderView.h"
-#include "RuntimeEnabledFeatures.h"
 #include "SVGElement.h"
 #include "ScopedEventQueue.h"
 #include "ScriptDisallowedScope.h"
@@ -72,20 +73,17 @@
 #include "StyleSheetContents.h"
 #include "TemplateContentDocumentFragment.h"
 #include "TextEvent.h"
-#include "TextManipulationController.h"
 #include "TouchEvent.h"
 #include "WheelEvent.h"
 #include "XMLNSNames.h"
 #include "XMLNames.h"
 #include <JavaScriptCore/HeapInlines.h>
-#include <wtf/HexNumber.h>
 #include <wtf/IsoMallocInlines.h>
 #include <wtf/RefCountedLeakCounter.h>
 #include <wtf/SHA1.h>
 #include <wtf/Variant.h>
 #include <wtf/text/CString.h>
 #include <wtf/text/StringBuilder.h>
-#include <wtf/text/TextStream.h>
 
 namespace WebCore {
 
@@ -131,8 +129,6 @@ static const char* stringForRareDataUseType(NodeRareData::UseType useType)
         return "InteractionObserver";
     case NodeRareData::UseType::PseudoElements:
         return "PseudoElements";
-    case NodeRareData::UseType::Animations:
-        return "Animations";
     }
     return nullptr;
 }
@@ -359,10 +355,6 @@ Node::~Node()
 
     if (hasRareData())
         clearRareData();
-
-    auto* textManipulationController = document().textManipulationControllerIfExists();
-    if (UNLIKELY(textManipulationController))
-        textManipulationController->removeNode(this);
 
     if (!isContainerNode())
         willBeDeletedFrom(document());
@@ -1107,6 +1099,12 @@ const RenderStyle* Node::computedStyle(PseudoId pseudoElementSpecifier)
     return composedParent->computedStyle(pseudoElementSpecifier);
 }
 
+int Node::maxCharacterOffset() const
+{
+    ASSERT_NOT_REACHED();
+    return 0;
+}
+
 // FIXME: Shouldn't these functions be in the editing code?  Code that asks questions about HTML in the core DOM class
 // is obviously misplaced.
 bool Node::canStartSelection() const
@@ -1297,16 +1295,12 @@ Node::InsertedIntoAncestorResult Node::insertedIntoAncestor(InsertionType insert
     return InsertedIntoAncestorResult::Done;
 }
 
-void Node::removedFromAncestor(RemovalType removalType, ContainerNode& oldParentOfRemovedTree)
+void Node::removedFromAncestor(RemovalType removalType, ContainerNode&)
 {
     if (removalType.disconnectedFromDocument)
         clearFlag(IsConnectedFlag);
     if (isInShadowTree() && !treeScope().rootNode().isShadowRoot())
         clearFlag(IsInShadowTreeFlag);
-    if (removalType.disconnectedFromDocument) {
-        if (auto* cache = oldParentOfRemovedTree.document().existingAXObjectCache())
-            cache->remove(*this);
-    }
 }
 
 bool Node::isRootEditableElement() const
@@ -1338,7 +1332,7 @@ Document* Node::ownerDocument() const
 const URL& Node::baseURI() const
 {
     auto& url = document().baseURL();
-    return url.isNull() ? aboutBlankURL() : url;
+    return url.isNull() ? WTF::blankURL() : url;
 }
 
 bool Node::isEqualNode(Node* other) const
@@ -1749,13 +1743,6 @@ FloatPoint Node::convertFromPage(const FloatPoint& p) const
 
     // No parent - no conversion needed
     return p;
-}
-
-String Node::debugDescription() const
-{
-    StringBuilder builder;
-    builder.append(nodeName(), " 0x"_s, hex(reinterpret_cast<uintptr_t>(this), Lowercase));
-    return builder.toString();
 }
 
 #if ENABLE(TREE_DEBUGGING)
@@ -2418,9 +2405,6 @@ void Node::dispatchDOMActivateEvent(Event& underlyingClickEvent)
 
 bool Node::dispatchBeforeLoadEvent(const String& sourceURL)
 {
-    if (!RuntimeEnabledFeatures::sharedFeatures().legacyBeforeLoadEventEnabled())
-        return true;
-
     if (!document().hasListenerType(Document::BEFORELOAD_LISTENER))
         return true;
 
@@ -2571,6 +2555,13 @@ void Node::removedLastRef()
     delete this;
 }
 
+void Node::textRects(Vector<IntRect>& rects) const
+{
+    auto range = Range::create(document());
+    range->selectNodeContents(const_cast<Node&>(*this));
+    range->absoluteTextRects(rects);
+}
+
 unsigned Node::connectedSubframeCount() const
 {
     return hasRareData() ? rareData()->connectedSubframeCount() : 0;
@@ -2627,40 +2618,6 @@ void* Node::opaqueRootSlow() const
         node = nextNode;
     }
     return const_cast<void*>(static_cast<const void*>(node));
-}
-
-static size_t depth(Node& node)
-{
-    size_t depth = 0;
-    auto ancestor = &node;
-    while ((ancestor = ancestor->parentNode()))
-        ++depth;
-    return depth;
-}
-
-RefPtr<Node> commonInclusiveAncestor(Node& a, Node& b)
-{
-    // This first check isn't needed for correctness, but it is cheap and likely to be
-    // common enough to be worth optimizing so we don't have to walk to the root.
-    if (&a == &b)
-        return &a;
-    auto [depthA, depthB] = std::make_tuple(depth(a), depth(b));
-    auto [x, y, difference] = depthA > depthB
-        ? std::make_tuple(&a, &b, depthA - depthB)
-        : std::make_tuple(&b, &a, depthB - depthA);
-    for (decltype(difference) i = 0; i < difference; ++i)
-        x = x->parentNode();
-    while (x != y) {
-        x = x->parentNode();
-        y = y->parentNode();
-    }
-    return x;
-}
-
-TextStream& operator<<(TextStream& ts, const Node& node)
-{
-    ts << "node " << &node << " " << node.debugDescription();
-    return ts;
 }
 
 } // namespace WebCore

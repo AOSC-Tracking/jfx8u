@@ -30,15 +30,11 @@
 namespace JSC {
 
 class AtomicsObject final : public JSNonFinalObject {
-public:
-    using Base = JSNonFinalObject;
+private:
+    AtomicsObject(VM&, Structure*);
 
-    template<typename CellType, SubspaceAccess>
-    static IsoSubspace* subspaceFor(VM& vm)
-    {
-        STATIC_ASSERT_ISO_SUBSPACE_SHARABLE(AtomicsObject, Base);
-        return &vm.plainObjectSpace;
-    }
+public:
+    typedef JSNonFinalObject Base;
 
     static AtomicsObject* create(VM&, JSGlobalObject*, Structure*);
 
@@ -46,8 +42,7 @@ public:
 
     static Structure* createStructure(VM&, JSGlobalObject*, JSValue);
 
-private:
-    AtomicsObject(VM&, Structure*);
+protected:
     void finishCreation(VM&, JSGlobalObject*);
 };
 

@@ -48,7 +48,6 @@ import com.sun.media.jfxmedia.track.Track;
 import com.sun.media.jfxmedia.track.VideoTrack;
 import com.sun.prism.Graphics;
 import com.sun.prism.Texture;
-import com.sun.prism.paint.Color;
 import com.sun.webkit.graphics.WCGraphicsContext;
 import com.sun.webkit.graphics.WCMediaPlayer;
 
@@ -361,7 +360,7 @@ final class WCMediaPlayerImpl extends WCMediaPlayer
             texture.unlock();
         } else {
             if (verbose) log.log(Level.FINEST, "  (Prism)renderImpl, texture is null, draw black rect");
-            gc.fillRect(x, y, w, h, Color.BLACK);
+            gc.fillRect(x, y, w, h, 0xFF000000);
         }
         if (verbose) log.log(Level.FINER, "<<(Prism)renderImpl");
     }

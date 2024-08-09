@@ -286,10 +286,9 @@ static inline void recordFormStructure(const HTMLFormElement& form, StringBuilde
     auto& controls = form.unsafeAssociatedElements();
     builder.appendLiteral(" [");
     for (size_t i = 0, namedControls = 0; i < controls.size() && namedControls < namedControlsToBeRecorded; ++i) {
-        auto* formAssociatedElement = controls[i]->asFormAssociatedElement();
-        if (!formAssociatedElement->isFormControlElementWithState())
+        if (!controls[i]->isFormControlElementWithState())
             continue;
-        RefPtr<HTMLFormControlElementWithState> control = static_cast<HTMLFormControlElementWithState*>(formAssociatedElement);
+        RefPtr<HTMLFormControlElementWithState> control = static_cast<HTMLFormControlElementWithState*>(controls[i]);
         if (!ownerFormForState(*control))
             continue;
         AtomString name = control->name();
@@ -320,7 +319,7 @@ AtomString FormKeyGenerator::formKey(const HTMLFormControlElementWithState& cont
 {
     auto form = makeRefPtr(ownerFormForState(control));
     if (!form) {
-        static MainThreadNeverDestroyed<const AtomString> formKeyForNoOwner("No owner", AtomString::ConstructFromLiteral);
+        static NeverDestroyed<AtomString> formKeyForNoOwner("No owner", AtomString::ConstructFromLiteral);
         return formKeyForNoOwner;
     }
 

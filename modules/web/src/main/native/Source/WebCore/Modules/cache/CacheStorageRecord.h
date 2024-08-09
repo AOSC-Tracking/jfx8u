@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2017 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -25,18 +25,17 @@
 
 #pragma once
 
-#if ENABLE(APPLE_PAY_INSTALLMENTS)
+#include "FetchRequest.h"
+#include "FetchResponse.h"
 
 namespace WebCore {
 
-enum class ApplePayInstallmentItemType : uint8_t {
-    Generic,
-    Phone,
-    Pad,
-    Watch,
-    Mac,
+struct CacheStorageRecord {
+    uint64_t identifier;
+    uint64_t updateResponseCounter;
+
+    Ref<FetchRequest> request;
+    Ref<FetchResponse> response;
 };
 
 } // namespace WebCore
-
-#endif // ENABLE(APPLE_PAY_INSTALLMENTS)

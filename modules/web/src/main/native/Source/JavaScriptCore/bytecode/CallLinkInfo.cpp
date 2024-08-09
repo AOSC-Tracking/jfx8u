@@ -27,8 +27,10 @@
 #include "CallLinkInfo.h"
 
 #include "CallFrameShuffleData.h"
+#include "DFGOperations.h"
+#include "DFGThunks.h"
 #include "FunctionCodeBlock.h"
-#include "JSCellInlines.h"
+#include "JSCInlines.h"
 #include "Opcode.h"
 #include "Repatch.h"
 #include <wtf/ListDump.h>
@@ -38,34 +40,18 @@ namespace JSC {
 
 CallLinkInfo::CallType CallLinkInfo::callTypeFor(OpcodeID opcodeID)
 {
-    switch (opcodeID) {
-    case op_tail_call_varargs:
-    case op_tail_call_forward_arguments:
-        return TailCallVarargs;
-
-    case op_call:
-    case op_call_eval:
-    case op_iterator_open:
-    case op_iterator_next:
+    if (opcodeID == op_call || opcodeID == op_call_eval)
         return Call;
-
-    case op_call_varargs:
+    if (opcodeID == op_call_varargs)
         return CallVarargs;
-
-    case op_construct:
+    if (opcodeID == op_construct)
         return Construct;
-
-    case op_construct_varargs:
+    if (opcodeID == op_construct_varargs)
         return ConstructVarargs;
-
-    case op_tail_call:
+    if (opcodeID == op_tail_call)
         return TailCall;
-
-    default:
-        break;
-    }
-    RELEASE_ASSERT_NOT_REACHED();
-    return Call;
+    ASSERT(opcodeID == op_tail_call_varargs || opcodeID == op_tail_call_forward_arguments);
+    return TailCallVarargs;
 }
 
 CallLinkInfo::CallLinkInfo()

@@ -30,6 +30,8 @@
 #include "config.h"
 #include <wtf/WorkQueue.h>
 
+#include <wtf/WallTime.h>
+#include <wtf/text/WTFString.h>
 #include <wtf/threads/BinarySemaphore.h>
 
 #if PLATFORM(JAVA)

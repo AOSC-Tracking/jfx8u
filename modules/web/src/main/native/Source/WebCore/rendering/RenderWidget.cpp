@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 1999 Lars Knoll (knoll@kde.org)
  * Copyright (C) 2000 Dirk Mueller (mueller@kde.org)
- * Copyright (C) 2004-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2004, 2006, 2009, 2010 Apple Inc. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -56,18 +56,16 @@ WidgetHierarchyUpdatesSuspensionScope::WidgetToParentMap& WidgetHierarchyUpdates
 
 void WidgetHierarchyUpdatesSuspensionScope::moveWidgets()
 {
-    while (!widgetNewParentMap().isEmpty()) {
-        auto map = std::exchange(widgetNewParentMap(), { });
-        for (auto& entry : map) {
-            auto& child = *entry.key;
-            auto* currentParent = child.parent();
-            auto* newParent = entry.value;
-            if (newParent != currentParent) {
-                if (currentParent)
-                    currentParent->removeChild(child);
-                if (newParent)
-                    newParent->addChild(child);
-            }
+    auto map = WTFMove(widgetNewParentMap());
+    for (auto& entry : map) {
+        auto& child = *entry.key;
+        auto* currentParent = child.parent();
+        auto* newParent = entry.value;
+        if (newParent != currentParent) {
+            if (currentParent)
+                currentParent->removeChild(child);
+            if (newParent)
+                newParent->addChild(child);
         }
     }
 }
@@ -248,18 +246,8 @@ void RenderWidget::paintContents(PaintInfo& paintInfo, const LayoutPoint& paintO
         paintInfo.context().translate(widgetPaintOffset);
         paintRect.move(-widgetPaintOffset);
     }
-
-    if (paintInfo.eventRegionContext) {
-        AffineTransform transform;
-        transform.translate(contentPaintOffset);
-        paintInfo.eventRegionContext->pushTransform(transform);
-    }
-
     // FIXME: Remove repaintrect enclosing/integral snapping when RenderWidget becomes device pixel snapped.
-    m_widget->paint(paintInfo.context(), snappedIntRect(paintRect), paintInfo.requireSecurityOriginAccessForWidgets ? Widget::SecurityOriginPaintPolicy::AccessibleOriginOnly : Widget::SecurityOriginPaintPolicy::AnyOrigin, paintInfo.eventRegionContext);
-
-    if (paintInfo.eventRegionContext)
-        paintInfo.eventRegionContext->popTransform();
+    m_widget->paint(paintInfo.context(), snappedIntRect(paintRect), paintInfo.requireSecurityOriginAccessForWidgets ? Widget::SecurityOriginPaintPolicy::AccessibleOriginOnly : Widget::SecurityOriginPaintPolicy::AnyOrigin);
 
     if (!widgetPaintOffset.isZero())
         paintInfo.context().translate(-widgetPaintOffset);
@@ -294,11 +282,7 @@ void RenderWidget::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
     if ((paintInfo.phase == PaintPhase::Outline || paintInfo.phase == PaintPhase::SelfOutline) && hasOutline())
         paintOutline(paintInfo, LayoutRect(adjustedPaintOffset, size()));
 
-    // FIXME: Shouldn't check if the frame view needs layout during event region painting. This is a workaround
-    // for the fact that non-composited frames depend on their enclosing compositing layer to perform an event
-    // region update on their behalf. See <https://webkit.org/b/210311> for more details.
-    bool needsEventRegionContentPaint = paintInfo.phase == PaintPhase::EventRegion && is<FrameView>(m_widget) && !downcast<FrameView>(*m_widget).needsLayout();
-    if (paintInfo.phase != PaintPhase::Foreground && !needsEventRegionContentPaint)
+    if (paintInfo.phase != PaintPhase::Foreground)
         return;
 
     if (style().hasBorderRadius()) {
@@ -319,9 +303,6 @@ void RenderWidget::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
 
     if (style().hasBorderRadius())
         paintInfo.context().restore();
-
-    if (paintInfo.phase == PaintPhase::EventRegion)
-        return;
 
     // Paint a partially transparent wash over selected widgets.
     if (isSelected() && !document().printing()) {
@@ -365,7 +346,7 @@ IntRect RenderWidget::windowClipRect() const
     return intersection(view().frameView().contentsToWindow(m_clipRect), view().frameView().windowClipRect());
 }
 
-void RenderWidget::setSelectionState(HighlightState state)
+void RenderWidget::setSelectionState(SelectionState state)
 {
     // The selection state for our containing block hierarchy is updated by the base class call.
     RenderReplaced::setSelectionState(state);

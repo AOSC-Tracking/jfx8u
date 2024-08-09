@@ -50,19 +50,25 @@ Location::Location(DOMWindow& window)
 inline const URL& Location::url() const
 {
     if (!frame())
-        return aboutBlankURL();
+        return WTF::blankURL();
 
     const URL& url = frame()->document()->url();
     if (!url.isValid())
-        return aboutBlankURL(); // Use "about:blank" while the page is still loading (before we have a frame).
+        return WTF::blankURL(); // Use "about:blank" while the page is still loading (before we have a frame).
 
     return url;
 }
 
 String Location::href() const
 {
-    URL urlWithoutCredentials(url());
-    urlWithoutCredentials.removeCredentials();
+    auto& url = this->url();
+
+    if (!url.hasUsername() && !url.hasPassword())
+        return url.string();
+
+    URL urlWithoutCredentials(url);
+    urlWithoutCredentials.setUser(WTF::emptyString());
+    urlWithoutCredentials.setPass(WTF::emptyString());
     return urlWithoutCredentials.string();
 }
 
@@ -85,19 +91,20 @@ String Location::hostname() const
 
 String Location::port() const
 {
-    auto port = url().port();
-    return port ? String::number(*port) : emptyString();
+    const URL& url = this->url();
+    return url.port() ? String::number(url.port().value()) : emptyString();
 }
 
 String Location::pathname() const
 {
-    auto path = url().path();
-    return path.isEmpty() ? "/"_s : path.toString();
+    const URL& url = this->url();
+    return url.path().isEmpty() ? "/" : url.path();
 }
 
 String Location::search() const
 {
-    return url().query().isEmpty() ? emptyString() : url().queryWithLeadingQuestionMark().toString();
+    const URL& url = this->url();
+    return url.query().isEmpty() ? emptyString() : "?" + url.query();
 }
 
 String Location::origin() const
@@ -118,7 +125,8 @@ Ref<DOMStringList> Location::ancestorOrigins() const
 
 String Location::hash() const
 {
-    return url().fragmentIdentifier().isEmpty() ? emptyString() : url().fragmentIdentifierWithLeadingNumberSign().toString();
+    const String& fragmentIdentifier = url().fragmentIdentifier();
+    return fragmentIdentifier.isEmpty() ? emptyString() : "#" + fragmentIdentifier;
 }
 
 ExceptionOr<void> Location::setHref(DOMWindow& activeWindow, DOMWindow& firstWindow, const String& url)
@@ -165,7 +173,11 @@ ExceptionOr<void> Location::setPort(DOMWindow& activeWindow, DOMWindow& firstWin
     if (!frame)
         return { };
     URL url = frame->document()->url();
-    url.setPort(parseUInt16(portString));
+    int port = portString.toInt();
+    if (port < 0 || port > 0xFFFF || portString.isEmpty())
+        url.removePort();
+    else
+        url.setPort(port);
     return setLocation(activeWindow, firstWindow, url.string());
 }
 
@@ -216,25 +228,25 @@ ExceptionOr<void> Location::assign(DOMWindow& activeWindow, DOMWindow& firstWind
     return setLocation(activeWindow, firstWindow, url);
 }
 
-ExceptionOr<void> Location::replace(DOMWindow& activeWindow, DOMWindow& firstWindow, const String& urlString)
+void Location::replace(DOMWindow& activeWindow, DOMWindow& firstWindow, const String& urlString)
 {
     auto* frame = this->frame();
     if (!frame)
-        return { };
+        return;
     ASSERT(frame->document());
     ASSERT(frame->document()->domWindow());
 
     Frame* firstFrame = firstWindow.frame();
     if (!firstFrame || !firstFrame->document())
-        return { };
+        return;
 
     URL completedURL = firstFrame->document()->completeURL(urlString);
-    if (!completedURL.isValid())
-        return Exception { SyntaxError };
+    // FIXME: The specification says to throw a SyntaxError if the URL is not valid.
+    if (completedURL.isNull())
+        return;
 
     // We call DOMWindow::setLocation directly here because replace() always operates on the current frame.
     frame->document()->domWindow()->setLocation(activeWindow, completedURL, LockHistoryAndBackForwardList);
-    return { };
 }
 
 void Location::reload(DOMWindow& activeWindow)
@@ -259,7 +271,7 @@ void Location::reload(DOMWindow& activeWindow)
         return;
     }
 
-    if (targetDocument.url().protocolIsJavaScript())
+    if (WTF::protocolIsJavaScript(targetDocument.url()))
         return;
 
     frame->navigationScheduler().scheduleRefresh(activeDocument);

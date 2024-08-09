@@ -25,14 +25,20 @@
 
 #pragma once
 
-#if USE(APPLE_INTERNAL_SDK)
+#if ENABLE(LAYOUT_FORMATTING_CONTEXT)
 
-#import <os/variant_private.h>
+#include <wtf/text/StringView.h>
 
-#else
+namespace WebCore {
+namespace Layout {
 
-WTF_EXTERN_C_BEGIN
-bool os_variant_allows_internal_security_policies(const char *);
-WTF_EXTERN_C_END
+struct TextContext {
+    WTF_MAKE_FAST_ALLOCATED;
+public:
+    String content;
+    bool canUseSimplifiedContentMeasuring { false };
+};
 
+}
+}
 #endif

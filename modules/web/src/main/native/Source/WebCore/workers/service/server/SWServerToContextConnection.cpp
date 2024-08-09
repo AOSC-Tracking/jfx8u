@@ -101,11 +101,12 @@ void SWServerToContextConnection::matchAll(uint64_t requestIdentifier, ServiceWo
     }
 }
 
-void SWServerToContextConnection::claim(ServiceWorkerIdentifier serviceWorkerIdentifier, CompletionHandler<void(Optional<ExceptionData>&&)>&& callback)
+void SWServerToContextConnection::claim(uint64_t requestIdentifier, ServiceWorkerIdentifier serviceWorkerIdentifier)
 {
-    auto* worker = SWServerWorker::existingWorkerForIdentifier(serviceWorkerIdentifier);
-    auto* server = worker ? worker->server() : nullptr;
-    callback(server ? server->claim(*worker) : WTF::nullopt);
+    if (auto* worker = SWServerWorker::existingWorkerForIdentifier(serviceWorkerIdentifier)) {
+        worker->claim();
+        worker->contextConnection()->claimCompleted(requestIdentifier);
+    }
 }
 
 void SWServerToContextConnection::skipWaiting(ServiceWorkerIdentifier serviceWorkerIdentifier, CompletionHandler<void()>&& completionHandler)

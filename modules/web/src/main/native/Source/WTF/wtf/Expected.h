@@ -213,7 +213,7 @@ template<class E>
 class bad_expected_access : public bad_expected_access<void> {
 public:
     explicit bad_expected_access(E val) : val(val) { }
-    const char* what() const noexcept override { return std::exception::what(); }
+    virtual const char* what() const noexcept override { return std::exception::what(); }
     E& error() & { return val; }
     const E& error() const& { return val; }
     E&& error() && { return std::move(val); }

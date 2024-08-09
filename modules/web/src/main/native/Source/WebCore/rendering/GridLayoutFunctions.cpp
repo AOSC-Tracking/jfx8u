@@ -53,8 +53,7 @@ static bool childHasMargin(const RenderBox& child, GridTrackSizingDirection dire
 
 LayoutUnit computeMarginLogicalSizeForChild(const RenderGrid& grid, GridTrackSizingDirection direction, const RenderBox& child)
 {
-    GridTrackSizingDirection flowAwareDirection = flowAwareDirectionForChild(grid, child, direction);
-    if (!childHasMargin(child, flowAwareDirection))
+    if (!childHasMargin(child, flowAwareDirectionForChild(grid, child, direction)))
         return 0;
 
     LayoutUnit marginStart;
@@ -63,17 +62,16 @@ LayoutUnit computeMarginLogicalSizeForChild(const RenderGrid& grid, GridTrackSiz
         child.computeInlineDirectionMargins(grid, child.containingBlockLogicalWidthForContentInFragment(nullptr), child.logicalWidth(), marginStart, marginEnd);
     else
         child.computeBlockDirectionMargins(grid, marginStart, marginEnd);
-    return marginStartIsAuto(child, flowAwareDirection) ? marginEnd : marginEndIsAuto(child, flowAwareDirection) ? marginStart : marginStart + marginEnd;
+    return marginStartIsAuto(child, direction) ? marginEnd : marginEndIsAuto(child, direction) ? marginStart : marginStart + marginEnd;
 }
 
 LayoutUnit marginLogicalSizeForChild(const RenderGrid& grid, GridTrackSizingDirection direction, const RenderBox& child)
 {
     if (child.needsLayout())
         return computeMarginLogicalSizeForChild(grid, direction, child);
-    GridTrackSizingDirection flowAwareDirection = flowAwareDirectionForChild(grid, child, direction);
-    bool isRowAxis = flowAwareDirection == ForColumns;
-    LayoutUnit marginStart = marginStartIsAuto(child, flowAwareDirection) ? 0_lu : isRowAxis ? child.marginStart() : child.marginBefore();
-    LayoutUnit marginEnd = marginEndIsAuto(child, flowAwareDirection) ? 0_lu : isRowAxis ? child.marginEnd() : child.marginAfter();
+    bool isRowAxis = flowAwareDirectionForChild(grid, child, direction) == ForColumns;
+    LayoutUnit marginStart = marginStartIsAuto(child, direction) ? 0_lu : isRowAxis ? child.marginStart() : child.marginBefore();
+    LayoutUnit marginEnd = marginEndIsAuto(child, direction) ? 0_lu : isRowAxis ? child.marginEnd() : child.marginAfter();
     return marginStart + marginEnd;
 }
 

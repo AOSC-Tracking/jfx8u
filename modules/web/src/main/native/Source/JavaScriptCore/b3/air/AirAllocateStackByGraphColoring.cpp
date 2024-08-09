@@ -35,6 +35,7 @@
 #include "AirLiveness.h"
 #include "AirPhaseScope.h"
 #include "AirStackAllocation.h"
+#include "StackAlignment.h"
 #include <wtf/ListDump.h>
 
 namespace JSC { namespace B3 { namespace Air {

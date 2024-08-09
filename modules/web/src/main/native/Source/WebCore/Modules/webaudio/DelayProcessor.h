@@ -36,16 +36,18 @@ class AudioDSPKernel;
 class DelayProcessor final : public AudioDSPKernelProcessor {
     WTF_MAKE_FAST_ALLOCATED;
 public:
-    DelayProcessor(BaseAudioContext&, float sampleRate, unsigned numberOfChannels, double maxDelayTime);
+    DelayProcessor(AudioContext&, float sampleRate, unsigned numberOfChannels, double maxDelayTime);
     virtual ~DelayProcessor();
 
     std::unique_ptr<AudioDSPKernel> createKernel() override;
 
-    AudioParam& delayTime() const { return m_delayTime.get(); }
-    double maxDelayTime() { return delayTime().maxValue(); }
+    AudioParam* delayTime() const { return m_delayTime.get(); }
 
+    double maxDelayTime() { return m_maxDelayTime; }
 private:
-    Ref<AudioParam> m_delayTime;
+
+    RefPtr<AudioParam> m_delayTime;
+    double m_maxDelayTime;
 };
 
 } // namespace WebCore

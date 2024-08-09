@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2013-2016 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -66,9 +66,7 @@ enum UseKind {
     KnownStringUse,
     KnownPrimitiveUse, // This bizarre type arises for op_strcat, which has a bytecode guarantee that it will only see primitives (i.e. not objects).
     SymbolUse,
-    AnyBigIntUse,
-    HeapBigIntUse,
-    BigInt32Use,
+    BigIntUse,
     DateObjectUse,
     MapObjectUse,
     SetObjectUse,
@@ -80,7 +78,6 @@ enum UseKind {
     NotStringVarUse,
     NotSymbolUse,
     NotCellUse,
-    NotCellNorBigIntUse,
     KnownOtherUse,
     OtherUse,
     MiscUse,
@@ -155,12 +152,8 @@ inline SpeculatedType typeFilterFor(UseKind useKind)
         return SpecHeapTop & ~SpecObject;
     case SymbolUse:
         return SpecSymbol;
-    case AnyBigIntUse:
+    case BigIntUse:
         return SpecBigInt;
-    case HeapBigIntUse:
-        return SpecHeapBigInt;
-    case BigInt32Use:
-        return SpecBigInt32;
     case PromiseObjectUse:
         return SpecPromiseObject;
     case DateObjectUse:
@@ -185,8 +178,6 @@ inline SpeculatedType typeFilterFor(UseKind useKind)
         return ~SpecSymbol;
     case NotCellUse:
         return ~SpecCellCheck;
-    case NotCellNorBigIntUse:
-        return ~SpecCellCheck & ~SpecBigInt;
     case KnownOtherUse:
     case OtherUse:
         return SpecOther;
@@ -221,6 +212,24 @@ inline bool mayHaveTypeCheck(UseKind kind)
     return !shouldNotHaveTypeCheck(kind);
 }
 
+inline bool isNumerical(UseKind kind)
+{
+    switch (kind) {
+    case Int32Use:
+    case KnownInt32Use:
+    case NumberUse:
+    case RealNumberUse:
+    case Int52RepUse:
+    case DoubleRepUse:
+    case DoubleRepRealUse:
+    case AnyIntUse:
+    case DoubleRepAnyIntUse:
+        return true;
+    default:
+        return false;
+    }
+}
+
 inline bool isDouble(UseKind kind)
 {
     switch (kind) {
@@ -252,7 +261,7 @@ inline bool isCell(UseKind kind)
     case StringUse:
     case KnownStringUse:
     case SymbolUse:
-    case HeapBigIntUse:
+    case BigIntUse:
     case StringObjectUse:
     case StringOrStringObjectUse:
     case DateObjectUse:
@@ -304,7 +313,6 @@ inline bool checkMayCrashIfInputIsEmpty(UseKind kind)
     case OtherUse:
     case MiscUse:
     case NotCellUse:
-    case NotCellNorBigIntUse:
         return false;
     default:
         return true;

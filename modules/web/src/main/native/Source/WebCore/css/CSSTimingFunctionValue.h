@@ -26,7 +26,6 @@
 #pragma once
 
 #include "CSSValue.h"
-#include "TimingFunction.h"
 
 namespace WebCore {
 
@@ -64,28 +63,28 @@ private:
 
 class CSSStepsTimingFunctionValue final : public CSSValue {
 public:
-    static Ref<CSSStepsTimingFunctionValue> create(int steps, Optional<StepsTimingFunction::StepPosition> stepPosition)
+    static Ref<CSSStepsTimingFunctionValue> create(int steps, bool stepAtStart)
     {
-        return adoptRef(*new CSSStepsTimingFunctionValue(steps, stepPosition));
+        return adoptRef(*new CSSStepsTimingFunctionValue(steps, stepAtStart));
     }
 
     int numberOfSteps() const { return m_steps; }
-    Optional<StepsTimingFunction::StepPosition> stepPosition() const { return m_stepPosition; }
+    bool stepAtStart() const { return m_stepAtStart; }
 
     String customCSSText() const;
 
     bool equals(const CSSStepsTimingFunctionValue&) const;
 
 private:
-    CSSStepsTimingFunctionValue(int steps, Optional<StepsTimingFunction::StepPosition> stepPosition)
+    CSSStepsTimingFunctionValue(int steps, bool stepAtStart)
         : CSSValue(StepsTimingFunctionClass)
         , m_steps(steps)
-        , m_stepPosition(stepPosition)
+        , m_stepAtStart(stepAtStart)
     {
     }
 
     int m_steps;
-    Optional<StepsTimingFunction::StepPosition> m_stepPosition;
+    bool m_stepAtStart;
 };
 
 class CSSSpringTimingFunctionValue final : public CSSValue {

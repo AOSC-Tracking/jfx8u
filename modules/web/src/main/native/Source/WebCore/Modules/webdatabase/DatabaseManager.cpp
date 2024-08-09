@@ -181,24 +181,20 @@ ExceptionOr<Ref<Database>> DatabaseManager::tryToOpenDatabaseBackend(Document& d
 
 void DatabaseManager::addProposedDatabase(ProposedDatabase& database)
 {
-    auto locker = holdLock(m_proposedDatabasesMutex);
+    std::lock_guard<Lock> lock { m_proposedDatabasesMutex };
     m_proposedDatabases.add(&database);
 }
 
 void DatabaseManager::removeProposedDatabase(ProposedDatabase& database)
 {
-    auto locker = holdLock(m_proposedDatabasesMutex);
+    std::lock_guard<Lock> lock { m_proposedDatabasesMutex };
     m_proposedDatabases.remove(&database);
 }
 
 ExceptionOr<Ref<Database>> DatabaseManager::openDatabase(Document& document, const String& name, const String& expectedVersion, const String& displayName, unsigned estimatedSize, RefPtr<DatabaseCallback>&& creationCallback)
 {
     ASSERT(isMainThread());
-
-    // FIXME: Remove this call to ScriptController::initializeMainThread(). The
-    // main thread should have been initialized by a WebKit entrypoint already.
-    // Also, initializeMainThread() does nothing on iOS.
-    ScriptController::initializeMainThread();
+    ScriptController::initializeThreading();
 
     bool setVersionInNewDatabase = !creationCallback;
     auto openResult = openDatabaseBackend(document, name, expectedVersion, displayName, estimatedSize, setVersionInNewDatabase);
@@ -241,7 +237,7 @@ void DatabaseManager::stopDatabases(Document& document, DatabaseTaskSynchronizer
 String DatabaseManager::fullPathForDatabase(SecurityOrigin& origin, const String& name, bool createIfDoesNotExist)
 {
     {
-        auto locker = holdLock(m_proposedDatabasesMutex);
+        std::lock_guard<Lock> lock { m_proposedDatabasesMutex };
         for (auto* proposedDatabase : m_proposedDatabases) {
             if (proposedDatabase->details().name() == name && proposedDatabase->origin().equal(&origin))
                 return String();
@@ -253,7 +249,7 @@ String DatabaseManager::fullPathForDatabase(SecurityOrigin& origin, const String
 DatabaseDetails DatabaseManager::detailsForNameAndOrigin(const String& name, SecurityOrigin& origin)
 {
     {
-        auto locker = holdLock(m_proposedDatabasesMutex);
+        std::lock_guard<Lock> lock { m_proposedDatabasesMutex };
         for (auto* proposedDatabase : m_proposedDatabases) {
             if (proposedDatabase->details().name() == name && proposedDatabase->origin().equal(&origin)) {
                 ASSERT(&proposedDatabase->details().thread() == &Thread::current() || isMainThread());

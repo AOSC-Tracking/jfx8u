@@ -28,6 +28,7 @@
 
 #include <wtf/MonotonicTime.h>
 #include <wtf/PrintStream.h>
+#include <wtf/TimeWithDynamicClockType.h>
 
 namespace WTF {
 

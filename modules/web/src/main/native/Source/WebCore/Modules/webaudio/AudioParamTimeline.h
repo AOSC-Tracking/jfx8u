@@ -43,23 +43,23 @@ public:
     {
     }
 
-    ExceptionOr<void> setValueAtTime(float value, Seconds time);
-    ExceptionOr<void> linearRampToValueAtTime(float value, Seconds time);
-    ExceptionOr<void> exponentialRampToValueAtTime(float value, Seconds time);
-    ExceptionOr<void> setTargetAtTime(float target, Seconds time, float timeConstant);
-    ExceptionOr<void> setValueCurveAtTime(Vector<float>&& curve, Seconds time, Seconds duration);
-    void cancelScheduledValues(Seconds startTime);
+    void setValueAtTime(float value, float time);
+    void linearRampToValueAtTime(float value, float time);
+    void exponentialRampToValueAtTime(float value, float time);
+    void setTargetAtTime(float target, float time, float timeConstant);
+    void setValueCurveAtTime(Float32Array* curve, float time, float duration);
+    void cancelScheduledValues(float startTime);
 
     // hasValue is set to true if a valid timeline value is returned.
     // otherwise defaultValue is returned.
-    float valueForContextTime(BaseAudioContext&, float defaultValue, bool& hasValue);
+    float valueForContextTime(AudioContext&, float defaultValue, bool& hasValue);
 
     // Given the time range, calculates parameter values into the values buffer
     // and returns the last parameter value calculated for "values" or the defaultValue if none were calculated.
     // controlRate is the rate (number per second) at which parameter values will be calculated.
     // It should equal sampleRate for sample-accurate parameter changes, and otherwise will usually match
     // the render quantum size such that the parameter value changes once per render quantum.
-    float valuesForTimeRange(Seconds startTime, Seconds endTime, float defaultValue, float* values, unsigned numberOfValues, double sampleRate, double controlRate);
+    float valuesForTimeRange(double startTime, double endTime, float defaultValue, float* values, unsigned numberOfValues, double sampleRate, double controlRate);
 
     bool hasValues() { return m_events.size(); }
 
@@ -75,7 +75,7 @@ private:
             LastType
         };
 
-        ParamEvent(Type type, float value, Seconds time, float timeConstant, Seconds duration, Vector<float>&& curve)
+        ParamEvent(Type type, float value, float time, float timeConstant, float duration, RefPtr<Float32Array>&& curve)
             : m_type(type)
             , m_value(value)
             , m_time(time)
@@ -87,22 +87,22 @@ private:
 
         unsigned type() const { return m_type; }
         float value() const { return m_value; }
-        Seconds time() const { return m_time; }
+        float time() const { return m_time; }
         float timeConstant() const { return m_timeConstant; }
-        Seconds duration() const { return m_duration; }
-        Vector<float>& curve() { return m_curve; }
+        float duration() const { return m_duration; }
+        Float32Array* curve() { return m_curve.get(); }
 
     private:
         unsigned m_type;
         float m_value;
-        Seconds m_time;
+        float m_time;
         float m_timeConstant;
-        Seconds m_duration;
-        Vector<float> m_curve;
+        float m_duration;
+        RefPtr<Float32Array> m_curve;
     };
 
-    ExceptionOr<void> insertEvent(const ParamEvent&);
-    float valuesForTimeRangeImpl(Seconds startTime, Seconds endTime, float defaultValue, float* values, unsigned numberOfValues, double sampleRate, double controlRate);
+    void insertEvent(const ParamEvent&);
+    float valuesForTimeRangeImpl(double startTime, double endTime, float defaultValue, float* values, unsigned numberOfValues, double sampleRate, double controlRate);
 
     Vector<ParamEvent> m_events;
 

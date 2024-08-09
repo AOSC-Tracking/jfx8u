@@ -274,16 +274,6 @@ private:
                 break;
             }
 
-            case DeleteById:
-            case DeleteByVal: {
-                // If child1 is not a cell-speculated, we call a generic implementation which emits write-barrier in C++ side.
-                // FIXME: We should consider accept base:UntypedUse.
-                // https://bugs.webkit.org/show_bug.cgi?id=209396
-                if (isCell(m_node->child1().useKind()))
-                    considerBarrier(m_node->child1());
-                break;
-            }
-
             case RecordRegExpCachedResult: {
                 considerBarrier(m_graph.varArgChild(m_node, 0));
                 break;
@@ -297,8 +287,7 @@ private:
                 break;
             }
 
-            case MultiPutByOffset:
-            case MultiDeleteByOffset: {
+            case MultiPutByOffset: {
                 considerBarrier(m_node->child1());
                 break;
             }
@@ -332,12 +321,13 @@ private:
 
             switch (m_node->op()) {
             case NewObject:
+            case NewPromise:
             case NewGenerator:
             case NewAsyncGenerator:
             case NewArray:
             case NewArrayWithSize:
             case NewArrayBuffer:
-            case NewInternalFieldObject:
+            case NewArrayIterator:
             case NewTypedArray:
             case NewRegexp:
             case NewStringObject:
@@ -483,7 +473,6 @@ private:
 
         // FIXME: We could support StoreBarrier(UntypedUse:). That would be sort of cool.
         // But right now we don't need it.
-        // https://bugs.webkit.org/show_bug.cgi?id=209396
 
         DFG_ASSERT(m_graph, m_node, isCell(base.useKind()), m_node->op(), base.useKind());
 

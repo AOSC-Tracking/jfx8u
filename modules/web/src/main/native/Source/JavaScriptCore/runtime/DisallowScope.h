@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2017-2019 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -35,18 +35,26 @@ class DisallowScope {
     WTF_MAKE_NONCOPYABLE(DisallowScope);
     WTF_FORBID_HEAP_ALLOCATION;
 public:
-#if ASSERT_ENABLED
-    DisallowScope()
+#ifdef NDEBUG
+
+    ALWAYS_INLINE DisallowScope(bool = false) { }
+    ALWAYS_INLINE ~DisallowScope() { }
+    ALWAYS_INLINE static bool isInEffectOnCurrentThread() { return false; }
+    ALWAYS_INLINE void enable() { }
+
+#else // not NDEBUG
+
+    DisallowScope(bool enabled = true)
     {
-        auto count = T::scopeReentryCount();
-        T::setScopeReentryCount(++count);
+        m_isEnabled = enabled;
+        if (m_isEnabled)
+            enterScope();
     }
 
     ~DisallowScope()
     {
-        auto count = T::scopeReentryCount();
-        ASSERT(count);
-        T::setScopeReentryCount(--count);
+        if (m_isEnabled)
+            exitScope();
     }
 
     static bool isInEffectOnCurrentThread()
@@ -54,10 +62,34 @@ public:
         return !!T::scopeReentryCount();
     }
 
-#else // not ASSERT_ENABLED
-    ALWAYS_INLINE DisallowScope() { } // We need this to placate Clang due to unused warnings.
-    ALWAYS_INLINE static bool isInEffectOnCurrentThread() { return false; }
-#endif // ASSERT_ENABLED
+    void enable()
+    {
+        m_isEnabled = true;
+        enterScope();
+    }
+
+    void disable()
+    {
+        m_isEnabled = false;
+        exitScope();
+    }
+
+private:
+    void enterScope()
+    {
+        auto count = T::scopeReentryCount();
+        T::setScopeReentryCount(++count);
+    }
+
+    void exitScope()
+    {
+        auto count = T::scopeReentryCount();
+        ASSERT(count);
+        T::setScopeReentryCount(--count);
+    }
+
+    bool m_isEnabled;
+#endif // NDEBUG
 };
 
 } // namespace JSC

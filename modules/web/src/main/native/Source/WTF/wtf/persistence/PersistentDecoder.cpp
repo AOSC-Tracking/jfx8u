@@ -59,67 +59,65 @@ bool Decoder::decodeFixedLengthData(uint8_t* data, size_t size)
     return true;
 }
 
-template<typename T>
-Decoder& Decoder::decodeNumber(Optional<T>& optional)
+template<typename Type>
+bool Decoder::decodeNumber(Type& value)
 {
-    if (!bufferIsLargeEnoughToContain(sizeof(T)))
-        return *this;
+    if (!bufferIsLargeEnoughToContain(sizeof(value)))
+        return false;
 
-    T value;
-    memcpy(&value, m_bufferPosition, sizeof(T));
-    m_bufferPosition += sizeof(T);
+    memcpy(&value, m_bufferPosition, sizeof(value));
+    m_bufferPosition += sizeof(Type);
 
     Encoder::updateChecksumForNumber(m_sha1, value);
-    optional = value;
-    return *this;
+    return true;
 }
 
-Decoder& Decoder::operator>>(Optional<bool>& result)
+bool Decoder::decode(bool& result)
 {
     return decodeNumber(result);
 }
 
-Decoder& Decoder::operator>>(Optional<uint8_t>& result)
+bool Decoder::decode(uint8_t& result)
 {
     return decodeNumber(result);
 }
 
-Decoder& Decoder::operator>>(Optional<uint16_t>& result)
+bool Decoder::decode(uint16_t& result)
 {
     return decodeNumber(result);
 }
 
-Decoder& Decoder::operator>>(Optional<int16_t>& result)
+bool Decoder::decode(int16_t& result)
 {
     return decodeNumber(result);
 }
 
-Decoder& Decoder::operator>>(Optional<uint32_t>& result)
+bool Decoder::decode(uint32_t& result)
 {
     return decodeNumber(result);
 }
 
-Decoder& Decoder::operator>>(Optional<uint64_t>& result)
+bool Decoder::decode(uint64_t& result)
 {
     return decodeNumber(result);
 }
 
-Decoder& Decoder::operator>>(Optional<int32_t>& result)
+bool Decoder::decode(int32_t& result)
 {
     return decodeNumber(result);
 }
 
-Decoder& Decoder::operator>>(Optional<int64_t>& result)
+bool Decoder::decode(int64_t& result)
 {
     return decodeNumber(result);
 }
 
-Decoder& Decoder::operator>>(Optional<float>& result)
+bool Decoder::decode(float& result)
 {
     return decodeNumber(result);
 }
 
-Decoder& Decoder::operator>>(Optional<double>& result)
+bool Decoder::decode(double& result)
 {
     return decodeNumber(result);
 }

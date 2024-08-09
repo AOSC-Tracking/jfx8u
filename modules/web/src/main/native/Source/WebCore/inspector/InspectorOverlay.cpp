@@ -222,7 +222,7 @@ static void drawOutlinedQuadWithClip(GraphicsContext& context, const FloatQuad& 
     context.fillPath(quadToPath(quad, bounds));
 
     context.setCompositeOperation(CompositeOperator::DestinationOut);
-    context.setFillColor(Color::red);
+    context.setFillColor(Color(255, 0, 0));
     context.fillPath(quadToPath(clipQuad, bounds));
 }
 
@@ -293,7 +293,7 @@ static void drawShapeHighlight(GraphicsContext& context, Node& node, Highlight::
     FrameView* containingView = containingFrame->view();
     FrameView* mainView = containingFrame->page()->mainFrame().view();
 
-    static constexpr auto shapeHighlightColor = SRGBA<uint8_t> { 96, 82, 127, 204 };
+    const Color shapeHighlightColor(96, 82, 127, 204);
 
     Shape::DisplayPaths paths;
     shapeOutsideInfo->computedShape().buildDisplayPaths(paths);
@@ -302,7 +302,7 @@ static void drawShapeHighlight(GraphicsContext& context, Node& node, Highlight::
         LayoutRect shapeBounds = shapeOutsideInfo->computedShapePhysicalBoundingBox();
         FloatQuad shapeQuad = renderer->localToAbsoluteQuad(FloatRect(shapeBounds));
         contentsQuadToCoordinateSystem(mainView, containingView, shapeQuad, InspectorOverlay::CoordinateSystem::Document);
-        drawOutlinedQuad(context, shapeQuad, shapeHighlightColor, Color::transparentBlack, bounds);
+        drawOutlinedQuad(context, shapeQuad, shapeHighlightColor, Color::transparent, bounds);
         return;
     }
 
@@ -345,7 +345,7 @@ static void drawShapeHighlight(GraphicsContext& context, Node& node, Highlight::
 
         GraphicsContextStateSaver stateSaver(context);
 
-        constexpr auto shapeMarginHighlightColor = SRGBA<uint8_t> { 96, 82, 127, 153 };
+        const Color shapeMarginHighlightColor(96, 82, 127, 153);
         context.setFillColor(shapeMarginHighlightColor);
         context.fillPath(marginPath);
     }
@@ -382,7 +382,7 @@ void InspectorOverlay::paint(GraphicsContext& context)
     if (m_indicating) {
         GraphicsContextStateSaver stateSaver(context);
 
-        constexpr auto indicatingColor = SRGBA<uint8_t> { 111, 168, 220, 168 };
+        const Color indicatingColor(111, 168, 220, 168);
         context.setFillColor(indicatingColor);
         context.fillRect({ FloatPoint::zero(), viewportSize });
     }
@@ -611,7 +611,7 @@ void InspectorOverlay::drawPaintRects(GraphicsContext& context, const Deque<Time
 {
     GraphicsContextStateSaver stateSaver(context);
 
-    constexpr auto paintRectsColor = Color::red.colorWithAlphaByte(128);
+    const Color paintRectsColor(1.0f, 0.0f, 0.0f, 0.5f);
     context.setFillColor(paintRectsColor);
 
     for (const TimeRectPair& pair : paintRects)
@@ -662,7 +662,7 @@ void InspectorOverlay::drawBounds(GraphicsContext& context, const Highlight::Bou
 
     context.setStrokeThickness(1);
 
-    constexpr auto boundsColor = Color::red.colorWithAlphaByte(153);
+    const Color boundsColor(1.0f, 0.0f, 0.0f, 0.6f);
     context.setStrokeColor(boundsColor);
 
     context.strokePath(path);
@@ -670,9 +670,9 @@ void InspectorOverlay::drawBounds(GraphicsContext& context, const Highlight::Bou
 
 void InspectorOverlay::drawRulers(GraphicsContext& context, const InspectorOverlay::RulerExclusion& rulerExclusion)
 {
-    constexpr auto rulerBackgroundColor = Color::white.colorWithAlphaByte(153);
-    constexpr auto lightRulerColor = Color::black.colorWithAlphaByte(51);
-    constexpr auto darkRulerColor = Color::black.colorWithAlphaByte(128);
+    const Color rulerBackgroundColor(1.0f, 1.0f, 1.0f, 0.6f);
+    const Color lightRulerColor(0.0f, 0.0f, 0.0f, 0.2f);
+    const Color darkRulerColor(0.0f, 0.0f, 0.0f, 0.5f);
 
     IntPoint scrollOffset;
 
@@ -1046,31 +1046,32 @@ Path InspectorOverlay::drawElementTitle(GraphicsContext& context, Node& node, co
 
     context.translate(elementDataBorderSize / 2.0f, elementDataBorderSize / 2.0f);
 
-    constexpr auto elementTitleBackgroundColor = SRGBA<uint8_t> { 255, 255, 194 };
+    const Color elementTitleBackgroundColor(255, 255, 194);
     context.setFillColor(elementTitleBackgroundColor);
 
     context.fillPath(path);
 
     context.setStrokeThickness(elementDataBorderSize);
 
-    constexpr auto elementTitleBorderColor = Color::darkGray;
+    const Color elementTitleBorderColor(128, 128, 128);
     context.setStrokeColor(elementTitleBorderColor);
 
     context.strokePath(path);
 
-    FloatPoint textPosition(boxX + elementDataSpacing, boxY - (elementDataSpacing / 2.0f) + fontHeight);
-    const auto drawText = [&] (const String& text, SRGBA<uint8_t> color) {
+    float textPositionX = boxX + elementDataSpacing;
+    float textPositionY = boxY - (elementDataSpacing / 2.0f) + fontHeight;
+    const auto drawText = [&] (const String& text, const Color& color) {
         if (text.isEmpty())
             return;
 
         context.setFillColor(color);
-        textPosition += context.drawText(font, TextRun(text), textPosition);
+        textPositionX += context.drawText(font, TextRun(text), { textPositionX, textPositionY });
     };
 
-    drawText(elementTagName, { 136, 18, 128 }); // Keep this in sync with XMLViewer.css (.tag)
-    drawText(elementIDValue, { 26, 26, 166 }); // Keep this in sync with XMLViewer.css (.attribute-value)
-    drawText(elementClassValue, { 153, 69, 0 }); // Keep this in sync with XMLViewer.css (.attribute-name)
-    drawText(elementPseudoType, { 136, 18, 128 }); // Keep this in sync with XMLViewer.css (.tag)
+    drawText(elementTagName, Color(136, 18, 128)); // Keep this in sync with XMLViewer.css (.tag)
+    drawText(elementIDValue, Color(26, 26, 166)); // Keep this in sync with XMLViewer.css (.attribute-value)
+    drawText(elementClassValue, Color(153, 69, 0)); // Keep this in sync with XMLViewer.css (.attribute-name)
+    drawText(elementPseudoType, Color(136, 18, 128)); // Keep this in sync with XMLViewer.css (.tag)
     drawText(" "_s, Color::black);
     drawText(elementWidth, Color::black);
     drawText("px"_s, Color::darkGray);
@@ -1081,7 +1082,10 @@ Path InspectorOverlay::drawElementTitle(GraphicsContext& context, Node& node, co
     drawText("px"_s, Color::darkGray);
 
     if (hasSecondLine) {
-        drawText("Role"_s, { 170, 13, 145 });
+        textPositionX = boxX + elementDataSpacing;
+        textPositionY += fontHeight;
+
+        drawText("Role"_s, Color(170, 13, 145));
         drawText(" "_s, Color::black);
         drawText(elementRole, Color::black);
     }

@@ -26,7 +26,10 @@
 #include "config.h"
 #include "JSCallee.h"
 
+#include "GetterSetter.h"
 #include "JSCInlines.h"
+#include "JSGlobalObject.h"
+#include "StackVisitor.h"
 
 namespace JSC {
 

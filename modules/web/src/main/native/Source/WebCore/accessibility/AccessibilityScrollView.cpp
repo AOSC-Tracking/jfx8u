@@ -38,7 +38,7 @@
 namespace WebCore {
 
 AccessibilityScrollView::AccessibilityScrollView(ScrollView* view)
-    : m_scrollView(makeWeakPtr(view))
+    : m_scrollView(view)
     , m_childrenDirty(false)
 {
 }
@@ -83,14 +83,9 @@ bool AccessibilityScrollView::isAttachment() const
     return m_scrollView && m_scrollView->platformWidget();
 }
 
-PlatformWidget AccessibilityScrollView::platformWidget() const
-{
-    return m_scrollView ? m_scrollView->platformWidget() : nullptr;
-}
-
 Widget* AccessibilityScrollView::widgetForAttachmentView() const
 {
-    return m_scrollView.get();
+    return m_scrollView;
 }
 
 bool AccessibilityScrollView::canSetFocusAttribute() const
@@ -191,7 +186,7 @@ void AccessibilityScrollView::addChildren()
 
 AccessibilityObject* AccessibilityScrollView::webAreaObject() const
 {
-    if (!is<FrameView>(m_scrollView.get()))
+    if (!is<FrameView>(m_scrollView))
         return nullptr;
 
     Document* document = downcast<FrameView>(*m_scrollView).frame().document();
@@ -233,15 +228,15 @@ LayoutRect AccessibilityScrollView::elementRect() const
 
 FrameView* AccessibilityScrollView::documentFrameView() const
 {
-    if (!is<FrameView>(m_scrollView.get()))
+    if (!is<FrameView>(m_scrollView))
         return nullptr;
 
-    return downcast<FrameView>(m_scrollView.get());
+    return downcast<FrameView>(m_scrollView);
 }
 
 AccessibilityObject* AccessibilityScrollView::parentObject() const
 {
-    if (!is<FrameView>(m_scrollView.get()))
+    if (!is<FrameView>(m_scrollView))
         return nullptr;
 
     AXObjectCache* cache = axObjectCache();
@@ -257,14 +252,14 @@ AccessibilityObject* AccessibilityScrollView::parentObject() const
 
 AccessibilityObject* AccessibilityScrollView::parentObjectIfExists() const
 {
-    if (!is<FrameView>(m_scrollView.get()))
+    if (!is<FrameView>(m_scrollView))
         return nullptr;
 
     AXObjectCache* cache = axObjectCache();
     if (!cache)
         return nullptr;
 
-    HTMLFrameOwnerElement* owner = downcast<FrameView>(*m_scrollView).frame().ownerElement();
+    HTMLFrameOwnerElement* owner = downcast<FrameView>(m_scrollView)->frame().ownerElement();
     if (owner && owner->renderer())
         return cache->get(owner);
 
@@ -273,7 +268,7 @@ AccessibilityObject* AccessibilityScrollView::parentObjectIfExists() const
 
 ScrollableArea* AccessibilityScrollView::getScrollableAreaIfScrollable() const
 {
-    return m_scrollView.get();
+    return m_scrollView;
 }
 
 void AccessibilityScrollView::scrollTo(const IntPoint& point) const

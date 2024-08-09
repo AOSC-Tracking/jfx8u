@@ -28,9 +28,10 @@
 
 #if ENABLE(DFG_JIT)
 
+#include "DFGBasicBlockInlines.h"
 #include "DFGGraph.h"
 #include "DFGPhase.h"
-#include "JSCJSValueInlines.h"
+#include "JSCInlines.h"
 
 namespace JSC { namespace DFG {
 
@@ -413,7 +414,7 @@ private:
         Vector<PhiStackEntry, 128>& phiStack = phiStackFor<operandKind>();
 
         // Ensure that attempts to use this fail instantly.
-        m_block = nullptr;
+        m_block = 0;
 
         while (!phiStack.isEmpty()) {
             PhiStackEntry entry = phiStack.last();
@@ -467,7 +468,7 @@ private:
 
                 Node* newPhi = addPhiSilently(block, currentPhi->origin, variable);
                 newPhi->children = currentPhi->children;
-                currentPhi->children.initialize(newPhi, variableInPrevious, nullptr);
+                currentPhi->children.initialize(newPhi, variableInPrevious, 0);
             }
         }
     }

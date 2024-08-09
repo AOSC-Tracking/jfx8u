@@ -25,8 +25,11 @@
 namespace JSC {
 
 class ArrayPrototype final : public JSArray {
+private:
+    ArrayPrototype(VM&, Structure*);
+
 public:
-    using Base = JSArray;
+    typedef JSArray Base;
 
     enum class SpeciesWatchpointStatus {
         Uninitialized,
@@ -43,11 +46,9 @@ public:
         return Structure::create(vm, globalObject, prototype, TypeInfo(DerivedArrayType, StructureFlags), info(), ArrayClass);
     }
 
-private:
-    ArrayPrototype(VM&, Structure*);
+protected:
     void finishCreation(VM&, JSGlobalObject*);
 };
-STATIC_ASSERT_ISO_SUBSPACE_SHARABLE(ArrayPrototype, ArrayPrototype::Base);
 
 EncodedJSValue JSC_HOST_CALL arrayProtoFuncSpeciesCreate(JSGlobalObject*, CallFrame*);
 EncodedJSValue JSC_HOST_CALL arrayProtoFuncToString(JSGlobalObject*, CallFrame*);

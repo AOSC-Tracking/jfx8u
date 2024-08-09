@@ -36,8 +36,8 @@ class ElementAndTextDescendantIterator {
 public:
     ElementAndTextDescendantIterator();
     enum FirstChildTag { FirstChild };
-    ElementAndTextDescendantIterator(const ContainerNode& root, FirstChildTag);
-    ElementAndTextDescendantIterator(const ContainerNode& root, Node* current);
+    ElementAndTextDescendantIterator(ContainerNode& root, FirstChildTag);
+    ElementAndTextDescendantIterator(ContainerNode& root, Node* current);
 
     ElementAndTextDescendantIterator& operator++() { return traverseNext(); }
 
@@ -63,9 +63,9 @@ public:
 
 private:
     static bool isElementOrText(const Node& node) { return is<Element>(node) || is<Text>(node); }
-    static Node* firstChild(const Node&);
-    static Node* nextSibling(const Node&);
-    static Node* previousSibling(const Node&);
+    static Node* firstChild(Node&);
+    static Node* nextSibling(Node&);
+    static Node* previousSibling(Node&);
 
     void popAncestorSiblingStack();
 
@@ -82,17 +82,17 @@ private:
 #endif
 };
 
-class ElementAndTextDescendantRange {
+class ElementAndTextDescendantIteratorAdapter {
 public:
-    explicit ElementAndTextDescendantRange(const ContainerNode& root);
-    ElementAndTextDescendantIterator begin() const;
-    ElementAndTextDescendantIterator end() const;
+    explicit ElementAndTextDescendantIteratorAdapter(ContainerNode& root);
+    ElementAndTextDescendantIterator begin();
+    ElementAndTextDescendantIterator end();
 
 private:
-    const ContainerNode& m_root;
+    ContainerNode& m_root;
 };
 
-ElementAndTextDescendantRange elementAndTextDescendants(ContainerNode&);
+ElementAndTextDescendantIteratorAdapter elementAndTextDescendants(ContainerNode&);
 
 // ElementAndTextDescendantIterator
 
@@ -101,7 +101,7 @@ inline ElementAndTextDescendantIterator::ElementAndTextDescendantIterator()
 {
 }
 
-inline ElementAndTextDescendantIterator::ElementAndTextDescendantIterator(const ContainerNode& root, FirstChildTag)
+inline ElementAndTextDescendantIterator::ElementAndTextDescendantIterator(ContainerNode& root, FirstChildTag)
     : m_current(firstChild(root))
 #if ASSERT_ENABLED
     , m_assertions(m_current)
@@ -113,7 +113,7 @@ inline ElementAndTextDescendantIterator::ElementAndTextDescendantIterator(const 
     m_depth = 1;
 }
 
-inline ElementAndTextDescendantIterator::ElementAndTextDescendantIterator(const ContainerNode& root, Node* current)
+inline ElementAndTextDescendantIterator::ElementAndTextDescendantIterator(ContainerNode& root, Node* current)
     : m_current(current)
 #if ASSERT_ENABLED
     , m_assertions(m_current)
@@ -148,7 +148,7 @@ inline void ElementAndTextDescendantIterator::dropAssertions()
 #endif
 }
 
-inline Node* ElementAndTextDescendantIterator::firstChild(const Node& current)
+inline Node* ElementAndTextDescendantIterator::firstChild(Node& current)
 {
     auto* node = current.firstChild();
     while (node && !isElementOrText(*node))
@@ -156,7 +156,7 @@ inline Node* ElementAndTextDescendantIterator::firstChild(const Node& current)
     return node;
 }
 
-inline Node* ElementAndTextDescendantIterator::nextSibling(const Node& current)
+inline Node* ElementAndTextDescendantIterator::nextSibling(Node& current)
 {
     auto* node = current.nextSibling();
     while (node && !isElementOrText(*node))
@@ -164,7 +164,7 @@ inline Node* ElementAndTextDescendantIterator::nextSibling(const Node& current)
     return node;
 }
 
-inline Node* ElementAndTextDescendantIterator::previousSibling(const Node& current)
+inline Node* ElementAndTextDescendantIterator::previousSibling(Node& current)
 {
     auto* node = current.previousSibling();
     while (node && !isElementOrText(*node))
@@ -294,28 +294,28 @@ inline bool ElementAndTextDescendantIterator::operator!=(const ElementAndTextDes
     return !(*this == other);
 }
 
-// ElementAndTextDescendantRange
+// ElementAndTextDescendantIteratorAdapter
 
-inline ElementAndTextDescendantRange::ElementAndTextDescendantRange(const ContainerNode& root)
+inline ElementAndTextDescendantIteratorAdapter::ElementAndTextDescendantIteratorAdapter(ContainerNode& root)
     : m_root(root)
 {
 }
 
-inline ElementAndTextDescendantIterator ElementAndTextDescendantRange::begin() const
+inline ElementAndTextDescendantIterator ElementAndTextDescendantIteratorAdapter::begin()
 {
     return ElementAndTextDescendantIterator(m_root, ElementAndTextDescendantIterator::FirstChild);
 }
 
-inline ElementAndTextDescendantIterator ElementAndTextDescendantRange::end() const
+inline ElementAndTextDescendantIterator ElementAndTextDescendantIteratorAdapter::end()
 {
     return { };
 }
 
 // Standalone functions
 
-inline ElementAndTextDescendantRange elementAndTextDescendants(ContainerNode& root)
+inline ElementAndTextDescendantIteratorAdapter elementAndTextDescendants(ContainerNode& root)
 {
-    return ElementAndTextDescendantRange(root);
+    return ElementAndTextDescendantIteratorAdapter(root);
 }
 
 } // namespace WebCore

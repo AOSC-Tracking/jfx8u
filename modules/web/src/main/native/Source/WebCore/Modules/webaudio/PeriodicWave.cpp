@@ -32,7 +32,6 @@
 
 #include "PeriodicWave.h"
 
-#include "BaseAudioContext.h"
 #include "FFTFrame.h"
 #include "VectorMath.h"
 #include <algorithm>
@@ -51,49 +50,6 @@ Ref<PeriodicWave> PeriodicWave::create(float sampleRate, Float32Array& real, Flo
 
     auto waveTable = adoptRef(*new PeriodicWave(sampleRate));
     waveTable->createBandLimitedTables(real.data(), imaginary.data(), real.length());
-    return waveTable;
-}
-
-ExceptionOr<Ref<PeriodicWave>> PeriodicWave::create(BaseAudioContext& context, PeriodicWaveOptions&& options)
-{
-    if (context.isStopped())
-        return Exception { InvalidStateError };
-
-    context.lazyInitialize();
-
-    Vector<float> real;
-    Vector<float> imag;
-
-    if (options.real && options.imag) {
-        if (options.real->size() != options.imag->size())
-            return Exception { IndexSizeError, "real and imag have different lengths"_s };
-        if (options.real->size() < 2)
-            return Exception { IndexSizeError, "real's length cannot be less than 2"_s };
-        if (options.imag->size() < 2)
-            return Exception { IndexSizeError, "imag's length cannot be less than 2"_s };
-        real = WTFMove(*options.real);
-        imag = WTFMove(*options.imag);
-    } else if (options.real) {
-        if (options.real->size() < 2)
-            return Exception { IndexSizeError, "real's length cannot be less than 2"_s };
-        real = WTFMove(*options.real);
-        imag.fill(0, real.size());
-    } else if (options.imag) {
-        if (options.imag->size() < 2)
-            return Exception { IndexSizeError, "imag's length cannot be less than 2"_s };
-        imag = WTFMove(*options.imag);
-        real.fill(0, imag.size());
-    } else {
-        real.fill(0, 2);
-        imag.fill(0, 2);
-        imag[1] = 1;
-    }
-
-    real[0] = 0;
-    imag[0] = 0;
-
-    auto waveTable = adoptRef(*new PeriodicWave(context.sampleRate()));
-    waveTable->createBandLimitedTables(real.data(), imag.data(), real.size(), options.disableNormalization ? ShouldDisableNormalization::Yes : ShouldDisableNormalization::No);
     return waveTable;
 }
 
@@ -186,7 +142,7 @@ unsigned PeriodicWave::numberOfPartialsForRange(unsigned rangeIndex) const
 // Convert into time-domain wave tables.
 // One table is created for each range for non-aliasing playback at different playback rates.
 // Thus, higher ranges have more high-frequency partials culled out.
-void PeriodicWave::createBandLimitedTables(const float* realData, const float* imagData, unsigned numberOfComponents, ShouldDisableNormalization disableNormalization)
+void PeriodicWave::createBandLimitedTables(const float* realData, const float* imagData, unsigned numberOfComponents)
 {
     float normalizationScale = 1;
 
@@ -243,14 +199,12 @@ void PeriodicWave::createBandLimitedTables(const float* realData, const float* i
         frame.doInverseFFT(data);
 
         // For the first range (which has the highest power), calculate its peak value then compute normalization scale.
-        if (disableNormalization == ShouldDisableNormalization::No) {
-            if (!rangeIndex) {
-                float maxValue;
-                vmaxmgv(data, 1, &maxValue, m_periodicWaveSize);
+        if (!rangeIndex) {
+            float maxValue;
+            vmaxmgv(data, 1, &maxValue, m_periodicWaveSize);
 
-                if (maxValue)
-                    normalizationScale = 1.0f / maxValue;
-            }
+            if (maxValue)
+                normalizationScale = 1.0f / maxValue;
         }
 
         // Apply normalization scale.

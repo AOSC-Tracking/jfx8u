@@ -35,10 +35,9 @@ typedef (GPUOutOfMemoryError or GPUValidationError) GPUError;
 
 [
     Conditional=WEBGPU,
+    Constructor(DOMString type, GPUUncapturedErrorEventInit gpuUncapturedErrorEventInitDict),
     EnabledAtRuntime=WebGPU,
     Exposed=Window
 ] interface GPUUncapturedErrorEvent : Event {
-    constructor(DOMString type, GPUUncapturedErrorEventInit gpuUncapturedErrorEventInitDict);
-
     readonly attribute GPUError error;
 };

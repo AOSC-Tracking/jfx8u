@@ -27,7 +27,7 @@
 #include "FETurbulence.h"
 
 #include "Filter.h"
-#include "ImageData.h"
+#include <JavaScriptCore/Uint8ClampedArray.h>
 #include <wtf/MathExtras.h>
 #include <wtf/ParallelJobs.h>
 #include <wtf/text/TextStream.h>
@@ -49,7 +49,7 @@ static const int s_randQ = 127773; // m / a
 static const int s_randR = 2836; // m % a
 
 FETurbulence::FETurbulence(Filter& filter, TurbulenceType type, float baseFrequencyX, float baseFrequencyY, int numOctaves, float seed, bool stitchTiles)
-    : FilterEffect(filter, Type::Turbulence)
+    : FilterEffect(filter)
     , m_type(type)
     , m_baseFrequencyX(baseFrequencyX)
     , m_baseFrequencyY(baseFrequencyY)
@@ -217,7 +217,7 @@ FETurbulence::StitchData FETurbulence::computeStitching(IntSize tileSize, float&
 }
 
 // This is taken 1:1 from SVG spec: http://www.w3.org/TR/SVG11/filters.html#feTurbulenceElement.
-ColorComponents<float> FETurbulence::noise2D(const PaintingData& paintingData, const StitchData& stitchData, const FloatPoint& noiseVector) const
+FloatComponents FETurbulence::noise2D(const PaintingData& paintingData, const StitchData& stitchData, const FloatPoint& noiseVector) const
 {
     struct NoisePosition {
         int index; // bx0, by0 in the spec text.
@@ -322,19 +322,19 @@ ColorComponents<float> FETurbulence::noise2D(const PaintingData& paintingData, c
 }
 
 // https://www.w3.org/TR/SVG/filters.html#feTurbulenceElement describes this conversion to color components.
-static inline ColorComponents<uint8_t> toIntBasedColorComponents(const ColorComponents<float>& floatComponents)
+static inline ColorComponents toColorComponents(const FloatComponents& floatComponents)
 {
     return {
-        std::clamp<uint8_t>(static_cast<int>(floatComponents[0] * 255), 0, 255),
-        std::clamp<uint8_t>(static_cast<int>(floatComponents[1] * 255), 0, 255),
-        std::clamp<uint8_t>(static_cast<int>(floatComponents[2] * 255), 0, 255),
-        std::clamp<uint8_t>(static_cast<int>(floatComponents[3] * 255), 0, 255),
+        std::max<uint8_t>(0, std::min(static_cast<int>(floatComponents.components[0] * 255), 255)),
+        std::max<uint8_t>(0, std::min(static_cast<int>(floatComponents.components[1] * 255), 255)),
+        std::max<uint8_t>(0, std::min(static_cast<int>(floatComponents.components[2] * 255), 255)),
+        std::max<uint8_t>(0, std::min(static_cast<int>(floatComponents.components[3] * 255), 255))
     };
 }
 
-ColorComponents<uint8_t> FETurbulence::calculateTurbulenceValueForPoint(const PaintingData& paintingData, StitchData stitchData, const FloatPoint& point) const
+ColorComponents FETurbulence::calculateTurbulenceValueForPoint(const PaintingData& paintingData, StitchData stitchData, const FloatPoint& point) const
 {
-    ColorComponents<float> turbulenceFunctionResult;
+    FloatComponents turbulenceFunctionResult;
     FloatPoint noiseVector(point.x() * paintingData.baseFrequencyX, point.y() * paintingData.baseFrequencyY);
     float ratio = 1;
     for (int octave = 0; octave < m_numOctaves; ++octave) {
@@ -362,7 +362,7 @@ ColorComponents<uint8_t> FETurbulence::calculateTurbulenceValueForPoint(const Pa
     if (m_type == TurbulenceType::FractalNoise)
         turbulenceFunctionResult = turbulenceFunctionResult * 0.5f + 0.5f;
 
-    return toIntBasedColorComponents(turbulenceFunctionResult);
+    return toColorComponents(turbulenceFunctionResult);
 }
 
 void FETurbulence::fillRegion(Uint8ClampedArray& pixelArray, const PaintingData& paintingData, StitchData stitchData, int startY, int endY) const
@@ -381,8 +381,8 @@ void FETurbulence::fillRegion(Uint8ClampedArray& pixelArray, const PaintingData&
         for (int x = 0; x < filterRegion.width(); ++x) {
             point.setX(point.x() + 1);
             FloatPoint localPoint = inverseTransfrom.mapPoint(point);
-            auto values = calculateTurbulenceValueForPoint(paintingData, stitchData, localPoint);
-            pixelArray.setRange(values.components.data(), 4, indexOfPixelChannel);
+            ColorComponents values = calculateTurbulenceValueForPoint(paintingData, stitchData, localPoint);
+            pixelArray.setRange(values.components, 4, indexOfPixelChannel);
             indexOfPixelChannel += 4;
         }
     }
@@ -395,8 +395,7 @@ void FETurbulence::fillRegionWorker(FillRegionParameters* parameters)
 
 void FETurbulence::platformApplySoftware()
 {
-    auto* resultImage = createUnmultipliedImageResult();
-    auto* pixelArray = resultImage ? resultImage->data() : nullptr;
+    Uint8ClampedArray* pixelArray = createUnmultipliedImageResult();
     if (!pixelArray)
         return;
 

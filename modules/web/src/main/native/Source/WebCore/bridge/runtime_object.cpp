@@ -200,7 +200,7 @@ bool RuntimeObject::put(JSCell* cell, JSGlobalObject* lexicalGlobalObject, Prope
     return result;
 }
 
-bool RuntimeObject::deleteProperty(JSCell*, JSGlobalObject*, PropertyName, DeletePropertySlot&)
+bool RuntimeObject::deleteProperty(JSCell*, JSGlobalObject*, PropertyName)
 {
     // Can never remove a property of a RuntimeObject.
     return false;
@@ -233,17 +233,18 @@ static EncodedJSValue JSC_HOST_CALL callRuntimeObject(JSGlobalObject* globalObje
     return JSValue::encode(result);
 }
 
-CallData RuntimeObject::getCallData(JSCell* cell)
+CallType RuntimeObject::getCallData(JSCell* cell, CallData& callData)
 {
-    CallData callData;
-
     RuntimeObject* thisObject = jsCast<RuntimeObject*>(cell);
-    if (thisObject->m_instance && thisObject->m_instance->supportsInvokeDefaultMethod()) {
-        callData.type = CallData::Type::Native;
-        callData.native.function = callRuntimeObject;
-    }
+    if (!thisObject->m_instance)
+        return CallType::None;
 
-    return callData;
+    RefPtr<Instance> instance = thisObject->m_instance;
+    if (!instance->supportsInvokeDefaultMethod())
+        return CallType::None;
+
+    callData.native.function = callRuntimeObject;
+    return CallType::Host;
 }
 
 static EncodedJSValue JSC_HOST_CALL callRuntimeConstructor(JSGlobalObject* globalObject, CallFrame* callFrame)
@@ -260,17 +261,18 @@ static EncodedJSValue JSC_HOST_CALL callRuntimeConstructor(JSGlobalObject* globa
     return JSValue::encode(result.isObject() ? jsCast<JSObject*>(result.asCell()) : constructor);
 }
 
-CallData RuntimeObject::getConstructData(JSCell* cell)
+ConstructType RuntimeObject::getConstructData(JSCell* cell, ConstructData& constructData)
 {
-    CallData constructData;
-
     RuntimeObject* thisObject = jsCast<RuntimeObject*>(cell);
-    if (thisObject->m_instance && thisObject->m_instance->supportsConstruct()) {
-        constructData.type = CallData::Type::Native;
-        constructData.native.function = callRuntimeConstructor;
-    }
+    if (!thisObject->m_instance)
+        return ConstructType::None;
 
-    return constructData;
+    RefPtr<Instance> instance = thisObject->m_instance;
+    if (!instance->supportsConstruct())
+        return ConstructType::None;
+
+    constructData.native.function = callRuntimeConstructor;
+    return ConstructType::Host;
 }
 
 void RuntimeObject::getOwnPropertyNames(JSObject* object, JSGlobalObject* lexicalGlobalObject, PropertyNameArray& propertyNames, EnumerationMode)

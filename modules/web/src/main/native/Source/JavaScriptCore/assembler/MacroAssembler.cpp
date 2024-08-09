@@ -28,7 +28,6 @@
 
 #if ENABLE(ASSEMBLER)
 
-#include "JSCPtrTag.h"
 #include "Options.h"
 #include "ProbeContext.h"
 #include <wtf/PrintStream.h>
@@ -56,9 +55,8 @@ static void stdFunctionCallback(Probe::Context& context)
 
 void MacroAssembler::probe(Function<void(Probe::Context&)> func)
 {
-    probe(tagCFunction<JITProbePtrTag>(stdFunctionCallback), new Function<void(Probe::Context&)>(WTFMove(func)));
+    probe(stdFunctionCallback, new Function<void(Probe::Context&)>(WTFMove(func)));
 }
-
 #endif // ENABLE(MASM_PROBE)
 
 } // namespace JSC
@@ -129,23 +127,23 @@ void printInternal(PrintStream& out, MacroAssembler::ResultCondition cond)
 void printInternal(PrintStream& out, MacroAssembler::DoubleCondition cond)
 {
     switch (cond) {
-    case MacroAssembler::DoubleEqualAndOrdered:
-        out.print("DoubleEqualAndOrdered");
+    case MacroAssembler::DoubleEqual:
+        out.print("DoubleEqual");
         return;
-    case MacroAssembler::DoubleNotEqualAndOrdered:
-        out.print("DoubleNotEqualAndOrdered");
+    case MacroAssembler::DoubleNotEqual:
+        out.print("DoubleNotEqual");
         return;
-    case MacroAssembler::DoubleGreaterThanAndOrdered:
-        out.print("DoubleGreaterThanAndOrdered");
+    case MacroAssembler::DoubleGreaterThan:
+        out.print("DoubleGreaterThan");
         return;
-    case MacroAssembler::DoubleGreaterThanOrEqualAndOrdered:
-        out.print("DoubleGreaterThanOrEqualAndOrdered");
+    case MacroAssembler::DoubleGreaterThanOrEqual:
+        out.print("DoubleGreaterThanOrEqual");
         return;
-    case MacroAssembler::DoubleLessThanAndOrdered:
-        out.print("DoubleLessThanAndOrdered");
+    case MacroAssembler::DoubleLessThan:
+        out.print("DoubleLessThan");
         return;
-    case MacroAssembler::DoubleLessThanOrEqualAndOrdered:
-        out.print("DoubleLessThanOrEqualAndOrdered");
+    case MacroAssembler::DoubleLessThanOrEqual:
+        out.print("DoubleLessThanOrEqual");
         return;
     case MacroAssembler::DoubleEqualOrUnordered:
         out.print("DoubleEqualOrUnordered");

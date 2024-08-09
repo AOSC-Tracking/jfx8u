@@ -35,7 +35,7 @@
 namespace JSC {
 
 template<typename JumpType, typename FunctionType, typename ResultType, typename... Arguments>
-class SlowPathCallGeneratorWithArguments final : public AccessCaseSnippetParams::SlowPathCallGenerator {
+class SlowPathCallGeneratorWithArguments : public AccessCaseSnippetParams::SlowPathCallGenerator {
 public:
     SlowPathCallGeneratorWithArguments(JumpType from, CCallHelpers::Label to, FunctionType function, ResultType result, std::tuple<Arguments...> arguments)
         : m_from(from)
@@ -84,7 +84,7 @@ public:
         return exceptions;
     }
 
-    CCallHelpers::JumpList generate(AccessGenerationState& state, const RegisterSet& usedRegistersBySnippet, CCallHelpers& jit) final
+    CCallHelpers::JumpList generate(AccessGenerationState& state, const RegisterSet& usedRegistersBySnippet, CCallHelpers& jit) override
     {
         m_from.link(&jit);
         CCallHelpers::JumpList exceptions = generateImpl(state, usedRegistersBySnippet, jit, std::make_index_sequence<std::tuple_size<std::tuple<Arguments...>>::value>());
@@ -92,7 +92,7 @@ public:
         return exceptions;
     }
 
-private:
+protected:
     JumpType m_from;
     CCallHelpers::Label m_to;
     FunctionType m_function;

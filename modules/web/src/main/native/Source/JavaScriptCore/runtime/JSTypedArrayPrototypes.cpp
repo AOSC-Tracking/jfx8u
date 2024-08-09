@@ -26,6 +26,7 @@
 #include "config.h"
 #include "JSTypedArrayPrototypes.h"
 
+#include "JSGenericTypedArrayViewPrototypeInlines.h"
 #include "JSCInlines.h"
 #include "JSTypedArrayViewPrototype.h"
 

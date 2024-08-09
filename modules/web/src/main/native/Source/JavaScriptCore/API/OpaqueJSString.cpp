@@ -26,8 +26,10 @@
 #include "config.h"
 #include "OpaqueJSString.h"
 
+#include "CallFrame.h"
 #include "Identifier.h"
 #include "IdentifierInlines.h"
+#include "JSGlobalObject.h"
 #include <wtf/text/StringView.h>
 
 using namespace JSC;

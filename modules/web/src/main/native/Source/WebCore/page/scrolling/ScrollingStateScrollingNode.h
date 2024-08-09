@@ -59,12 +59,10 @@ public:
         ScrollableAreaSize = NumStateNodeBits,
         TotalContentsSize,
         ReachableContentsSize,
+        ParentRelativeScrollableRect,
         ScrollPosition,
         ScrollOrigin,
         ScrollableAreaParams,
-#if ENABLE(SCROLLING_THREAD)
-        ReasonsForSynchronousScrolling,
-#endif
         RequestedScrollPosition,
 #if ENABLE(CSS_SCROLL_SNAP)
         HorizontalSnapOffsets,
@@ -91,6 +89,9 @@ public:
 
     const FloatSize& reachableContentsSize() const { return m_reachableContentsSize; }
     WEBCORE_EXPORT void setReachableContentsSize(const FloatSize&);
+
+    const LayoutRect& parentRelativeScrollableRect() const { return m_parentRelativeScrollableRect; }
+    WEBCORE_EXPORT void setParentRelativeScrollableRect(const LayoutRect&);
 
     const FloatPoint& scrollPosition() const { return m_scrollPosition; }
     WEBCORE_EXPORT void setScrollPosition(const FloatPoint&);
@@ -120,12 +121,6 @@ public:
 
     const ScrollableAreaParameters& scrollableAreaParameters() const { return m_scrollableAreaParameters; }
     WEBCORE_EXPORT void setScrollableAreaParameters(const ScrollableAreaParameters& params);
-
-#if ENABLE(SCROLLING_THREAD)
-    OptionSet<SynchronousScrollingReason> synchronousScrollingReasons() const { return m_synchronousScrollingReasons; }
-    WEBCORE_EXPORT void setSynchronousScrollingReasons(OptionSet<SynchronousScrollingReason>);
-    bool hasSynchronousScrollingReasons() const { return !m_synchronousScrollingReasons.isEmpty(); }
-#endif
 
     const RequestedScrollData& requestedScrollData() const { return m_requestedScrollData; }
     WEBCORE_EXPORT void setRequestedScrollData(const RequestedScrollData&);
@@ -164,6 +159,7 @@ private:
     FloatSize m_scrollableAreaSize;
     FloatSize m_totalContentsSize;
     FloatSize m_reachableContentsSize;
+    LayoutRect m_parentRelativeScrollableRect;
     FloatPoint m_scrollPosition;
     IntPoint m_scrollOrigin;
 
@@ -185,9 +181,7 @@ private:
 
     ScrollableAreaParameters m_scrollableAreaParameters;
     RequestedScrollData m_requestedScrollData;
-#if ENABLE(SCROLLING_THREAD)
-    OptionSet<SynchronousScrollingReason> m_synchronousScrollingReasons;
-#endif
+
     bool m_isMonitoringWheelEvents { false };
 };
 

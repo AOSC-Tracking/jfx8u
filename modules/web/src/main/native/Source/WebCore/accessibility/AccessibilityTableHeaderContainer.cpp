@@ -70,10 +70,10 @@ void AccessibilityTableHeaderContainer::addChildren()
         return;
 
     auto& parentTable = downcast<AccessibilityTable>(*m_parent);
-    if (!parentTable.isExposable())
+    if (!parentTable.isExposableThroughAccessibility())
         return;
 
-    m_children = parentTable.columnHeaders();
+    parentTable.columnHeaders(m_children);
 
     for (const auto& child : m_children)
         m_headerRect.unite(child->elementRect());

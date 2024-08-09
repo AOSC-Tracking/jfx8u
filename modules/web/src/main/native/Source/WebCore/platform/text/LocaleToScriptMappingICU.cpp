@@ -34,7 +34,6 @@
 #include <unicode/uloc.h>
 #include <wtf/text/CString.h>
 #include <wtf/text/WTFString.h>
-#include <wtf/unicode/icu/ICUHelpers.h>
 
 namespace WebCore {
 
@@ -72,7 +71,7 @@ UScriptCode localeToScriptCodeForFontSelection(const String& locale)
     UScriptCode scriptCode = USCRIPT_COMMON;
     uscript_getCode(script, &scriptCode, 1, &status);
     // Ignore error that multiple scripts could be returned, since we only want one script.
-    if (U_FAILURE(status) && !needsToGrowToProduceBuffer(status))
+    if (U_FAILURE(status) && status != U_BUFFER_OVERFLOW_ERROR)
         return USCRIPT_COMMON;
 
     return scriptCodeForFontSelection(scriptCode);

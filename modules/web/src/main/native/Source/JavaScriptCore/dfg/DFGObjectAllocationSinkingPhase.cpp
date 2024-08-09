@@ -41,10 +41,7 @@
 #include "DFGSSACalculator.h"
 #include "DFGValidate.h"
 #include "JSArrayIterator.h"
-#include "JSInternalPromise.h"
-#include "JSMapIterator.h"
-#include "JSSetIterator.h"
-#include "StructureInlines.h"
+#include "JSCInlines.h"
 #include <wtf/StdList.h>
 
 namespace JSC { namespace DFG {
@@ -964,28 +961,8 @@ private:
             break;
         }
 
-        case NewInternalFieldObject: {
-            switch (node->structure()->typeInfo().type()) {
-            case JSArrayIteratorType:
-                target = handleInternalFieldClass<JSArrayIterator>(node, writes);
-                break;
-            case JSMapIteratorType:
-                target = handleInternalFieldClass<JSMapIterator>(node, writes);
-                break;
-            case JSSetIteratorType:
-                target = handleInternalFieldClass<JSSetIterator>(node, writes);
-                break;
-            case JSPromiseType:
-                if (node->structure()->classInfo() == JSInternalPromise::info())
-                    target = handleInternalFieldClass<JSInternalPromise>(node, writes);
-                else {
-                    ASSERT(node->structure()->classInfo() == JSPromise::info());
-                    target = handleInternalFieldClass<JSPromise>(node, writes);
-                }
-                break;
-            default:
-                DFG_CRASH(m_graph, node, "Bad structure");
-            }
+        case NewArrayIterator: {
+            target = handleInternalFieldClass<JSArrayIterator>(node, writes);
             break;
         }
 
@@ -1243,7 +1220,6 @@ private:
         case FilterGetByStatus:
         case FilterPutByIdStatus:
         case FilterInByIdStatus:
-        case FilterDeleteByStatus:
             break;
 
         default:
@@ -2108,8 +2084,8 @@ private:
                         node->convertToPhantomNewAsyncFunction();
                         break;
 
-                    case NewInternalFieldObject:
-                        node->convertToPhantomNewInternalFieldObject();
+                    case NewArrayIterator:
+                        node->convertToPhantomNewArrayIterator();
                         break;
 
                     case CreateActivation:
@@ -2594,7 +2570,6 @@ private:
                 case FilterGetByStatus:
                 case FilterPutByIdStatus:
                 case FilterInByIdStatus:
-                case FilterDeleteByStatus:
                     if (node->child1()->isPhantomAllocation())
                         node->removeWithoutChecks();
                     break;

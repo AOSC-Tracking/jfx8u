@@ -209,7 +209,7 @@ public:
     }
 
     template <class Encoder> void encode(Encoder&) const;
-    template <class Decoder> static WARN_UNUSED_RETURN bool decode(Decoder&, HTTPHeaderMap&);
+    template <class Decoder> static bool decode(Decoder&, HTTPHeaderMap&);
 
 private:
     void setUncommonHeader(const String& name, const String& value);
@@ -222,7 +222,7 @@ private:
 template <class Encoder>
 void HTTPHeaderMap::CommonHeader::encode(Encoder& encoder) const
 {
-    encoder << key;
+    encoder.encodeEnum(key);
     encoder << value;
 }
 
@@ -230,7 +230,7 @@ template <class Decoder>
 auto HTTPHeaderMap::CommonHeader::decode(Decoder& decoder) -> Optional<CommonHeader>
 {
     HTTPHeaderName name;
-    if (!decoder.decode(name))
+    if (!decoder.decodeEnum(name))
         return WTF::nullopt;
     String value;
     if (!decoder.decode(value))

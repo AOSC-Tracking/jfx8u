@@ -29,106 +29,20 @@
 #if ENABLE(WEB_CRYPTO)
 
 #include "CryptoKeyAES.h"
-#include "OpenSSLCryptoUniquePtr.h"
-#include <openssl/evp.h>
+#include "NotImplemented.h"
 
 namespace WebCore {
 
-static const EVP_CIPHER* aesAlgorithm(size_t keySize)
+ExceptionOr<Vector<uint8_t>> CryptoAlgorithmAES_KW::platformWrapKey(const CryptoKeyAES&, const Vector<uint8_t>&)
 {
-    if (keySize * 8 == 128)
-        return EVP_aes_128_wrap();
-
-    if (keySize * 8 == 192)
-        return EVP_aes_192_wrap();
-
-    if (keySize * 8 == 256)
-        return EVP_aes_256_wrap();
-
-    return nullptr;
+    notImplemented();
+    return Exception { NotSupportedError };
 }
 
-static Optional<Vector<uint8_t>> cryptWrapKey(const Vector<uint8_t>& key, const Vector<uint8_t>& data)
+ExceptionOr<Vector<uint8_t>> CryptoAlgorithmAES_KW::platformUnwrapKey(const CryptoKeyAES&, const Vector<uint8_t>&)
 {
-    const EVP_CIPHER* algorithm = aesAlgorithm(key.size());
-    if (!algorithm)
-        return WTF::nullopt;
-
-    EvpCipherCtxPtr ctx;
-    Vector<uint8_t> cipherText(data.size() + 8);
-    int len;
-
-    // Create and initialize the context
-    if (!(ctx = EvpCipherCtxPtr(EVP_CIPHER_CTX_new())))
-        return WTF::nullopt;
-
-    EVP_CIPHER_CTX_set_flags(ctx.get(), EVP_CIPHER_CTX_FLAG_WRAP_ALLOW);
-
-    // Initialize the encryption operation
-    if (1 != EVP_EncryptInit_ex(ctx.get(), algorithm, nullptr, key.data(), nullptr))
-        return WTF::nullopt;
-
-    // Provide the message to be encrypted, and obtain the encrypted output
-    if (1 != EVP_EncryptUpdate(ctx.get(), cipherText.data(), &len, data.data(), data.size()))
-        return WTF::nullopt;
-
-    // Finalize the encryption. Further ciphertext bytes may be written at this stage
-    if (1 != EVP_EncryptFinal_ex(ctx.get(), cipherText.data() + len, &len))
-        return WTF::nullopt;
-
-    return cipherText;
-}
-
-static Optional<Vector<uint8_t>> cryptUnwrapKey(const Vector<uint8_t>& key, const Vector<uint8_t>& data)
-{
-    const EVP_CIPHER* algorithm = aesAlgorithm(key.size());
-    if (!algorithm)
-        return WTF::nullopt;
-
-    EvpCipherCtxPtr ctx;
-    Vector<uint8_t> plainText(data.size());
-    int len;
-    int plainTextLen;
-
-    // Create and initialize the context
-    if (!(ctx = EvpCipherCtxPtr(EVP_CIPHER_CTX_new())))
-        return WTF::nullopt;
-
-    EVP_CIPHER_CTX_set_flags(ctx.get(), EVP_CIPHER_CTX_FLAG_WRAP_ALLOW);
-
-    // Initialize the decryption operation
-    if (1 != EVP_DecryptInit_ex(ctx.get(), algorithm, nullptr, key.data(), nullptr))
-        return WTF::nullopt;
-
-    // Provide the message to be decrypted, and obtain the plaintext output
-    if (1 != EVP_DecryptUpdate(ctx.get(), plainText.data(), &len, data.data(), data.size()))
-        return WTF::nullopt;
-    plainTextLen = len;
-
-    // Finalize the decryption. Further plaintext bytes may be written at this stage
-    if (1 != EVP_DecryptFinal_ex(ctx.get(), plainText.data() + len, &len))
-        return WTF::nullopt;
-    plainTextLen += len;
-
-    plainText.shrink(plainTextLen);
-
-    return plainText;
-}
-
-ExceptionOr<Vector<uint8_t>> CryptoAlgorithmAES_KW::platformWrapKey(const CryptoKeyAES& key, const Vector<uint8_t>& data)
-{
-    auto output = cryptWrapKey(key.key(), data);
-    if (!output)
-        return Exception { OperationError };
-    return WTFMove(*output);
-}
-
-ExceptionOr<Vector<uint8_t>> CryptoAlgorithmAES_KW::platformUnwrapKey(const CryptoKeyAES& key, const Vector<uint8_t>& data)
-{
-    auto output = cryptUnwrapKey(key.key(), data);
-    if (!output)
-        return Exception { OperationError };
-    return WTFMove(*output);
+    notImplemented();
+    return Exception { NotSupportedError };
 }
 
 } // namespace WebCore

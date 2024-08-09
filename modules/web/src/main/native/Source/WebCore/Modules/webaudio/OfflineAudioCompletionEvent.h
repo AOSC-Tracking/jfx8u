@@ -24,30 +24,27 @@
 
 #pragma once
 
+#include "AudioBuffer.h"
 #include "Event.h"
+#include <wtf/RefPtr.h>
 
 namespace WebCore {
-
-class AudioBuffer;
-struct OfflineAudioCompletionEventInit;
 
 class OfflineAudioCompletionEvent final : public Event {
     WTF_MAKE_ISO_ALLOCATED(OfflineAudioCompletionEvent);
 public:
-    static Ref<OfflineAudioCompletionEvent> create(Ref<AudioBuffer>&& renderedBuffer);
-    static Ref<OfflineAudioCompletionEvent> create(const AtomString& eventType, OfflineAudioCompletionEventInit&&);
+    static Ref<OfflineAudioCompletionEvent> create(RefPtr<AudioBuffer>&& renderedBuffer);
 
     virtual ~OfflineAudioCompletionEvent();
 
-    AudioBuffer& renderedBuffer() { return m_renderedBuffer.get(); }
+    AudioBuffer* renderedBuffer() { return m_renderedBuffer.get(); }
 
     EventInterface eventInterface() const override;
 
 private:
-    explicit OfflineAudioCompletionEvent(Ref<AudioBuffer>&& renderedBuffer);
-    OfflineAudioCompletionEvent(const AtomString& eventType, OfflineAudioCompletionEventInit&&);
+    explicit OfflineAudioCompletionEvent(RefPtr<AudioBuffer>&& renderedBuffer);
 
-    Ref<AudioBuffer> m_renderedBuffer;
+    RefPtr<AudioBuffer> m_renderedBuffer;
 };
 
 } // namespace WebCore

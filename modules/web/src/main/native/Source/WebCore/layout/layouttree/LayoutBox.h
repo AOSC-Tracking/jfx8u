@@ -27,8 +27,9 @@
 
 #if ENABLE(LAYOUT_FORMATTING_CONTEXT)
 
-#include "LayoutUnits.h"
+#include "LayoutReplaced.h"
 #include "RenderStyle.h"
+#include "TextContext.h"
 #include <wtf/IsoMalloc.h>
 #include <wtf/WeakPtr.h>
 
@@ -40,8 +41,7 @@ class Box;
 
 namespace Layout {
 
-class ContainerBox;
-class InitialContainingBlock;
+class Container;
 class LayoutState;
 class TreeBuilder;
 
@@ -55,6 +55,7 @@ public:
         TableBox, // The table box is a block-level box that contains the table's internal table boxes.
         Image,
         IFrame,
+        HardLineBreak,
         GenericElement
     };
 
@@ -64,15 +65,13 @@ public:
 
     enum BaseTypeFlag {
         BoxFlag               = 1 << 0,
-        InlineTextBoxFlag          = 1 << 1,
-        LineBreakBoxFlag           = 1 << 2,
-        ReplacedBoxFlag            = 1 << 3,
-        InitialContainingBlockFlag = 1 << 4,
-        ContainerBoxFlag           = 1 << 5
+        ContainerFlag         = 1 << 1
     };
     typedef unsigned BaseTypeFlags;
 
-    virtual ~Box();
+    Box(Optional<ElementAttributes>, RenderStyle&&);
+    Box(TextContext&&, RenderStyle&&);
+    ~Box();
 
     bool establishesFormattingContext() const;
     bool establishesBlockFormattingContext() const;
@@ -96,11 +95,12 @@ public:
 
     bool isFloatingOrOutOfFlowPositioned() const { return isFloatingPositioned() || isOutOfFlowPositioned(); }
 
-    const ContainerBox& containingBlock() const;
-    const ContainerBox& formattingContextRoot() const;
-    const InitialContainingBlock& initialContainingBlock() const;
+    const Container* containingBlock() const;
+    const Container& formattingContextRoot() const;
+    const Container& initialContainingBlock() const;
 
-    bool isInFormattingContextOf(const ContainerBox&) const;
+    bool isDescendantOf(const Container&) const;
+    bool isContainingBlockDescendantOf(const Container&) const;
 
     bool isAnonymous() const { return m_isAnonymous; }
 
@@ -111,7 +111,7 @@ public:
     bool isInlineBlockBox() const;
     bool isInlineTableBox() const;
     bool isBlockContainerBox() const;
-    bool isInitialContainingBlock() const { return m_baseTypeFlags & InitialContainingBlockFlag; }
+    bool isInitialContainingBlock() const;
 
     bool isDocumentBox() const { return m_elementAttributes && m_elementAttributes.value().elementType == ElementType::Document; }
     bool isBodyBox() const { return m_elementAttributes && m_elementAttributes.value().elementType == ElementType::Body; }
@@ -125,10 +125,12 @@ public:
     bool isTableColumnGroup() const { return style().display() == DisplayType::TableColumnGroup; }
     bool isTableColumn() const { return style().display() == DisplayType::TableColumn; }
     bool isTableCell() const { return style().display() == DisplayType::TableCell; }
+    bool isReplaced() const { return isImage() || isIFrame(); }
     bool isIFrame() const { return m_elementAttributes && m_elementAttributes.value().elementType == ElementType::IFrame; }
     bool isImage() const { return m_elementAttributes && m_elementAttributes.value().elementType == ElementType::Image; }
+    bool isLineBreakBox() const { return m_elementAttributes && m_elementAttributes.value().elementType == ElementType::HardLineBreak; }
 
-    const ContainerBox& parent() const { return *m_parent; }
+    const Container* parent() const { return m_parent; }
     const Box* nextSibling() const { return m_nextSibling; }
     const Box* nextInFlowSibling() const;
     const Box* nextInFlowOrFloatingSibling() const;
@@ -139,10 +141,7 @@ public:
     // FIXME: This is currently needed for style updates.
     Box* nextSibling() { return m_nextSibling; }
 
-    bool isContainerBox() const { return m_baseTypeFlags & ContainerBoxFlag; }
-    bool isInlineTextBox() const { return m_baseTypeFlags & InlineTextBoxFlag; }
-    bool isLineBreakBox() const { return m_baseTypeFlags & LineBreakBoxFlag; }
-    bool isReplacedBox() const { return m_baseTypeFlags & ReplacedBoxFlag; }
+    bool isContainer() const { return m_baseTypeFlags & ContainerFlag; }
 
     bool isPaddingApplicable() const;
     bool isOverflowVisible() const;
@@ -150,17 +149,23 @@ public:
     void updateStyle(const RenderStyle& newStyle);
     const RenderStyle& style() const { return m_style; }
 
-    // FIXME: Find a better place for random DOM things.
-    void setRowSpan(size_t);
-    size_t rowSpan() const;
+    const Replaced* replaced() const;
+    // FIXME: Temporary until after intrinsic size change is tracked by Replaced.
+    Replaced* replaced();
+    bool hasTextContent() const { return !!m_textContext; }
+    const Optional<TextContext>& textContext() const { return m_textContext; }
 
-    void setColumnSpan(size_t);
-    size_t columnSpan() const;
+    // FIXME: Find a better place for random DOM things.
+    void setRowSpan(unsigned);
+    unsigned rowSpan() const;
+
+    void setColumnSpan(unsigned);
+    unsigned columnSpan() const;
 
     void setColumnWidth(LayoutUnit);
     Optional<LayoutUnit> columnWidth() const;
 
-    void setParent(ContainerBox& parent) { m_parent = &parent; }
+    void setParent(Container& parent) { m_parent = &parent; }
     void setNextSibling(Box& nextSibling) { m_nextSibling = &nextSibling; }
     void setPreviousSibling(Box& previousSibling) { m_previousSibling = &previousSibling; }
 
@@ -171,7 +176,7 @@ public:
     void setCachedDisplayBoxForLayoutState(LayoutState&, std::unique_ptr<Display::Box>) const;
 
 protected:
-    Box(Optional<ElementAttributes>, RenderStyle&&, BaseTypeFlags);
+    Box(Optional<ElementAttributes>, Optional<TextContext>, RenderStyle&&, BaseTypeFlags);
 
 private:
     class BoxRareData {
@@ -179,7 +184,9 @@ private:
     public:
         BoxRareData() = default;
 
-        CellSpan tableCellSpan;
+        std::unique_ptr<Replaced> replaced;
+        unsigned rowSpan { 1 };
+        unsigned columnSpan { 1 };
         Optional<LayoutUnit> columnWidth;
     };
 
@@ -196,9 +203,11 @@ private:
     RenderStyle m_style;
     Optional<ElementAttributes> m_elementAttributes;
 
-    ContainerBox* m_parent { nullptr };
+    Container* m_parent { nullptr };
     Box* m_previousSibling { nullptr };
     Box* m_nextSibling { nullptr };
+
+    const Optional<TextContext> m_textContext;
 
     // First LayoutState gets a direct cache.
     mutable WeakPtr<LayoutState> m_cachedLayoutState;

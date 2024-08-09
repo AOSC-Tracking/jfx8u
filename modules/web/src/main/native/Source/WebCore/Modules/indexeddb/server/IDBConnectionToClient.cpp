@@ -28,7 +28,6 @@
 
 #if ENABLE(INDEXED_DATABASE)
 
-#include "IDBDatabaseNameAndVersion.h"
 #include "UniqueIDBDatabaseConnection.h"
 
 namespace WebCore {
@@ -182,10 +181,10 @@ void IDBConnectionToClient::notifyOpenDBRequestBlocked(const IDBResourceIdentifi
         m_delegate->notifyOpenDBRequestBlocked(requestIdentifier, oldVersion, newVersion);
 }
 
-void IDBConnectionToClient::didGetAllDatabaseNamesAndVersions(const IDBResourceIdentifier& requestIdentifier, Vector<IDBDatabaseNameAndVersion>&& databases)
+void IDBConnectionToClient::didGetAllDatabaseNames(uint64_t callbackID, const Vector<String>& databaseNames)
 {
     if (m_delegate)
-        m_delegate->didGetAllDatabaseNamesAndVersions(requestIdentifier, WTFMove(databases));
+        m_delegate->didGetAllDatabaseNames(callbackID, databaseNames);
 }
 
 void IDBConnectionToClient::registerDatabaseConnection(UniqueIDBDatabaseConnection& connection)
@@ -201,15 +200,15 @@ void IDBConnectionToClient::unregisterDatabaseConnection(UniqueIDBDatabaseConnec
 
 void IDBConnectionToClient::connectionToClientClosed()
 {
-    m_isClosed = true;
     auto databaseConnections = m_databaseConnections;
 
-    for (auto* connection : databaseConnections) {
-        ASSERT(m_databaseConnections.contains(connection));
-        connection->connectionClosedFromClient();
+    for (auto connection : databaseConnections) {
+        if (m_databaseConnections.contains(connection))
+            connection->connectionClosedFromClient();
     }
 
-    ASSERT(m_databaseConnections.isEmpty());
+    m_isClosed = true;
+    m_databaseConnections.clear();
 }
 
 } // namespace IDBServer

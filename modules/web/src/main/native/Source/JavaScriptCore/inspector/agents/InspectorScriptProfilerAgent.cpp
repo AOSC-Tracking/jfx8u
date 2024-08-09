@@ -71,15 +71,13 @@ void InspectorScriptProfilerAgent::startTracking(ErrorString&, const bool* inclu
 
     m_tracking = true;
 
-    auto& stopwatch = m_environment.executionStopwatch();
-
 #if ENABLE(SAMPLING_PROFILER)
     if (includeSamples && *includeSamples) {
         VM& vm = m_environment.scriptDebugServer().vm();
-        SamplingProfiler& samplingProfiler = vm.ensureSamplingProfiler(stopwatch);
+        SamplingProfiler& samplingProfiler = vm.ensureSamplingProfiler(m_environment.executionStopwatch());
 
         LockHolder locker(samplingProfiler.getLock());
-        samplingProfiler.setStopWatch(locker, stopwatch);
+        samplingProfiler.setStopWatch(locker, m_environment.executionStopwatch());
         samplingProfiler.noticeCurrentThreadAsJSCExecutionThread(locker);
         samplingProfiler.start(locker);
         m_enabledSamplingProfiler = true;
@@ -90,7 +88,7 @@ void InspectorScriptProfilerAgent::startTracking(ErrorString&, const bool* inclu
 
     m_environment.scriptDebugServer().setProfilingClient(this);
 
-    m_frontendDispatcher->trackingStart(stopwatch.elapsedTime().seconds());
+    m_frontendDispatcher->trackingStart(m_environment.executionStopwatch()->elapsedTime().seconds());
 }
 
 void InspectorScriptProfilerAgent::stopTracking(ErrorString&)
@@ -123,14 +121,14 @@ Seconds InspectorScriptProfilerAgent::willEvaluateScript()
     }
 #endif
 
-    return m_environment.executionStopwatch().elapsedTime();
+    return m_environment.executionStopwatch()->elapsedTime();
 }
 
 void InspectorScriptProfilerAgent::didEvaluateScript(Seconds startTime, ProfilingReason reason)
 {
     m_activeEvaluateScript = false;
 
-    Seconds endTime = m_environment.executionStopwatch().elapsedTime();
+    Seconds endTime = m_environment.executionStopwatch()->elapsedTime();
 
     addEvent(startTime, endTime, reason);
 }
@@ -203,7 +201,7 @@ static Ref<Protocol::ScriptProfiler::Samples> buildSamples(VM& vm, Vector<Sampli
 
 void InspectorScriptProfilerAgent::trackingComplete()
 {
-    auto timestamp = m_environment.executionStopwatch().elapsedTime().seconds();
+    auto timestamp = m_environment.executionStopwatch()->elapsedTime().seconds();
 
 #if ENABLE(SAMPLING_PROFILER)
     if (m_enabledSamplingProfiler) {

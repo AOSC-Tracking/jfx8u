@@ -33,18 +33,15 @@ class AudioDestination;
 class DefaultAudioDestinationNode final : public AudioDestinationNode {
     WTF_MAKE_ISO_ALLOCATED(DefaultAudioDestinationNode);
 public:
-    static Ref<DefaultAudioDestinationNode> create(BaseAudioContext& context, Optional<float> sampleRate = WTF::nullopt)
+    static Ref<DefaultAudioDestinationNode> create(AudioContext& context)
     {
-        return adoptRef(*new DefaultAudioDestinationNode(context, sampleRate));
+        return adoptRef(*new DefaultAudioDestinationNode(context));
     }
 
     virtual ~DefaultAudioDestinationNode();
 
-    unsigned framesPerBuffer() const;
-    float sampleRate() const final { return m_sampleRate; }
-
 private:
-    explicit DefaultAudioDestinationNode(BaseAudioContext&, Optional<float>);
+    explicit DefaultAudioDestinationNode(AudioContext&);
     void createDestination();
 
     void initialize() final;
@@ -52,7 +49,7 @@ private:
     ExceptionOr<void> setChannelCount(unsigned) final;
 
     void enableInput(const String& inputDeviceId) final;
-    ExceptionOr<void> startRendering() final;
+    void startRendering() final;
     void resume(Function<void ()>&&) final;
     void suspend(Function<void ()>&&) final;
     void close(Function<void ()>&&) final;
@@ -62,7 +59,6 @@ private:
     std::unique_ptr<AudioDestination> m_destination;
     String m_inputDeviceId;
     unsigned m_numberOfInputChannels { 0 };
-    float m_sampleRate { 0 };
 };
 
 } // namespace WebCore

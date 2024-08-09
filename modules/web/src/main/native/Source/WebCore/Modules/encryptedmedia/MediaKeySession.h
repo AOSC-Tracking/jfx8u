@@ -37,18 +37,11 @@
 #include "MediaKeyMessageType.h"
 #include "MediaKeySessionType.h"
 #include "MediaKeyStatus.h"
-#include <wtf/Observer.h>
 #include <wtf/RefCounted.h>
 #include <wtf/UniqueRef.h>
 #include <wtf/Vector.h>
 #include <wtf/WeakPtr.h>
 #include <wtf/text/WTFString.h>
-
-#if !RELEASE_LOG_DISABLED
-namespace WTF {
-class Logger;
-}
-#endif
 
 namespace WebCore {
 
@@ -64,7 +57,7 @@ template<typename IDLType> class DOMPromiseProxy;
 class MediaKeySession final : public RefCounted<MediaKeySession>, public EventTargetWithInlineData, public ActiveDOMObject, public CDMInstanceSessionClient {
     WTF_MAKE_ISO_ALLOCATED(MediaKeySession);
 public:
-    static Ref<MediaKeySession> create(Document&, WeakPtr<MediaKeys>&&, MediaKeySessionType, bool useDistinctiveIdentifier, Ref<CDM>&&, Ref<CDMInstanceSession>&&);
+    static Ref<MediaKeySession> create(ScriptExecutionContext&, WeakPtr<MediaKeys>&&, MediaKeySessionType, bool useDistinctiveIdentifier, Ref<CDM>&&, Ref<CDMInstanceSession>&&);
     virtual ~MediaKeySession();
 
     using RefCounted<MediaKeySession>::ref;
@@ -87,10 +80,11 @@ public:
 
     const Vector<std::pair<Ref<SharedBuffer>, MediaKeyStatus>>& statuses() const { return m_statuses; }
 
-    unsigned internalInstanceSessionObjectRefCount() const { return m_instanceSession->refCount(); }
+    // ActiveDOMObject
+    bool hasPendingActivity() const override;
 
 private:
-    MediaKeySession(Document&, WeakPtr<MediaKeys>&&, MediaKeySessionType, bool useDistinctiveIdentifier, Ref<CDM>&&, Ref<CDMInstanceSession>&&);
+    MediaKeySession(ScriptExecutionContext&, WeakPtr<MediaKeys>&&, MediaKeySessionType, bool useDistinctiveIdentifier, Ref<CDM>&&, Ref<CDMInstanceSession>&&);
     void enqueueMessage(MediaKeyMessageType, const SharedBuffer&);
     void updateExpiration(double);
     void sessionClosed();
@@ -100,7 +94,6 @@ private:
     void updateKeyStatuses(CDMInstanceSessionClient::KeyStatusVector&&) override;
     void sendMessage(CDMMessageType, Ref<SharedBuffer>&& message) final;
     void sessionIdChanged(const String&) final;
-    PlatformDisplayID displayID() final;
 
     // EventTarget
     EventTargetInterface eventTargetInterface() const override { return MediaKeySessionEventTargetInterfaceType; }
@@ -109,22 +102,7 @@ private:
     void derefEventTarget() override { deref(); }
 
     // ActiveDOMObject
-    const char* activeDOMObjectName() const final;
-    bool virtualHasPendingActivity() const final;
-
-    // DisplayChangedObserver
-    void displayChanged(PlatformDisplayID);
-
-#if !RELEASE_LOG_DISABLED
-    // LoggerHelper
-    const WTF::Logger& logger() const { return m_logger; }
-    const char* logClassName() const { return "MediaKeySession"; }
-    WTFLogChannel& logChannel() const;
-    const void* logIdentifier() const { return m_logIdentifier; }
-
-    Ref<WTF::Logger> m_logger;
-    const void* m_logIdentifier;
-#endif
+    const char* activeDOMObjectName() const override;
 
     WeakPtr<MediaKeys> m_keys;
     String m_sessionId;
@@ -142,9 +120,6 @@ private:
     double m_firstDecryptTime { 0 };
     double m_latestDecryptTime { 0 };
     Vector<std::pair<Ref<SharedBuffer>, MediaKeyStatus>> m_statuses;
-
-    using DisplayChangedObserver = Observer<void(PlatformDisplayID)>;
-    DisplayChangedObserver m_displayChangedObserver;
 };
 
 } // namespace WebCore

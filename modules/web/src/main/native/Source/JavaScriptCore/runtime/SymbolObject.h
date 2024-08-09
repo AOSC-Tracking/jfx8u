@@ -62,10 +62,11 @@ public:
 
     static JSValue defaultValue(const JSObject*, JSGlobalObject*, PreferredPrimitiveType);
 
-private:
+    static String toStringName(const JSObject*, JSGlobalObject*);
+
+protected:
     JS_EXPORT_PRIVATE void finishCreation(VM&, Symbol*);
     JS_EXPORT_PRIVATE SymbolObject(VM&, Structure*);
 };
-static_assert(sizeof(SymbolObject) == sizeof(JSWrapperObject));
 
 } // namespace JSC

@@ -42,8 +42,9 @@
 #include "StyleRule.h"
 #include "StyleRuleImport.h"
 #include "StyleSheetContents.h"
+#include "ViewportStyleResolver.h"
 
-#if ENABLE(VIDEO)
+#if ENABLE(VIDEO_TRACK)
 #include "TextTrackCue.h"
 #endif
 
@@ -137,25 +138,25 @@ static bool computeContainsUncommonAttributeSelector(const CSSSelector& rootSele
     return false;
 }
 
-static inline PropertyAllowlistType determinePropertyAllowlistType(const CSSSelector* selector)
+static inline PropertyWhitelistType determinePropertyWhitelistType(const CSSSelector* selector)
 {
     for (const CSSSelector* component = selector; component; component = component->tagHistory()) {
-#if ENABLE(VIDEO)
+#if ENABLE(VIDEO_TRACK)
         if (component->match() == CSSSelector::PseudoElement && (component->pseudoElementType() == CSSSelector::PseudoElementCue || component->value() == TextTrackCue::cueShadowPseudoId()))
-            return PropertyAllowlistCue;
+            return PropertyWhitelistCue;
 #endif
         if (component->match() == CSSSelector::PseudoElement && component->pseudoElementType() == CSSSelector::PseudoElementMarker)
-            return PropertyAllowlistMarker;
+            return PropertyWhitelistMarker;
 
         if (const auto* selectorList = selector->selectorList()) {
             for (const auto* subSelector = selectorList->first(); subSelector; subSelector = CSSSelectorList::next(subSelector)) {
-                auto allowlistType = determinePropertyAllowlistType(subSelector);
-                if (allowlistType != PropertyAllowlistNone)
-                    return allowlistType;
+                auto whitelistType = determinePropertyWhitelistType(subSelector);
+                if (whitelistType != PropertyWhitelistNone)
+                    return whitelistType;
             }
         }
     }
-    return PropertyAllowlistNone;
+    return PropertyWhitelistNone;
 }
 
 RuleData::RuleData(const StyleRule& styleRule, unsigned selectorIndex, unsigned selectorListIndex, unsigned position)
@@ -167,7 +168,7 @@ RuleData::RuleData(const StyleRule& styleRule, unsigned selectorIndex, unsigned 
     , m_canMatchPseudoElement(selectorCanMatchPseudoElement(*selector()))
     , m_containsUncommonAttributeSelector(computeContainsUncommonAttributeSelector(*selector()))
     , m_linkMatchType(SelectorChecker::determineLinkMatchType(selector()))
-    , m_propertyAllowlistType(determinePropertyAllowlistType(selector()))
+    , m_propertyWhitelistType(determinePropertyWhitelistType(selector()))
     , m_isEnabled(true)
     , m_descendantSelectorIdentifierHashes(SelectorFilter::collectHashes(*selector()))
 {

@@ -23,8 +23,9 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. 
  */
 
-interface CompositionEvent : UIEvent {
-    constructor(DOMString type, optional CompositionEventInit eventInitDict);
+[
+    Constructor(DOMString type, optional CompositionEventInit eventInitDict),
+] interface CompositionEvent : UIEvent {
 
     readonly attribute DOMString data;
 

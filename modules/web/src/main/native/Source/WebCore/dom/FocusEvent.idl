@@ -23,9 +23,9 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-interface FocusEvent : UIEvent {
-    constructor(DOMString type, optional FocusEventInit eventInitDict);
-
+[
+    Constructor(DOMString type, optional FocusEventInit eventInitDict),
+] interface FocusEvent : UIEvent {
     readonly attribute EventTarget? relatedTarget;
 };
 

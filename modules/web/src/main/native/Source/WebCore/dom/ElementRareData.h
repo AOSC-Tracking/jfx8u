@@ -24,7 +24,6 @@
 #include "CustomElementReactionQueue.h"
 #include "DOMTokenList.h"
 #include "DatasetDOMStringMap.h"
-#include "ElementAnimationRareData.h"
 #include "IntersectionObserver.h"
 #include "KeyframeEffectStack.h"
 #include "NamedNodeMap.h"
@@ -102,8 +101,8 @@ public:
     bool hasCSSAnimation() const { return m_hasCSSAnimation; }
     void setHasCSSAnimation(bool value) { m_hasCSSAnimation = value; }
 
-    ElementAnimationRareData* elementAnimationRareData() { return m_animationRareData.get(); }
-    ElementAnimationRareData& ensureAnimationRareData();
+    KeyframeEffectStack* keyframeEffectStack() { return m_keyframeEffectStack.get(); }
+    void setKeyframeEffectStack(std::unique_ptr<KeyframeEffectStack>&& keyframeEffectStack) { m_keyframeEffectStack = WTFMove(keyframeEffectStack); }
 
     bool hasElementIdentifier() const { return m_hasElementIdentifier; }
     void setHasElementIdentifier(bool value) { m_hasElementIdentifier = value; }
@@ -159,8 +158,6 @@ public:
 #endif
         if (m_beforePseudoElement || m_afterPseudoElement)
             result.add(UseType::PseudoElements);
-        if (m_animationRareData)
-            result.add(UseType::Animations);
         return result;
     }
 #endif
@@ -193,7 +190,7 @@ private:
     std::unique_ptr<ResizeObserverData> m_resizeObserverData;
 #endif
 
-    std::unique_ptr<ElementAnimationRareData> m_animationRareData;
+    std::unique_ptr<KeyframeEffectStack> m_keyframeEffectStack;
 
     RefPtr<PseudoElement> m_beforePseudoElement;
     RefPtr<PseudoElement> m_afterPseudoElement;
@@ -250,13 +247,6 @@ inline void ElementRareData::resetComputedStyle()
 inline void ElementRareData::resetStyleRelations()
 {
     setChildIndex(0);
-}
-
-inline ElementAnimationRareData& ElementRareData::ensureAnimationRareData()
-{
-    if (!m_animationRareData)
-        m_animationRareData = makeUnique<ElementAnimationRareData>();
-    return *m_animationRareData.get();
 }
 
 } // namespace WebCore

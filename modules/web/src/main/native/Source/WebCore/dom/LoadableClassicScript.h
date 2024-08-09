@@ -41,7 +41,7 @@ class LoadableClassicScript final : public LoadableScript, private CachedResourc
 public:
     virtual ~LoadableClassicScript();
 
-    static Ref<LoadableClassicScript> create(const String& nonce, const String& integrity, ReferrerPolicy, const String& crossOriginMode, const String& charset, const AtomString& initiatorName, bool isInUserAgentShadowTree, bool isAsync);
+    static Ref<LoadableClassicScript> create(const String& nonce, const String& integrity, ReferrerPolicy, const String& crossOriginMode, const String& charset, const AtomString& initiatorName, bool isInUserAgentShadowTree);
     bool isLoaded() const final;
     Optional<Error> error() const final;
     bool wasCanceled() const final;
@@ -56,19 +56,17 @@ public:
     bool load(Document&, const URL&);
 
 private:
-    LoadableClassicScript(const String& nonce, const String& integrity, ReferrerPolicy policy, const String& crossOriginMode, const String& charset, const AtomString& initiatorName, bool isInUserAgentShadowTree, bool isAsync)
+    LoadableClassicScript(const String& nonce, const String& integrity, ReferrerPolicy policy, const String& crossOriginMode, const String& charset, const AtomString& initiatorName, bool isInUserAgentShadowTree)
         : LoadableScript(nonce, policy, crossOriginMode, charset, initiatorName, isInUserAgentShadowTree)
         , m_integrity(integrity)
-        , m_isAsync(isAsync)
     {
     }
 
-    void notifyFinished(CachedResource&, const NetworkLoadMetrics&) final;
+    void notifyFinished(CachedResource&) final;
 
     CachedResourceHandle<CachedScript> m_cachedScript { };
     Optional<Error> m_error { WTF::nullopt };
     String m_integrity;
-    bool m_isAsync { false };
 };
 
 }

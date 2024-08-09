@@ -28,8 +28,6 @@
 
 #if ENABLE(DFG_JIT)
 
-#include "JSCJSValueInlines.h"
-
 namespace JSC { namespace DFG {
 
 void LazyNode::dump(PrintStream& out) const

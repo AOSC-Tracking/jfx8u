@@ -57,7 +57,7 @@ private:
     bool optimizeRootedTree(Value* root, InsertionSet&, size_t indexInBlock, const Vector<unsigned>& useCounts);
 
     Procedure& m_proc;
-    static constexpr bool verbose { false };
+    bool verbose { false };
 };
 
 int64_t OptimizeAssociativeExpressionTrees::neutralElement(Opcode op)

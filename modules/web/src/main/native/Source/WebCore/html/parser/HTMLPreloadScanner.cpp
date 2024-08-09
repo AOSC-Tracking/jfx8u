@@ -28,7 +28,6 @@
 #include "config.h"
 #include "HTMLPreloadScanner.h"
 
-#include "HTMLImageElement.h"
 #include "HTMLNames.h"
 #include "HTMLParserIdioms.h"
 #include "HTMLSrcsetParser.h"
@@ -164,14 +163,9 @@ public:
         if (!LinkLoader::isSupportedType(type.value(), m_typeAttribute))
             return nullptr;
 
-        // Do not preload if lazyload is possible but metadata fetch is disabled.
-        if (HTMLImageElement::hasLazyLoadableAttributeValue(m_lazyloadAttribute))
-            return nullptr;
-
         auto request = makeUnique<PreloadRequest>(initiatorFor(m_tagId), m_urlToLoad, predictedBaseURL, type.value(), m_mediaAttribute, m_moduleScript, m_referrerPolicy);
         request->setCrossOriginMode(m_crossOriginMode);
         request->setNonce(m_nonceAttribute);
-        request->setScriptIsAsync(m_scriptIsAsync);
 
         // According to the spec, the module tag ignores the "charset" attribute as the same to the worker's
         // importScript. But WebKit supports the "charset" for importScript intentionally. So to be consistent,
@@ -214,12 +208,6 @@ private:
                 m_sizesAttribute = attributeValue;
                 break;
             }
-            if (RuntimeEnabledFeatures::sharedFeatures().lazyImageLoadingEnabled()) {
-                if (match(attributeName, loadingAttr) && m_lazyloadAttribute.isNull()) {
-                    m_lazyloadAttribute = attributeValue;
-                    break;
-                }
-            }
             processImageAndScriptAttribute(attributeName, attributeValue);
             break;
         case TagId::Source:
@@ -259,9 +247,6 @@ private:
             } else if (match(attributeName, nomoduleAttr)) {
                 m_scriptIsNomodule = true;
                 break;
-            } else if (match(attributeName, asyncAttr)) {
-                m_scriptIsAsync = true;
-                break;
             }
             processImageAndScriptAttribute(attributeName, attributeValue);
             break;
@@ -284,8 +269,6 @@ private:
                 m_asAttribute = attributeValue;
             else if (match(attributeName, typeAttr))
                 m_typeAttribute = attributeValue;
-            else if (match(attributeName, referrerpolicyAttr))
-                m_referrerPolicy = parseReferrerPolicy(attributeValue, ReferrerPolicySource::ReferrerPolicyAttribute).valueOr(ReferrerPolicy::EmptyString);
             break;
         case TagId::Input:
             if (match(attributeName, srcAttr))
@@ -395,12 +378,10 @@ private:
     String m_metaContent;
     String m_asAttribute;
     String m_typeAttribute;
-    String m_lazyloadAttribute;
     bool m_metaIsViewport;
     bool m_metaIsDisabledAdaptations;
     bool m_inputIsImage;
     bool m_scriptIsNomodule { false };
-    bool m_scriptIsAsync { false };
     float m_deviceScaleFactor;
     PreloadRequest::ModuleScript m_moduleScript { PreloadRequest::ModuleScript::No };
     ReferrerPolicy m_referrerPolicy { ReferrerPolicy::EmptyString };

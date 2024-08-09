@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2019 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -37,42 +37,9 @@ namespace WebCore {
 RenderingUpdateScheduler::RenderingUpdateScheduler(Page& page)
     : m_page(page)
 {
+#if USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)
     windowScreenDidChange(page.chrome().displayID());
-}
-
-void RenderingUpdateScheduler::setPreferredFramesPerSecond(FramesPerSecond preferredFramesPerSecond)
-{
-    if (m_preferredFramesPerSecond == preferredFramesPerSecond)
-        return;
-
-    m_preferredFramesPerSecond = preferredFramesPerSecond;
-    DisplayRefreshMonitorManager::sharedManager().setPreferredFramesPerSecond(*this, m_preferredFramesPerSecond);
-}
-
-bool RenderingUpdateScheduler::scheduleAnimation(FramesPerSecond preferredFramesPerSecond)
-{
-#if !PLATFORM(IOS_FAMILY)
-    // PreferredFramesPerSecond can only be changed for iOS DisplayRefreshMonitor.
-    // The caller has to fall back to using the timer.
-    if (preferredFramesPerSecond != FullSpeedFramesPerSecond)
-        return false;
 #endif
-    setPreferredFramesPerSecond(preferredFramesPerSecond);
-    return DisplayRefreshMonitorManager::sharedManager().scheduleAnimation(*this);
-}
-
-void RenderingUpdateScheduler::adjustRenderingUpdateFrequency()
-{
-    Seconds interval = m_page.preferredRenderingUpdateInterval();
-
-    // PreferredFramesPerSecond is an integer and should be > 0.
-    if (interval <= 1_s)
-        setPreferredFramesPerSecond(preferredFramesPerSecond(interval));
-
-    if (isScheduled()) {
-        clearScheduled();
-        scheduleTimedRenderingUpdate();
-    }
 }
 
 void RenderingUpdateScheduler::scheduleTimedRenderingUpdate()
@@ -88,14 +55,12 @@ void RenderingUpdateScheduler::scheduleTimedRenderingUpdate()
 
     tracePoint(ScheduleRenderingUpdate);
 
-    Seconds interval = m_page.preferredRenderingUpdateInterval();
+#if USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)
+    if (!DisplayRefreshMonitorManager::sharedManager().scheduleAnimation(*this))
+#endif
+        startTimer(Seconds(1.0 / 60));
 
-    // PreferredFramesPerSecond is an integer and should be > 0.
-    if (interval <= 1_s)
-        m_scheduled = scheduleAnimation(preferredFramesPerSecond(interval));
-
-    if (!isScheduled())
-        startTimer(interval);
+    m_scheduled = true;
 }
 
 bool RenderingUpdateScheduler::isScheduled() const
@@ -109,7 +74,6 @@ void RenderingUpdateScheduler::startTimer(Seconds delay)
     ASSERT(!isScheduled());
     m_refreshTimer = makeUnique<Timer>(*this, &RenderingUpdateScheduler::displayRefreshFired);
     m_refreshTimer->startOneShot(delay);
-    m_scheduled = true;
 }
 
 void RenderingUpdateScheduler::clearScheduled()
@@ -118,6 +82,7 @@ void RenderingUpdateScheduler::clearScheduled()
     m_refreshTimer = nullptr;
 }
 
+#if USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)
 RefPtr<DisplayRefreshMonitor> RenderingUpdateScheduler::createDisplayRefreshMonitor(PlatformDisplayID displayID) const
 {
     if (auto monitor = m_page.chrome().client().createDisplayRefreshMonitor(displayID))
@@ -130,6 +95,7 @@ void RenderingUpdateScheduler::windowScreenDidChange(PlatformDisplayID displayID
 {
     DisplayRefreshMonitorManager::sharedManager().windowScreenDidChange(displayID, *this);
 }
+#endif
 
 void RenderingUpdateScheduler::displayRefreshFired()
 {
@@ -141,7 +107,7 @@ void RenderingUpdateScheduler::displayRefreshFired()
 
 void RenderingUpdateScheduler::scheduleImmediateRenderingUpdate()
 {
-    m_page.chrome().client().scheduleRenderingUpdate();
+    m_page.chrome().client().scheduleCompositingLayerFlush();
 }
 
 void RenderingUpdateScheduler::scheduleRenderingUpdate()

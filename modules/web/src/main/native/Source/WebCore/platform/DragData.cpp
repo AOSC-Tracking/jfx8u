@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2007-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2007 Apple Inc.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,23 +32,23 @@
 namespace WebCore {
 
 #if !PLATFORM(COCOA)
-DragData::DragData(DragDataRef data, const IntPoint& clientPosition, const IntPoint& globalPosition, OptionSet<DragOperation> sourceOperationMask, OptionSet<DragApplicationFlags> flags, OptionSet<DragDestinationAction> destinationActionMask)
+DragData::DragData(DragDataRef data, const IntPoint& clientPosition, const IntPoint& globalPosition, DragOperation sourceOperationMask, DragApplicationFlags flags, DragDestinationAction destinationAction)
     : m_clientPosition(clientPosition)
     , m_globalPosition(globalPosition)
     , m_platformDragData(data)
     , m_draggingSourceOperationMask(sourceOperationMask)
     , m_applicationFlags(flags)
-    , m_dragDestinationActionMask(destinationActionMask)
+    , m_dragDestinationAction(destinationAction)
 {
 }
 
-DragData::DragData(const String&, const IntPoint& clientPosition, const IntPoint& globalPosition, OptionSet<DragOperation> sourceOperationMask, OptionSet<DragApplicationFlags> flags, OptionSet<DragDestinationAction> destinationActionMask)
+DragData::DragData(const String&, const IntPoint& clientPosition, const IntPoint& globalPosition, DragOperation sourceOperationMask, DragApplicationFlags flags, DragDestinationAction destinationAction)
     : m_clientPosition(clientPosition)
     , m_globalPosition(globalPosition)
     , m_platformDragData(0)
     , m_draggingSourceOperationMask(sourceOperationMask)
     , m_applicationFlags(flags)
-    , m_dragDestinationActionMask(destinationActionMask)
+    , m_dragDestinationAction(destinationAction)
 {
 }
 #endif

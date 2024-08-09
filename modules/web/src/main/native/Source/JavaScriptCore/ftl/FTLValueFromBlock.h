@@ -34,8 +34,8 @@ namespace JSC { namespace FTL {
 class ValueFromBlock {
 public:
     ValueFromBlock()
-        : m_value(nullptr)
-        , m_block(nullptr)
+        : m_value(0)
+        , m_block(0)
     {
     }
 

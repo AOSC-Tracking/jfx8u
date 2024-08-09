@@ -34,7 +34,7 @@ namespace JSC { namespace DFG {
 
 class SpeculativeJIT;
 
-class SnippetParams final : public JSC::SnippetParams {
+class SnippetParams : public JSC::SnippetParams {
 public:
     SnippetParams(SpeculativeJIT* jit, Vector<Value>&& regs, Vector<GPRReg>&& gpScratch, Vector<FPRReg>&& fpScratch)
         : JSC::SnippetParams(jit->vm(), WTFMove(regs), WTFMove(gpScratch), WTFMove(fpScratch))
@@ -43,7 +43,7 @@ public:
     }
 
 private:
-#define JSC_DEFINE_CALL_OPERATIONS(OperationType, ResultType, ...) void addSlowPathCallImpl(CCallHelpers::JumpList, CCallHelpers&, OperationType, ResultType, std::tuple<__VA_ARGS__> args) final;
+#define JSC_DEFINE_CALL_OPERATIONS(OperationType, ResultType, ...) void addSlowPathCallImpl(CCallHelpers::JumpList, CCallHelpers&, OperationType, ResultType, std::tuple<__VA_ARGS__> args) override;
     SNIPPET_SLOW_PATH_CALLS(JSC_DEFINE_CALL_OPERATIONS)
 #undef JSC_DEFINE_CALL_OPERATIONS
 

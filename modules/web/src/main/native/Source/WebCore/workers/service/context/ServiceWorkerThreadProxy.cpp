@@ -35,7 +35,6 @@
 #include "Frame.h"
 #include "FrameLoader.h"
 #include "LoaderStrategy.h"
-#include "Logging.h"
 #include "MessageWithMessagePorts.h"
 #include "PlatformStrategies.h"
 #include "ServiceWorkerClientData.h"
@@ -47,12 +46,13 @@
 
 namespace WebCore {
 
-static URL topOriginURL(const SecurityOrigin& origin)
+URL static inline topOriginURL(const SecurityOrigin& origin)
 {
     URL url;
     url.setProtocol(origin.protocol());
     url.setHost(origin.host());
-    url.setPort(origin.port());
+    if (origin.port())
+        url.setPort(*origin.port());
     return url;
 }
 
@@ -197,8 +197,6 @@ void ServiceWorkerThreadProxy::notifyNetworkStateChange(bool isOnline)
 
 void ServiceWorkerThreadProxy::startFetch(SWServerConnectionIdentifier connectionIdentifier, FetchIdentifier fetchIdentifier, Ref<ServiceWorkerFetch::Client>&& client, Optional<ServiceWorkerClientIdentifier>&& clientId, ResourceRequest&& request, String&& referrer, FetchOptions&& options)
 {
-    RELEASE_LOG(ServiceWorker, "ServiceWorkerThreadProxy::startFetch %llu", fetchIdentifier.toUInt64());
-
     auto key = std::make_pair(connectionIdentifier, fetchIdentifier);
 
     if (m_ongoingFetchTasks.isEmpty())
@@ -213,8 +211,6 @@ void ServiceWorkerThreadProxy::startFetch(SWServerConnectionIdentifier connectio
 
 void ServiceWorkerThreadProxy::cancelFetch(SWServerConnectionIdentifier connectionIdentifier, FetchIdentifier fetchIdentifier)
 {
-    RELEASE_LOG(ServiceWorker, "ServiceWorkerThreadProxy::cancelFetch %llu", fetchIdentifier.toUInt64());
-
     auto client = m_ongoingFetchTasks.take(std::make_pair(connectionIdentifier, fetchIdentifier));
     if (!client)
         return;
@@ -240,8 +236,6 @@ void ServiceWorkerThreadProxy::continueDidReceiveFetchResponse(SWServerConnectio
 
 void ServiceWorkerThreadProxy::removeFetch(SWServerConnectionIdentifier connectionIdentifier, FetchIdentifier fetchIdentifier)
 {
-    RELEASE_LOG(ServiceWorker, "ServiceWorkerThreadProxy::removeFetch %llu", fetchIdentifier.toUInt64());
-
     m_ongoingFetchTasks.remove(std::make_pair(connectionIdentifier, fetchIdentifier));
 
     if (m_ongoingFetchTasks.isEmpty())

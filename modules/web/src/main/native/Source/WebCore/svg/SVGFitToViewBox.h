@@ -65,13 +65,10 @@ protected:
 
     void reset();
     bool parseAttribute(const QualifiedName&, const AtomString&);
-    Optional<FloatRect> parseViewBox(StringView);
-    Optional<FloatRect> parseViewBox(StringParsingBuffer<LChar>&, bool validate = true);
-    Optional<FloatRect> parseViewBox(StringParsingBuffer<UChar>&, bool validate = true);
+    bool parseViewBox(const AtomString& value, FloatRect& viewBox);
+    bool parseViewBox(const UChar*& start, const UChar* end, FloatRect& viewBox, bool validate = true);
 
 private:
-    template<typename CharacterType> Optional<FloatRect> parseViewBoxGeneric(StringParsingBuffer<CharacterType>&, bool validate = true);
-
     Ref<SVGAnimatedRect> m_viewBox;
     Ref<SVGAnimatedPreserveAspectRatio> m_preserveAspectRatio;
     bool m_isViewBoxValid { false };

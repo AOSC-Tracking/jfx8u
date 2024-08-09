@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012 Motorola Mobility, Inc. All rights reserved.
- * Copyright (C) 2014-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2014 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -29,6 +29,7 @@
 
 #include "HTMLFormElement.h"
 #include "HTMLInputElement.h"
+#include "HTMLNames.h"
 #include "HTMLObjectElement.h"
 #include "NodeRareData.h"
 #include <wtf/IsoMallocInlines.h>
@@ -42,13 +43,8 @@ WTF_MAKE_ISO_ALLOCATED_IMPL(RadioNodeList);
 RadioNodeList::RadioNodeList(ContainerNode& rootNode, const AtomString& name)
     : CachedLiveNodeList(rootNode, InvalidateForFormControls)
     , m_name(name)
-    , m_isRootedAtDocument(is<HTMLFormElement>(rootNode))
+    , m_isRootedAtDocument(is<HTMLFormElement>(ownerNode()))
 {
-}
-
-Ref<RadioNodeList> RadioNodeList::create(ContainerNode& rootNode, const AtomString& name)
-{
-    return adoptRef(*new RadioNodeList(rootNode, name));
 }
 
 RadioNodeList::~RadioNodeList()
@@ -56,7 +52,7 @@ RadioNodeList::~RadioNodeList()
     ownerNode().nodeLists()->removeCacheWithAtomName(*this, m_name);
 }
 
-static RefPtr<HTMLInputElement> nonEmptyRadioButton(Element& element)
+static inline RefPtr<HTMLInputElement> toRadioButtonInputElement(HTMLElement& element)
 {
     if (!is<HTMLInputElement>(element))
         return nullptr;
@@ -71,10 +67,10 @@ String RadioNodeList::value() const
 {
     auto length = this->length();
     for (unsigned i = 0; i < length; ++i) {
-        if (auto button = nonEmptyRadioButton(*item(i))) {
-            if (button->checked())
-                return button->value();
-        }
+        auto inputElement = toRadioButtonInputElement(*item(i));
+        if (!inputElement || !inputElement->checked())
+            continue;
+        return inputElement->value();
     }
     return String();
 }
@@ -83,34 +79,40 @@ void RadioNodeList::setValue(const String& value)
 {
     auto length = this->length();
     for (unsigned i = 0; i < length; ++i) {
-        if (auto button = nonEmptyRadioButton(*item(i))) {
-            if (button->value() == value) {
-                button->setChecked(true);
-                return;
-            }
-        }
+        auto inputElement = toRadioButtonInputElement(*item(i));
+        if (!inputElement || inputElement->value() != value)
+            continue;
+        inputElement->setChecked(true);
+        return;
     }
 }
 
-bool RadioNodeList::elementMatches(Element& element) const
+bool RadioNodeList::checkElementMatchesRadioNodeListFilter(const Element& testElement) const
 {
-    if (!is<HTMLObjectElement>(element) && !is<HTMLFormControlElement>(element))
-        return false;
-
-    if (is<HTMLInputElement>(element) && downcast<HTMLInputElement>(element).isImageButton())
-        return false;
-
+    ASSERT(is<HTMLObjectElement>(testElement) || is<HTMLFormControlElement>(testElement));
     if (is<HTMLFormElement>(ownerNode())) {
-        RefPtr<HTMLFormElement> form;
-        if (is<HTMLObjectElement>(element))
-            form = downcast<HTMLObjectElement>(element).form();
+        RefPtr<HTMLFormElement> formElement;
+        if (testElement.hasTagName(objectTag))
+            formElement = downcast<HTMLObjectElement>(testElement).form();
         else
-            form = downcast<HTMLFormControlElement>(element).form();
-        if (!form || form != &ownerNode())
+            formElement = downcast<HTMLFormControlElement>(testElement).form();
+        if (!formElement || formElement != &ownerNode())
             return false;
     }
 
-    return element.getIdAttribute() == m_name || element.getNameAttribute() == m_name;
+    return testElement.getIdAttribute() == m_name || testElement.getNameAttribute() == m_name;
 }
 
-} // namespace WebCore
+bool RadioNodeList::elementMatches(Element& testElement) const
+{
+    if (!is<HTMLObjectElement>(testElement) && !is<HTMLFormControlElement>(testElement))
+        return false;
+
+    if (is<HTMLInputElement>(testElement) && downcast<HTMLInputElement>(testElement).isImageButton())
+        return false;
+
+    return checkElementMatchesRadioNodeListFilter(testElement);
+}
+
+} // namspace
+

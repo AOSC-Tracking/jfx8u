@@ -129,6 +129,7 @@ template<> struct HashTraits<WebCore::CSSParserContext> : GenericHashTraits<WebC
     static WebCore::CSSParserContext emptyValue() { return WebCore::CSSParserContext(WebCore::HTMLStandardMode); }
 };
 
-template<> struct DefaultHash<WebCore::CSSParserContext> : WebCore::CSSParserContextHash { };
-
+template<> struct DefaultHash<WebCore::CSSParserContext> {
+    typedef WebCore::CSSParserContextHash Hash;
+};
 } // namespace WTF

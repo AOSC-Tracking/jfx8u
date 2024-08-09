@@ -26,7 +26,9 @@
 #include "config.h"
 #include <wtf/PrintStream.h>
 
+#include <stdio.h>
 #include <wtf/text/CString.h>
+#include <wtf/text/UniquedStringImpl.h>
 #include <wtf/text/WTFString.h>
 
 namespace WTF {
@@ -75,18 +77,13 @@ void printInternal(PrintStream& out, const char* string)
 static void printExpectedCStringHelper(PrintStream& out, const char* type, Expected<CString, UTF8ConversionError> expectedCString)
 {
     if (UNLIKELY(!expectedCString)) {
-        if (expectedCString.error() == UTF8ConversionError::OutOfMemory) {
-            printInternal(out, "(Out of memory while converting ");
-            printInternal(out, type);
-            printInternal(out, " to utf8)");
-        } else {
-            printInternal(out, "(failed to convert ");
-            printInternal(out, type);
-            printInternal(out, " to utf8)");
-        }
+        if (expectedCString.error() == UTF8ConversionError::OutOfMemory)
+            out.print("(Out of memory while converting ", type, " to utf8)");
+        else
+            out.print("(failed to convert ", type, " to utf8)");
         return;
     }
-    printInternal(out, expectedCString.value());
+    out.print(expectedCString.value());
 }
 
 void printInternal(PrintStream& out, const StringView& string)
@@ -96,7 +93,7 @@ void printInternal(PrintStream& out, const StringView& string)
 
 void printInternal(PrintStream& out, const CString& string)
 {
-    printInternal(out, string.data());
+    out.print(string.data());
 }
 
 void printInternal(PrintStream& out, const String& string)
@@ -107,7 +104,7 @@ void printInternal(PrintStream& out, const String& string)
 void printInternal(PrintStream& out, const StringImpl* string)
 {
     if (!string) {
-        printInternal(out, "(null StringImpl*)");
+        out.print("(null StringImpl*)");
         return;
     }
     printExpectedCStringHelper(out, "StringImpl*", string->tryGetUtf8());
@@ -170,7 +167,7 @@ void printInternal(PrintStream& out, unsigned long long value)
 
 void printInternal(PrintStream& out, float value)
 {
-    printInternal(out, static_cast<double>(value));
+    out.print(static_cast<double>(value));
 }
 
 void printInternal(PrintStream& out, double value)

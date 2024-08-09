@@ -25,6 +25,7 @@
 #include "config.h"
 #include "PluginDocument.h"
 
+#include "CustomHeaderFields.h"
 #include "DocumentLoader.h"
 #include "Frame.h"
 #include "FrameLoader.h"
@@ -73,7 +74,7 @@ void PluginDocumentParser::createDocumentStructure()
     rootElement->insertedByParser();
 
     if (document.frame())
-        document.frame()->injectUserScripts(UserScriptInjectionTime::DocumentStart);
+        document.frame()->injectUserScripts(InjectAtDocumentStart);
 
 #if PLATFORM(IOS_FAMILY)
     // Should not be able to zoom into standalone plug-in documents.
@@ -107,7 +108,6 @@ void PluginDocumentParser::createDocumentStructure()
     document.setPluginElement(*m_embedElement);
 
     body->appendChild(embedElement);
-    document.setHasVisuallyNonEmptyCustomContent();
 }
 
 void PluginDocumentParser::appendBytes(DocumentWriter&, const char*, size_t)

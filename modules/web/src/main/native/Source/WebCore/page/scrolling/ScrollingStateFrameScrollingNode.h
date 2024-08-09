@@ -48,6 +48,7 @@ public:
     enum ChangedProperty {
         FrameScaleFactor = NumScrollingStateNodeBits,
         EventTrackingRegion,
+        ReasonsForSynchronousScrolling,
         RootContentsLayer,
         ScrolledContentsLayer,
         CounterScrollingLayer,
@@ -73,6 +74,9 @@ public:
 
     const EventTrackingRegions& eventTrackingRegions() const { return m_eventTrackingRegions; }
     WEBCORE_EXPORT void setEventTrackingRegions(const EventTrackingRegions&);
+
+    SynchronousScrollingReasons synchronousScrollingReasons() const { return m_synchronousScrollingReasons; }
+    WEBCORE_EXPORT void setSynchronousScrollingReasons(SynchronousScrollingReasons);
 
     ScrollBehaviorForFixedElements scrollBehaviorForFixedElements() const { return m_behaviorForFixed; }
     WEBCORE_EXPORT void setScrollBehaviorForFixedElements(ScrollBehaviorForFixedElements);
@@ -160,6 +164,7 @@ private:
     float m_topContentInset { 0 };
     int m_headerHeight { 0 };
     int m_footerHeight { 0 };
+    SynchronousScrollingReasons m_synchronousScrollingReasons { 0 };
     ScrollBehaviorForFixedElements m_behaviorForFixed { StickToDocumentBounds };
     bool m_fixedElementsLayoutRelativeToFrame { false };
     bool m_visualViewportIsSmallerThanLayoutViewport { false };

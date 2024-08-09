@@ -28,6 +28,11 @@
 
 #include "InjectedScript.h"
 #include "InjectedScriptManager.h"
+#include "JSCInlines.h"
+#include "JSGlobalObject.h"
+#include <wtf/Ref.h>
+#include <wtf/RefPtr.h>
+#include <wtf/text/WTFString.h>
 
 namespace Inspector {
 

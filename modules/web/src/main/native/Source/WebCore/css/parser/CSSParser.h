@@ -41,7 +41,6 @@ class StyleRuleBase;
 class StyleRuleKeyframe;
 class StyleSheetContents;
 class RenderStyle;
-template<typename> struct SRGBA;
 
 namespace Style {
 class BuilderState;
@@ -64,7 +63,7 @@ public:
     static RefPtr<StyleRuleBase> parseRule(const CSSParserContext&, StyleSheetContents*, const String&);
 
     RefPtr<StyleRuleKeyframe> parseKeyframeRule(const String&);
-    static Vector<double> parseKeyframeKeyList(const String&);
+    static std::unique_ptr<Vector<double>> parseKeyframeKeyList(const String&);
 
     bool parseSupportsCondition(const String&);
 
@@ -85,11 +84,9 @@ public:
 
     RefPtr<CSSValue> parseValueWithVariableReferences(CSSPropertyID, const CSSValue&, Style::BuilderState&);
 
-    WEBCORE_EXPORT static Color parseColor(const String&, bool strict = false);
-    static Color parseColorWorkerSafe(StringView);
-    static Color parseSystemColor(StringView);
-    static Optional<SRGBA<uint8_t>> parseNamedColor(StringView);
-    static Optional<SRGBA<uint8_t>> parseHexColor(StringView);
+    static Color parseColor(const String&, bool strict = false);
+    static Color parseColorWorkerSafe(const String&, CSSValuePool&, bool strict = false);
+    static Color parseSystemColor(const String&, const CSSParserContext*);
 
 private:
     ParseResult parseValue(MutableStyleProperties&, CSSPropertyID, const String&, bool important);

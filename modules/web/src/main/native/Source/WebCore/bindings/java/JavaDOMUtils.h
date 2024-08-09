@@ -85,7 +85,7 @@ template<typename T> inline T* raiseOnDOMError(JNIEnv* env, ExceptionOr<Ref<T>>&
         raiseDOMErrorException(env, exceptionOrReturnValue.releaseException());
         return nullptr;
     }
-    return WTF::getPtr(exceptionOrReturnValue.returnValue());
+    return WTF::getPtr(exceptionOrReturnValue.releaseReturnValue());
 }
 
 template<typename T> inline T raiseOnDOMError(JNIEnv* env, ExceptionOr<T>&& exceptionOrReturnValue)

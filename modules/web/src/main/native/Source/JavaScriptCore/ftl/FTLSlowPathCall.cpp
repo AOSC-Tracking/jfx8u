@@ -32,6 +32,7 @@
 #include "FTLState.h"
 #include "FTLThunks.h"
 #include "GPRInfo.h"
+#include "JSCInlines.h"
 
 namespace JSC { namespace FTL {
 
@@ -136,7 +137,7 @@ SlowPathCall SlowPathCallContext::makeCall(VM& vm, FunctionPtr<CFunctionPtrTag> 
 CallSiteIndex callSiteIndexForCodeOrigin(State& state, CodeOrigin codeOrigin)
 {
     if (codeOrigin)
-        return state.jitCode->common.codeOrigins->addCodeOrigin(codeOrigin);
+        return state.jitCode->common.addCodeOrigin(codeOrigin);
     return CallSiteIndex();
 }
 

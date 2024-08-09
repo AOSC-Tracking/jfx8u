@@ -33,8 +33,6 @@
 
 namespace WebCore {
 
-class DeferredPromise;
-
 class UserMessageHandler : public RefCounted<UserMessageHandler>, public FrameDestructionObserver {
 public:
     static Ref<UserMessageHandler> create(Frame& frame, UserMessageHandlerDescriptor& descriptor)
@@ -43,7 +41,7 @@ public:
     }
     virtual ~UserMessageHandler();
 
-    ExceptionOr<void> postMessage(RefPtr<SerializedScriptValue>&&, Ref<DeferredPromise>&&);
+    ExceptionOr<void> postMessage(RefPtr<SerializedScriptValue>&&);
 
     UserMessageHandlerDescriptor* descriptor() { return m_descriptor.get(); }
     void invalidateDescriptor() { m_descriptor = nullptr; }

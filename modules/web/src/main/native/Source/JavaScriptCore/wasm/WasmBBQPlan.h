@@ -56,34 +56,35 @@ public:
 
     BBQPlan(Context*, Ref<ModuleInformation>, uint32_t functionIndex, CodeBlock*, CompletionTask&&);
 
-    bool hasWork() const final
+    bool hasWork() const override
     {
         if (m_asyncWork == AsyncWork::Validation)
             return m_state < State::Validated;
         return m_state < State::Compiled;
     }
 
-    void work(CompilationEffort) final;
+    void work(CompilationEffort) override;
 
     using CalleeInitializer = Function<void(uint32_t, RefPtr<EmbedderEntrypointCallee>&&, Ref<BBQCallee>&&)>;
     void initializeCallees(const CalleeInitializer&);
 
-    bool didReceiveFunctionData(unsigned, const FunctionData&) final;
+    bool didReceiveFunctionData(unsigned, const FunctionData&) override;
 
     bool parseAndValidateModule()
     {
         return Base::parseAndValidateModule(m_source.data(), m_source.size());
     }
 
-private:
-    bool prepareImpl() final;
-    void compileFunction(uint32_t functionIndex) final;
-    void didCompleteCompilation(const AbstractLocker&) final;
+protected:
+    bool prepareImpl() override;
+    void compileFunction(uint32_t functionIndex) override;
+    void didCompleteCompilation(const AbstractLocker&) override;
 
+private:
     std::unique_ptr<InternalFunction> compileFunction(uint32_t functionIndex, CompilationContext&, Vector<UnlinkedWasmToWasmCall>&, TierUpCount*);
 
     Vector<std::unique_ptr<InternalFunction>> m_wasmInternalFunctions;
-    HashMap<uint32_t, std::unique_ptr<InternalFunction>, DefaultHash<uint32_t>, WTF::UnsignedWithZeroKeyHashTraits<uint32_t>> m_embedderToWasmInternalFunctions;
+    HashMap<uint32_t, std::unique_ptr<InternalFunction>, typename DefaultHash<uint32_t>::Hash, WTF::UnsignedWithZeroKeyHashTraits<uint32_t>> m_embedderToWasmInternalFunctions;
     Vector<CompilationContext> m_compilationContexts;
     Vector<std::unique_ptr<TierUpCount>> m_tierUpCounts;
 

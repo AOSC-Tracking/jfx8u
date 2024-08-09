@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2011, 2015 Google Inc. All rights reserved.
- * Copyright (C) 2016-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2016-2019 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -58,7 +58,6 @@ void injectInternalsObject(JSContextRef context)
 {
     JSGlobalObject* lexicalGlobalObject = toJS(context);
     VM& vm = lexicalGlobalObject->vm();
-    auto scope = DECLARE_CATCH_SCOPE(vm);
     JSLockHolder lock(vm);
     JSDOMGlobalObject* globalObject = jsCast<JSDOMGlobalObject*>(lexicalGlobalObject);
     ScriptExecutionContext* scriptContext = globalObject->scriptExecutionContext();
@@ -67,7 +66,6 @@ void injectInternalsObject(JSContextRef context)
         Options::useDollarVM() = true;
         globalObject->exposeDollarVM(vm);
     }
-    EXCEPTION_ASSERT_UNUSED(scope, !scope.exception());
 }
 
 void resetInternalsObject(JSContextRef context)
@@ -81,16 +79,16 @@ void resetInternalsObject(JSContextRef context)
     InternalSettings::from(page)->resetToConsistentState();
 }
 
-void monitorWheelEvents(WebCore::Frame& frame, bool clearLatchingState)
+void monitorWheelEvents(WebCore::Frame& frame)
 {
     Page* page = frame.page();
     if (!page)
         return;
 
-    page->startMonitoringWheelEvents(clearLatchingState);
+    page->ensureWheelEventTestMonitor();
 }
 
-void setWheelEventMonitorTestCallbackAndStartMonitoring(bool expectWheelEndOrCancel, bool expectMomentumEnd, WebCore::Frame& frame, JSContextRef context, JSObjectRef jsCallbackFunction)
+void setTestCallbackAndStartNotificationTimer(WebCore::Frame& frame, JSContextRef context, JSObjectRef jsCallbackFunction)
 {
     Page* page = frame.page();
     if (!page || !page->isMonitoringWheelEvents())
@@ -98,12 +96,10 @@ void setWheelEventMonitorTestCallbackAndStartMonitoring(bool expectWheelEndOrCan
 
     JSValueProtect(context, jsCallbackFunction);
 
-    if (auto wheelEventTestMonitor = page->wheelEventTestMonitor()) {
-        wheelEventTestMonitor->setTestCallbackAndStartMonitoring(expectWheelEndOrCancel, expectMomentumEnd, [=](void) {
-            JSObjectCallAsFunction(context, jsCallbackFunction, nullptr, 0, nullptr, nullptr);
-            JSValueUnprotect(context, jsCallbackFunction);
-        });
-    }
+    page->ensureWheelEventTestMonitor().setTestCallbackAndStartNotificationTimer([=](void) {
+        JSObjectCallAsFunction(context, jsCallbackFunction, nullptr, 0, nullptr, nullptr);
+        JSValueUnprotect(context, jsCallbackFunction);
+    });
 }
 
 void clearWheelEventTestMonitor(WebCore::Frame& frame)
@@ -168,14 +164,13 @@ void disconnectMockGamepad(unsigned gamepadIndex)
 #endif
 }
 
-void setMockGamepadDetails(unsigned gamepadIndex, const WTF::String& gamepadID, const WTF::String& mapping, unsigned axisCount, unsigned buttonCount)
+void setMockGamepadDetails(unsigned gamepadIndex, const WTF::String& gamepadID, unsigned axisCount, unsigned buttonCount)
 {
 #if ENABLE(GAMEPAD)
-    MockGamepadProvider::singleton().setMockGamepadDetails(gamepadIndex, gamepadID, mapping, axisCount, buttonCount);
+    MockGamepadProvider::singleton().setMockGamepadDetails(gamepadIndex, gamepadID, axisCount, buttonCount);
 #else
     UNUSED_PARAM(gamepadIndex);
     UNUSED_PARAM(gamepadID);
-    UNUSED_PARAM(mapping);
     UNUSED_PARAM(axisCount);
     UNUSED_PARAM(buttonCount);
 #endif

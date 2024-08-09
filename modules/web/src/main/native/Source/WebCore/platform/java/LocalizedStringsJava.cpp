@@ -372,6 +372,7 @@ String contextMenuItemTagEnterVideoFullscreen()
     return String(); // UNSUPPORTED: getLocalizedProperty("contextMenuItemTagEnterVideoFullscreen");
 }
 
+#if ENABLE(VIDEO_TRACK)
 String textTrackSubtitlesText()
 {
     return String::fromUTF8("Subtitles");
@@ -396,6 +397,7 @@ String audioTrackNoLabelText()
 {
     return String::fromUTF8("No label");
 }
+#endif
 
 String contextMenuItemTagMediaPlay()
 {

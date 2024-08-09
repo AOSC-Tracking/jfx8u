@@ -27,6 +27,9 @@
 #include "config.h"
 #include "InByIdVariant.h"
 
+#include "JSCInlines.h"
+#include <wtf/ListDump.h>
+
 namespace JSC {
 
 InByIdVariant::InByIdVariant(const StructureSet& structureSet, PropertyOffset offset, const ObjectPropertyConditionSet& conditionSet)
@@ -80,7 +83,7 @@ bool InByIdVariant::finalize(VM& vm)
 
 void InByIdVariant::dump(PrintStream& out) const
 {
-    dumpInContext(out, nullptr);
+    dumpInContext(out, 0);
 }
 
 void InByIdVariant::dumpInContext(PrintStream& out, DumpContext* context) const

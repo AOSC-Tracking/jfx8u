@@ -30,16 +30,12 @@
 namespace JSC {
 
 class ReflectObject final : public JSNonFinalObject {
-public:
-    using Base = JSNonFinalObject;
-    static constexpr unsigned StructureFlags = Base::StructureFlags | HasStaticPropertyTable;
+private:
+    ReflectObject(VM&, Structure*);
 
-    template<typename CellType, SubspaceAccess>
-    static IsoSubspace* subspaceFor(VM& vm)
-    {
-        STATIC_ASSERT_ISO_SUBSPACE_SHARABLE(ReflectObject, Base);
-        return &vm.plainObjectSpace;
-    }
+public:
+    typedef JSNonFinalObject Base;
+    static constexpr unsigned StructureFlags = Base::StructureFlags | HasStaticPropertyTable;
 
     static ReflectObject* create(VM& vm, JSGlobalObject* globalObject, Structure* structure)
     {
@@ -55,8 +51,7 @@ public:
         return Structure::create(vm, globalObject, prototype, TypeInfo(ObjectType, StructureFlags), info());
     }
 
-private:
-    ReflectObject(VM&, Structure*);
+protected:
     void finishCreation(VM&, JSGlobalObject*);
 };
 

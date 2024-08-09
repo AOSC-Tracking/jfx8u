@@ -33,8 +33,8 @@ namespace WebCore {
 
 class RenderedDocumentMarker : public DocumentMarker {
 public:
-    explicit RenderedDocumentMarker(DocumentMarker&& marker)
-        : DocumentMarker(WTFMove(marker))
+    explicit RenderedDocumentMarker(const DocumentMarker& marker)
+        : DocumentMarker(marker)
     {
     }
 
@@ -48,10 +48,10 @@ public:
         return false;
     }
 
-    void setUnclippedAbsoluteRects(Vector<FloatRect>&& rects)
+    void setUnclippedAbsoluteRects(Vector<FloatRect>& rects)
     {
         m_isValid = true;
-        m_rects = WTFMove(rects);
+        m_rects = rects;
     }
 
     const Vector<FloatRect, 1>& unclippedAbsoluteRects() const

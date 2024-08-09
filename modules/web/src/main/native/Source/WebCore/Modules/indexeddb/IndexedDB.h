@@ -1,6 +1,5 @@
 /*
  * Copyright (C) 2013 Google Inc. All rights reserved.
- * Copyright (C) 2013-2020 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -50,13 +49,13 @@ enum class CursorDirection {
 };
 const unsigned CursorDirectionMaximum = 3;
 
-enum class CursorType : bool {
+enum class CursorType {
     KeyAndValue = 0,
     KeyOnly = 1,
 };
 const unsigned CursorTypeMaximum = 1;
 
-enum class CursorSource : bool {
+enum class CursorSource {
     Index,
     ObjectStore,
 };
@@ -72,7 +71,7 @@ enum class ObjectStoreOverwriteMode {
     NoOverwrite,
 };
 
-enum class IndexRecordType : bool {
+enum class IndexRecordType {
     Key,
     Value,
 };
@@ -107,7 +106,7 @@ enum class GetAllType {
 
 enum class ConnectionClosedOnBehalfOfServer : bool { No, Yes };
 
-enum class CursorIterateOption : bool {
+enum class CursorIterateOption {
     DoNotReply,
     Reply,
 };
@@ -118,30 +117,6 @@ enum class CursorIterateOption : bool {
 
 namespace WTF {
 
-template<> struct EnumTraits<WebCore::IndexedDB::CursorDirection> {
-    using values = EnumValues<
-        WebCore::IndexedDB::CursorDirection,
-        WebCore::IndexedDB::CursorDirection::Next,
-        WebCore::IndexedDB::CursorDirection::Nextunique,
-        WebCore::IndexedDB::CursorDirection::Prev,
-        WebCore::IndexedDB::CursorDirection::Prevunique
-    >;
-};
-
-template<> struct EnumTraits<WebCore::IndexedDB::KeyType> {
-    using values = EnumValues<
-        WebCore::IndexedDB::KeyType,
-        WebCore::IndexedDB::KeyType::Max,
-        WebCore::IndexedDB::KeyType::Invalid,
-        WebCore::IndexedDB::KeyType::Array,
-        WebCore::IndexedDB::KeyType::Binary,
-        WebCore::IndexedDB::KeyType::String,
-        WebCore::IndexedDB::KeyType::Date,
-        WebCore::IndexedDB::KeyType::Number,
-        WebCore::IndexedDB::KeyType::Min
-    >;
-};
-
 template<> struct EnumTraits<WebCore::IndexedDB::ObjectStoreOverwriteMode> {
     using values = EnumValues<
         WebCore::IndexedDB::ObjectStoreOverwriteMode,
@@ -151,15 +126,6 @@ template<> struct EnumTraits<WebCore::IndexedDB::ObjectStoreOverwriteMode> {
     >;
 };
 
-template<> struct EnumTraits<WebCore::IndexedDB::RequestType> {
-    using values = EnumValues<
-        WebCore::IndexedDB::RequestType,
-        WebCore::IndexedDB::RequestType::Open,
-        WebCore::IndexedDB::RequestType::Delete,
-        WebCore::IndexedDB::RequestType::Other
-    >;
-};
-
-} // namespace WTF
+}
 
 #endif // ENABLED(INDEXED_DATABASE)

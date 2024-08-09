@@ -29,7 +29,6 @@
 
 #if ENABLE(PICTURE_IN_PICTURE_API)
 
-#include "EnterPictureInPictureEvent.h"
 #include "EventNames.h"
 #include "HTMLVideoElement.h"
 #include "JSDOMPromiseDeferred.h"
@@ -90,10 +89,12 @@ void HTMLVideoElementPictureInPicture::requestPictureInPicture(HTMLVideoElement&
         return;
     }
 
+#if ENABLE(VIDEO_TRACK)
     if (!videoElement.videoTracks() || !videoElement.videoTracks()->length()) {
         promise->reject(InvalidStateError, "The video element does not have a video track or it has not detected a video track yet.");
         return;
     }
+#endif
 
     bool userActivationRequired = !videoElement.document().pictureInPictureElement();
     if (userActivationRequired && !UserGestureIndicator::processingUserGesture()) {

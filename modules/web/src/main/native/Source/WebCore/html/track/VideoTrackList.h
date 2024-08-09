@@ -25,7 +25,7 @@
 
 #pragma once
 
-#if ENABLE(VIDEO)
+#if ENABLE(VIDEO_TRACK)
 
 #include "TrackListBase.h"
 
@@ -37,9 +37,7 @@ class VideoTrackList final : public TrackListBase {
 public:
     static Ref<VideoTrackList> create(WeakPtr<HTMLMediaElement> owner, ScriptExecutionContext* context)
     {
-        auto list = adoptRef(*new VideoTrackList(owner, context));
-        list->suspendIfNeeded();
-        return list;
+        return adoptRef(*new VideoTrackList(owner, context));
     }
     virtual ~VideoTrackList();
 
@@ -55,11 +53,9 @@ public:
 
 private:
     VideoTrackList(WeakPtr<HTMLMediaElement>, ScriptExecutionContext*);
-
-    const char* activeDOMObjectName() const final;
 };
 static_assert(sizeof(VideoTrackList) == sizeof(TrackListBase), "");
 
 } // namespace WebCore
 
-#endif // ENABLE(VIDEO)
+#endif // ENABLE(VIDEO_TRACK)

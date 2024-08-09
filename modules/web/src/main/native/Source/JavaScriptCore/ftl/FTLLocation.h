@@ -201,7 +201,9 @@ namespace WTF {
 void printInternal(PrintStream&, JSC::FTL::Location::Kind);
 
 template<typename T> struct DefaultHash;
-template<> struct DefaultHash<JSC::FTL::Location> : JSC::FTL::LocationHash { };
+template<> struct DefaultHash<JSC::FTL::Location> {
+    typedef JSC::FTL::LocationHash Hash;
+};
 
 template<typename T> struct HashTraits;
 template<> struct HashTraits<JSC::FTL::Location> : SimpleClassHashTraits<JSC::FTL::Location> { };

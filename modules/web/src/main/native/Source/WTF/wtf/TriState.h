@@ -27,10 +27,10 @@
 
 namespace WTF {
 
-enum class TriState : uint8_t {
-    False,
-    True,
-    Indeterminate
+enum TriState : uint8_t {
+    FalseTriState,
+    TrueTriState,
+    MixedTriState
 };
 
 inline TriState triState(bool boolean)
@@ -41,4 +41,7 @@ inline TriState triState(bool boolean)
 }
 
 using WTF::TriState;
+using WTF::FalseTriState;
+using WTF::TrueTriState;
+using WTF::MixedTriState;
 using WTF::triState;

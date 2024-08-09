@@ -34,7 +34,6 @@
 
 #include "Blob.h"
 #include "BlobURL.h"
-#include "ExceptionCode.h"
 #include "FileReaderLoaderClient.h"
 #include "HTTPHeaderNames.h"
 #include "ResourceError.h"
@@ -79,7 +78,7 @@ void FileReaderLoader::start(ScriptExecutionContext* scriptExecutionContext, Blo
     // The blob is read by routing through the request handling layer given a temporary public url.
     m_urlForReading = BlobURL::createPublicURL(scriptExecutionContext->securityOrigin());
     if (m_urlForReading.isEmpty()) {
-        failed(SecurityError);
+        failed(FileError::SECURITY_ERR);
         return;
     }
     ThreadableBlobRegistry::registerBlobURL(scriptExecutionContext->securityOrigin(), m_urlForReading, blob.url());
@@ -103,7 +102,7 @@ void FileReaderLoader::start(ScriptExecutionContext* scriptExecutionContext, Blo
 
 void FileReaderLoader::cancel()
 {
-    m_errorCode = AbortError;
+    m_errorCode = FileError::ABORT_ERR;
     terminate();
 }
 
@@ -145,7 +144,7 @@ void FileReaderLoader::didReceiveResponse(unsigned long, const ResourceResponse&
     // so to call ArrayBuffer's create function.
     // FIXME: Support reading more than the current size limit of ArrayBuffer.
     if (length > std::numeric_limits<unsigned>::max()) {
-        failed(NotReadableError);
+        failed(FileError::NOT_READABLE_ERR);
         return;
     }
 
@@ -153,7 +152,7 @@ void FileReaderLoader::didReceiveResponse(unsigned long, const ResourceResponse&
     m_rawData = ArrayBuffer::tryCreate(static_cast<unsigned>(length), 1);
 
     if (!m_rawData) {
-        failed(NotReadableError);
+        failed(FileError::NOT_READABLE_ERR);
         return;
     }
 
@@ -177,20 +176,20 @@ void FileReaderLoader::didReceiveData(const char* data, int dataLength)
     if (length > static_cast<long long>(remainingBufferSpace)) {
         // If the buffer has hit maximum size, it can't be grown any more.
         if (m_totalBytes >= std::numeric_limits<unsigned>::max()) {
-            failed(NotReadableError);
+            failed(FileError::NOT_READABLE_ERR);
             return;
         }
         if (m_variableLength) {
             unsigned newLength = m_totalBytes + static_cast<unsigned>(dataLength);
             if (newLength < m_totalBytes) {
-                failed(NotReadableError);
+                failed(FileError::NOT_READABLE_ERR);
                 return;
             }
             newLength = std::max(newLength, m_totalBytes + m_totalBytes / 4 + 1);
             auto newData = ArrayBuffer::tryCreate(newLength, 1);
             if (!newData) {
                 // Not enough memory.
-                failed(NotReadableError);
+                failed(FileError::NOT_READABLE_ERR);
                 return;
             }
             memcpy(static_cast<char*>(newData->data()), static_cast<char*>(m_rawData->data()), m_bytesLoaded);
@@ -229,37 +228,37 @@ void FileReaderLoader::didFinishLoading(unsigned long)
 void FileReaderLoader::didFail(const ResourceError& error)
 {
     // If we're aborting, do not proceed with normal error handling since it is covered in aborting code.
-    if (m_errorCode && m_errorCode.value() == AbortError)
+    if (m_errorCode == FileError::ABORT_ERR)
         return;
 
     failed(toErrorCode(static_cast<BlobResourceHandle::Error>(error.errorCode())));
 }
 
-void FileReaderLoader::failed(ExceptionCode errorCode)
+void FileReaderLoader::failed(FileError::ErrorCode errorCode)
 {
     m_errorCode = errorCode;
     cleanup();
     if (m_client)
-        m_client->didFail(errorCode);
+        m_client->didFail(m_errorCode);
 }
 
-ExceptionCode FileReaderLoader::toErrorCode(BlobResourceHandle::Error error)
+FileError::ErrorCode FileReaderLoader::toErrorCode(BlobResourceHandle::Error error)
 {
     switch (error) {
     case BlobResourceHandle::Error::NotFoundError:
-        return NotFoundError;
+        return FileError::NOT_FOUND_ERR;
     default:
-        return NotReadableError;
+        return FileError::NOT_READABLE_ERR;
     }
 }
 
-ExceptionCode FileReaderLoader::httpStatusCodeToErrorCode(int httpStatusCode)
+FileError::ErrorCode FileReaderLoader::httpStatusCodeToErrorCode(int httpStatusCode)
 {
     switch (httpStatusCode) {
     case 403:
-        return SecurityError;
+        return FileError::SECURITY_ERR;
     default:
-        return NotReadableError;
+        return FileError::NOT_READABLE_ERR;
     }
 }
 

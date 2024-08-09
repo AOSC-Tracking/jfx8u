@@ -31,24 +31,18 @@ namespace JSC {
 
 class JSTypedArrayViewPrototype final : public JSNonFinalObject {
 public:
-    using Base = JSNonFinalObject;
+    typedef JSNonFinalObject Base;
 
-    template<typename CellType, SubspaceAccess>
-    static IsoSubspace* subspaceFor(VM& vm)
-    {
-        STATIC_ASSERT_ISO_SUBSPACE_SHARABLE(JSTypedArrayViewPrototype, Base);
-        return &vm.plainObjectSpace;
-    }
+protected:
+    JSTypedArrayViewPrototype(VM&, Structure*);
+    void finishCreation(VM&, JSGlobalObject*);
 
+public:
     static JSTypedArrayViewPrototype* create(VM&, JSGlobalObject*, Structure*);
 
     DECLARE_INFO;
 
     static Structure* createStructure(VM&, JSGlobalObject*, JSValue prototype);
-
-private:
-    JSTypedArrayViewPrototype(VM&, Structure*);
-    void finishCreation(VM&, JSGlobalObject*);
 };
 
 EncodedJSValue JSC_HOST_CALL typedArrayViewPrivateFuncIsTypedArrayView(JSGlobalObject*, CallFrame*);

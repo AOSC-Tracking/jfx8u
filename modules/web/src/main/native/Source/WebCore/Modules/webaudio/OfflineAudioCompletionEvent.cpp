@@ -30,33 +30,20 @@
 
 #include "AudioBuffer.h"
 #include "EventNames.h"
-#include "OfflineAudioCompletionEventInit.h"
 #include <wtf/IsoMallocInlines.h>
 
 namespace WebCore {
 
 WTF_MAKE_ISO_ALLOCATED_IMPL(OfflineAudioCompletionEvent);
 
-Ref<OfflineAudioCompletionEvent> OfflineAudioCompletionEvent::create(Ref<AudioBuffer>&& renderedBuffer)
+Ref<OfflineAudioCompletionEvent> OfflineAudioCompletionEvent::create(RefPtr<AudioBuffer>&& renderedBuffer)
 {
     return adoptRef(*new OfflineAudioCompletionEvent(WTFMove(renderedBuffer)));
 }
 
-Ref<OfflineAudioCompletionEvent> OfflineAudioCompletionEvent::create(const AtomString& eventType, OfflineAudioCompletionEventInit&& init)
-{
-    RELEASE_ASSERT(init.renderedBuffer);
-    return adoptRef(*new OfflineAudioCompletionEvent(eventType, WTFMove(init)));
-}
-
-OfflineAudioCompletionEvent::OfflineAudioCompletionEvent(Ref<AudioBuffer>&& renderedBuffer)
+OfflineAudioCompletionEvent::OfflineAudioCompletionEvent(RefPtr<AudioBuffer>&& renderedBuffer)
     : Event(eventNames().completeEvent, CanBubble::Yes, IsCancelable::No)
     , m_renderedBuffer(WTFMove(renderedBuffer))
-{
-}
-
-OfflineAudioCompletionEvent::OfflineAudioCompletionEvent(const AtomString& eventType, OfflineAudioCompletionEventInit&& init)
-    : Event(eventType, init, IsTrusted::No)
-    , m_renderedBuffer(init.renderedBuffer.releaseNonNull())
 {
 }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2012-2017 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -25,7 +25,7 @@
 
 #pragma once
 
-#if ENABLE(VIDEO)
+#if ENABLE(VIDEO_TRACK)
 
 #include "InbandTextTrack.h"
 #include "WebVTTParser.h"
@@ -36,15 +36,15 @@ namespace WebCore {
 class InbandWebVTTTextTrack final : public InbandTextTrack, private WebVTTParserClient {
     WTF_MAKE_ISO_ALLOCATED(InbandWebVTTTextTrack);
 public:
-    static Ref<InbandTextTrack> create(Document&, TextTrackClient&, InbandTextTrackPrivate&);
+    static Ref<InbandTextTrack> create(ScriptExecutionContext&, TextTrackClient&, InbandTextTrackPrivate&);
     virtual ~InbandWebVTTTextTrack();
 
 private:
-    InbandWebVTTTextTrack(Document&, TextTrackClient&, InbandTextTrackPrivate&);
+    InbandWebVTTTextTrack(ScriptExecutionContext&, TextTrackClient&, InbandTextTrackPrivate&);
 
     WebVTTParser& parser();
     void parseWebVTTCueData(const char* data, unsigned length) final;
-    void parseWebVTTCueData(ISOWebVTTCue&&) final;
+    void parseWebVTTCueData(const ISOWebVTTCue&) final;
 
     void newCuesParsed() final;
     void newRegionsParsed() final;
@@ -60,4 +60,4 @@ private:
 
 } // namespace WebCore
 
-#endif // ENABLE(VIDEO)
+#endif // ENABLE(VIDEO_TRACK)

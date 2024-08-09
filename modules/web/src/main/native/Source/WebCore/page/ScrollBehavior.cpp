@@ -33,17 +33,15 @@
 
 namespace WebCore {
 
-bool useSmoothScrolling(ScrollBehavior behavior, Element* associatedElement)
+bool useSmoothScrolling(ScrollBehavior behavior, Element& associatedElement)
 {
-    if (!associatedElement
-        || !associatedElement->renderer()
-        || !associatedElement->document().settings().CSSOMViewSmoothScrollingEnabled())
+    if (!associatedElement.document().settings().CSSOMViewSmoothScrollingEnabled() || !associatedElement.renderer())
         return false;
 
     // https://drafts.csswg.org/cssom-view/#scrolling
     switch (behavior) {
     case ScrollBehavior::Auto:
-        return associatedElement->renderer()->style().useSmoothScrolling();
+        return associatedElement.renderer()->style().useSmoothScrolling();
     case ScrollBehavior::Instant:
         return false;
     case ScrollBehavior::Smooth:

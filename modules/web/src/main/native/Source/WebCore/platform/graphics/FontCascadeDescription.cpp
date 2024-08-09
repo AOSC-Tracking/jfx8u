@@ -42,7 +42,6 @@ struct SameSizeAsFontCascadeDescription {
     char c;
 #endif
     AtomString string;
-    AtomString string2;
     int16_t fontSelectionRequest[3];
     float size;
     unsigned bitfields1;

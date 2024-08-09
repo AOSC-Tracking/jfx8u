@@ -26,15 +26,8 @@ namespace JSC {
 
 class ObjectPrototype final : public JSNonFinalObject {
 public:
-    using Base = JSNonFinalObject;
+    typedef JSNonFinalObject Base;
     static constexpr unsigned StructureFlags = Base::StructureFlags | IsImmutablePrototypeExoticObject;
-
-    template<typename CellType, SubspaceAccess>
-    static IsoSubspace* subspaceFor(VM& vm)
-    {
-        STATIC_ASSERT_ISO_SUBSPACE_SHARABLE(ObjectPrototype, Base);
-        return &vm.plainObjectSpace;
-    }
 
     static ObjectPrototype* create(VM&, JSGlobalObject*, Structure*);
 
@@ -45,12 +38,13 @@ public:
         return Structure::create(vm, globalObject, prototype, TypeInfo(ObjectType, StructureFlags), info());
     }
 
+protected:
+    void finishCreation(VM&, JSGlobalObject*);
+
 private:
     ObjectPrototype(VM&, Structure*);
-    void finishCreation(VM&, JSGlobalObject*);
 };
 
 JS_EXPORT_PRIVATE EncodedJSValue JSC_HOST_CALL objectProtoFuncToString(JSGlobalObject*, CallFrame*);
-bool objectPrototypeHasOwnProperty(JSGlobalObject*, JSValue base, const Identifier& property);
 
 } // namespace JSC

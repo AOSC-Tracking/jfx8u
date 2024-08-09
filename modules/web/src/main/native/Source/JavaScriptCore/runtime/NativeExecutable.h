@@ -48,8 +48,8 @@ public:
 
     CodeBlockHash hashFor(CodeSpecializationKind) const;
 
-    TaggedNativeFunction function() const { return m_function; }
-    TaggedNativeFunction constructor() const { return m_constructor; }
+    TaggedNativeFunction function() { return m_function; }
+    TaggedNativeFunction constructor() { return m_constructor; }
 
     TaggedNativeFunction nativeFunctionFor(CodeSpecializationKind kind)
     {
@@ -76,9 +76,11 @@ public:
     const DOMJIT::Signature* signatureFor(CodeSpecializationKind) const;
     Intrinsic intrinsic() const;
 
+protected:
+    void finishCreation(VM&, Ref<JITCode>&& callThunk, Ref<JITCode>&& constructThunk, const String& name);
+
 private:
     NativeExecutable(VM&, TaggedNativeFunction, TaggedNativeFunction constructor);
-    void finishCreation(VM&, Ref<JITCode>&& callThunk, Ref<JITCode>&& constructThunk, const String& name);
 
     TaggedNativeFunction m_function;
     TaggedNativeFunction m_constructor;

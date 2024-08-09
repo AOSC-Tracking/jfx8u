@@ -52,10 +52,10 @@ namespace JSC {
             , m_target(0)
         { }
 
-        explicit GenericBoundLabel(int offset)
+        explicit GenericBoundLabel(int target)
             : m_type(Offset)
             , m_generator(nullptr)
-            , m_target(offset)
+            , m_target(target)
         { }
 
         GenericBoundLabel(BytecodeGenerator* generator, Label* label)

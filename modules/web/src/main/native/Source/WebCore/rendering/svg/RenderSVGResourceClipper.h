@@ -54,9 +54,10 @@ public:
 
     SVGUnitTypes::SVGUnitType clipPathUnits() const { return clipPathElement().clipPathUnits(); }
 
-private:
+protected:
     bool selfNeedsClientInvalidation() const override { return (everHadLayout() || m_clipper.size()) && selfNeedsLayout(); }
 
+private:
     struct ClipperData {
         FloatRect objectBoundingBox;
         AffineTransform absoluteTransform;

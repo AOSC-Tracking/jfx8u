@@ -46,8 +46,7 @@ public:
     JSGlobalObjectDebuggable(JSGlobalObject&);
     ~JSGlobalObjectDebuggable() { }
 
-    Inspector::RemoteControllableTarget::Type type() const final { return m_type; }
-    void setIsITML() { m_type = Inspector::RemoteControllableTarget::Type::ITML; }
+    Inspector::RemoteControllableTarget::Type type() const final { return Inspector::RemoteControllableTarget::Type::JavaScript; }
 
     String name() const final;
     bool hasLocalDebugger() const final { return false; }
@@ -61,17 +60,10 @@ public:
 
 private:
     JSGlobalObject& m_globalObject;
-    Inspector::RemoteControllableTarget::Type m_type { Inspector::RemoteControllableTarget::Type::JavaScript };
 };
 
 } // namespace JSC
 
-SPECIALIZE_TYPE_TRAITS_BEGIN(JSC::JSGlobalObjectDebuggable)
-    static bool isType(const Inspector::RemoteControllableTarget& target)
-    {
-        return target.type() == Inspector::RemoteControllableTarget::Type::JavaScript
-            || target.type() == Inspector::RemoteControllableTarget::Type::ITML;
-    }
-SPECIALIZE_TYPE_TRAITS_END()
+SPECIALIZE_TYPE_TRAITS_CONTROLLABLE_TARGET(JSC::JSGlobalObjectDebuggable, JavaScript);
 
 #endif // ENABLE(REMOTE_INSPECTOR)

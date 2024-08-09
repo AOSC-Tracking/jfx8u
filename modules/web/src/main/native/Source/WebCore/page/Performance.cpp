@@ -33,6 +33,7 @@
 #include "config.h"
 #include "Performance.h"
 
+#include "CustomHeaderFields.h"
 #include "Document.h"
 #include "DocumentLoader.h"
 #include "Event.h"
@@ -41,7 +42,6 @@
 #include "PerformanceEntry.h"
 #include "PerformanceNavigation.h"
 #include "PerformanceObserver.h"
-#include "PerformancePaintTiming.h"
 #include "PerformanceResourceTiming.h"
 #include "PerformanceTiming.h"
 #include "PerformanceUserTiming.h"
@@ -74,13 +74,8 @@ void Performance::contextDestroyed()
 
 DOMHighResTimeStamp Performance::now() const
 {
-    return nowInReducedResolutionSeconds().milliseconds();
-}
-
-ReducedResolutionSeconds Performance::nowInReducedResolutionSeconds() const
-{
     Seconds now = MonotonicTime::now() - m_timeOrigin;
-    return reduceTimeResolution(now);
+    return reduceTimeResolution(now).milliseconds();
 }
 
 Seconds Performance::reduceTimeResolution(Seconds seconds)
@@ -129,9 +124,6 @@ Vector<RefPtr<PerformanceEntry>> Performance::getEntries() const
         entries.appendVector(m_userTiming->getMeasures());
     }
 
-    if (m_firstContentfulPaint)
-        entries.append(m_firstContentfulPaint);
-
     std::sort(entries.begin(), entries.end(), PerformanceEntry::startTimeCompareLessThan);
     return entries;
 }
@@ -140,16 +132,13 @@ Vector<RefPtr<PerformanceEntry>> Performance::getEntriesByType(const String& ent
 {
     Vector<RefPtr<PerformanceEntry>> entries;
 
-    if (entryType == "resource")
+    if (equalLettersIgnoringASCIICase(entryType, "resource"))
         entries.appendVector(m_resourceTimingBuffer);
 
-    if (m_firstContentfulPaint && entryType == "paint")
-        entries.append(m_firstContentfulPaint);
-
     if (m_userTiming) {
-        if (entryType == "mark")
+        if (equalLettersIgnoringASCIICase(entryType, "mark"))
             entries.appendVector(m_userTiming->getMarks());
-        else if (entryType == "measure")
+        else if (equalLettersIgnoringASCIICase(entryType, "measure"))
             entries.appendVector(m_userTiming->getMeasures());
     }
 
@@ -161,41 +150,22 @@ Vector<RefPtr<PerformanceEntry>> Performance::getEntriesByName(const String& nam
 {
     Vector<RefPtr<PerformanceEntry>> entries;
 
-    if (entryType.isNull() || entryType == "resource") {
+    if (entryType.isNull() || equalLettersIgnoringASCIICase(entryType, "resource")) {
         for (auto& resource : m_resourceTimingBuffer) {
             if (resource->name() == name)
                 entries.append(resource);
         }
     }
 
-    if (m_firstContentfulPaint && (entryType.isNull() || entryType == "paint") && name == "first-contentful-paint")
-        entries.append(m_firstContentfulPaint);
-
     if (m_userTiming) {
-        if (entryType.isNull() || entryType == "mark")
+        if (entryType.isNull() || equalLettersIgnoringASCIICase(entryType, "mark"))
             entries.appendVector(m_userTiming->getMarks(name));
-        if (entryType.isNull() || entryType == "measure")
+        if (entryType.isNull() || equalLettersIgnoringASCIICase(entryType, "measure"))
             entries.appendVector(m_userTiming->getMeasures(name));
     }
 
     std::sort(entries.begin(), entries.end(), PerformanceEntry::startTimeCompareLessThan);
     return entries;
-}
-
-bool Performance::appendBufferedEntriesByType(const String& entryType, Vector<RefPtr<PerformanceEntry>>& entries) const
-{
-    auto oldEntriesSize = entries.size();
-    if (entryType == "resource")
-        entries.appendVector(m_resourceTimingBuffer);
-
-    if (m_userTiming) {
-        if (entryType.isNull() || entryType == "mark")
-            entries.appendVector(m_userTiming->getMarks());
-        if (entryType.isNull() || entryType == "measure")
-            entries.appendVector(m_userTiming->getMeasures());
-    }
-
-    return entries.size() > oldEntriesSize;
 }
 
 void Performance::clearResourceTimings()
@@ -208,13 +178,6 @@ void Performance::setResourceTimingBufferSize(unsigned size)
 {
     m_resourceTimingBufferSize = size;
     m_resourceTimingBufferFullFlag = false;
-}
-
-void Performance::reportFirstContentfulPaint()
-{
-    ASSERT(!m_firstContentfulPaint);
-    m_firstContentfulPaint = PerformancePaintTiming::createFirstContentfulPaint(now());
-    queueEntry(*m_firstContentfulPaint);
 }
 
 void Performance::addResourceTiming(ResourceTiming&& resourceTiming)

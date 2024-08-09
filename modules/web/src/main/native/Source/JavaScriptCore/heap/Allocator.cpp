@@ -26,6 +26,7 @@
 #include "config.h"
 #include "Allocator.h"
 
+#include "Heap.h"
 #include "LocalAllocator.h"
 
 namespace JSC {

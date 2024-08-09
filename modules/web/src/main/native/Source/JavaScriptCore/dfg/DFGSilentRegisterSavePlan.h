@@ -77,7 +77,7 @@ public:
         : m_spillAction(DoNothingForSpill)
         , m_fillAction(DoNothingForFill)
         , m_register(-1)
-        , m_node(nullptr)
+        , m_node(0)
     {
     }
 

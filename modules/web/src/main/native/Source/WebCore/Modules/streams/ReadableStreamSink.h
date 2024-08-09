@@ -26,6 +26,8 @@
 
 #pragma once
 
+#if ENABLE(STREAMS_API)
+
 #include "ExceptionOr.h"
 #include "ReadableStreamChunk.h"
 #include <wtf/Function.h>
@@ -65,3 +67,5 @@ private:
 };
 
 } // namespace WebCore
+
+#endif // ENABLE(STREAMS_API)

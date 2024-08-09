@@ -39,15 +39,9 @@ struct CompositionHighlight {
     {
     }
 
-#if PLATFORM(IOS_FAMILY)
-    static constexpr auto defaultCompositionFillColor = SRGBA<uint8_t> { 175, 192, 227, 60 };
-#else
-    static constexpr auto defaultCompositionFillColor = SRGBA<uint8_t> { 225, 221, 85 };
-#endif
-
     unsigned startOffset { 0 };
     unsigned endOffset { 0 };
-    Color color { defaultCompositionFillColor };
+    Color color { Color::compositionFill };
 
     template<class Encoder> void encode(Encoder&) const;
     template<class Decoder> static Optional<CompositionHighlight> decode(Decoder&);

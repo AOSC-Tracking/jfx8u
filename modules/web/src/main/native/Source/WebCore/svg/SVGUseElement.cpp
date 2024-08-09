@@ -331,7 +331,8 @@ static void removeDisallowedElementsFromSubtree(SVGElement& subtree)
     ASSERT(!subtree.isConnected());
 
     Vector<Element*> disallowedElements;
-    for (auto it = descendantsOfType<Element>(subtree).begin(); it; ) {
+    auto descendants = descendantsOfType<Element>(subtree);
+    for (auto it = descendants.begin(), end = descendants.end(); it != end; ) {
         if (isDisallowedElement(*it)) {
             disallowedElements.append(&*it);
             it.traverseNextSkippingChildren();
@@ -451,9 +452,9 @@ static void cloneDataAndChildren(SVGElement& replacementClone, SVGElement& origi
 void SVGUseElement::expandUseElementsInShadowTree() const
 {
     auto descendants = descendantsOfType<SVGUseElement>(*userAgentShadowRoot());
-    for (auto it = descendants.begin(); it; ) {
+    for (auto it = descendants.begin(), end = descendants.end(); it != end; ) {
         SVGUseElement& originalClone = *it;
-        it.dropAssertions();
+        it = end; // Efficiently quiets assertions due to the outstanding iterator.
 
         auto* target = originalClone.findTarget();
 
@@ -484,9 +485,9 @@ void SVGUseElement::expandUseElementsInShadowTree() const
 void SVGUseElement::expandSymbolElementsInShadowTree() const
 {
     auto descendants = descendantsOfType<SVGSymbolElement>(*userAgentShadowRoot());
-    for (auto it = descendants.begin(); it; ) {
+    for (auto it = descendants.begin(), end = descendants.end(); it != end; ) {
         SVGSymbolElement& originalClone = *it;
-        it.dropAssertions();
+        it = end; // Efficiently quiets assertions due to the outstanding iterator.
 
         // Spec: The referenced 'symbol' and its contents are deep-cloned into the generated tree,
         // with the exception that the 'symbol' is replaced by an 'svg'. This generated 'svg' will
@@ -542,7 +543,7 @@ bool SVGUseElement::selfHasRelativeLengths() const
     return targetClone && targetClone->hasRelativeLengths();
 }
 
-void SVGUseElement::notifyFinished(CachedResource& resource, const NetworkLoadMetrics&)
+void SVGUseElement::notifyFinished(CachedResource& resource)
 {
     ASSERT(ScriptDisallowedScope::InMainThread::isScriptAllowed());
     invalidateShadowTree();

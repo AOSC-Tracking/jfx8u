@@ -31,6 +31,7 @@
 #include "AirSpecial.h"
 #include "AirStackSlot.h"
 #include "B3Value.h"
+#include "FPRInfo.h"
 #include "GPRInfo.h"
 
 #if !ASSERT_ENABLED

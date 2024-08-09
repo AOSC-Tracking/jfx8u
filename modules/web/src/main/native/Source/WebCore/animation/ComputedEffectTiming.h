@@ -27,7 +27,7 @@
 
 #include "AnimationEffectPhase.h"
 #include "EffectTiming.h"
-#include "WebAnimationTypes.h"
+#include "WebAnimationUtilities.h"
 
 namespace WebCore {
 

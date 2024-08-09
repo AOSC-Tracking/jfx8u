@@ -56,7 +56,7 @@ PageConsoleAgent::~PageConsoleAgent() = default;
 
 void PageConsoleAgent::clearMessages(ErrorString& errorString)
 {
-    if (auto* domAgent = m_instrumentingAgents.persistentDOMAgent())
+    if (auto* domAgent = m_instrumentingAgents.inspectorDOMAgent())
         domAgent->releaseDanglingNodes();
 
     WebConsoleAgent::clearMessages(errorString);

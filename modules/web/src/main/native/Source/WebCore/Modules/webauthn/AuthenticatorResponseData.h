@@ -56,31 +56,6 @@ struct AuthenticatorResponseData {
 };
 
 template<class Encoder>
-static void encodeArrayBuffer(Encoder& encoder, const ArrayBuffer& buffer)
-{
-    encoder << static_cast<uint64_t>(buffer.byteLength());
-    encoder.encodeFixedLengthData(reinterpret_cast<const uint8_t*>(buffer.data()), buffer.byteLength(), 1);
-}
-
-template<class Decoder>
-RefPtr<ArrayBuffer> decodeArrayBuffer(Decoder& decoder)
-{
-    Optional<uint64_t> length;
-    decoder >> length;
-    if (!length)
-        return nullptr;
-
-    if (!decoder.template bufferIsLargeEnoughToContain<uint8_t>(length.value()))
-        return nullptr;
-    auto buffer = ArrayBuffer::tryCreate(length.value(), sizeof(uint8_t));
-    if (!buffer)
-        return nullptr;
-    if (!decoder.decodeFixedLengthData(reinterpret_cast<uint8_t*>(buffer->data()), length.value(), 1))
-        return nullptr;
-    return buffer;
-}
-
-template<class Encoder>
 void AuthenticatorResponseData::encode(Encoder& encoder) const
 {
     if (!rawId) {
@@ -88,19 +63,24 @@ void AuthenticatorResponseData::encode(Encoder& encoder) const
         return;
     }
     encoder << false;
-    encodeArrayBuffer(encoder, *rawId);
+
+    encoder << static_cast<uint64_t>(rawId->byteLength());
+    encoder.encodeFixedLengthData(reinterpret_cast<const uint8_t*>(rawId->data()), rawId->byteLength(), 1);
 
     encoder << isAuthenticatorAttestationResponse;
 
     if (isAuthenticatorAttestationResponse && attestationObject) {
-        encodeArrayBuffer(encoder, *attestationObject);
+        encoder << static_cast<uint64_t>(attestationObject->byteLength());
+        encoder.encodeFixedLengthData(reinterpret_cast<const uint8_t*>(attestationObject->data()), attestationObject->byteLength(), 1);
         return;
     }
 
     if (!authenticatorData || !signature)
         return;
-    encodeArrayBuffer(encoder, *authenticatorData);
-    encodeArrayBuffer(encoder, *signature);
+    encoder << static_cast<uint64_t>(authenticatorData->byteLength());
+    encoder.encodeFixedLengthData(reinterpret_cast<const uint8_t*>(authenticatorData->data()), authenticatorData->byteLength(), 1);
+    encoder << static_cast<uint64_t>(signature->byteLength());
+    encoder.encodeFixedLengthData(reinterpret_cast<const uint8_t*>(signature->data()), signature->byteLength(), 1);
 
     // Encode AppID before user handle to avoid the userHandle flag.
     encoder << appid;
@@ -110,7 +90,8 @@ void AuthenticatorResponseData::encode(Encoder& encoder) const
         return;
     }
     encoder << true;
-    encodeArrayBuffer(encoder, *userHandle);
+    encoder << static_cast<uint64_t>(userHandle->byteLength());
+    encoder.encodeFixedLengthData(reinterpret_cast<const uint8_t*>(userHandle->data()), userHandle->byteLength(), 1);
 }
 
 template<class Decoder>
@@ -125,8 +106,13 @@ Optional<AuthenticatorResponseData> AuthenticatorResponseData::decode(Decoder& d
     if (isEmpty.value())
         return result;
 
-    result.rawId = decodeArrayBuffer(decoder);
-    if (!result.rawId)
+    Optional<uint64_t> rawIdLength;
+    decoder >> rawIdLength;
+    if (!rawIdLength)
+        return WTF::nullopt;
+
+    result.rawId = ArrayBuffer::create(rawIdLength.value(), sizeof(uint8_t));
+    if (!decoder.decodeFixedLengthData(reinterpret_cast<uint8_t*>(result.rawId->data()), rawIdLength.value(), 1))
         return WTF::nullopt;
 
     Optional<bool> isAuthenticatorAttestationResponse;
@@ -136,18 +122,34 @@ Optional<AuthenticatorResponseData> AuthenticatorResponseData::decode(Decoder& d
     result.isAuthenticatorAttestationResponse = isAuthenticatorAttestationResponse.value();
 
     if (result.isAuthenticatorAttestationResponse) {
-        result.attestationObject = decodeArrayBuffer(decoder);
-        if (!result.attestationObject)
+        Optional<uint64_t> attestationObjectLength;
+        decoder >> attestationObjectLength;
+        if (!attestationObjectLength)
             return WTF::nullopt;
+
+        result.attestationObject = ArrayBuffer::create(attestationObjectLength.value(), sizeof(uint8_t));
+        if (!decoder.decodeFixedLengthData(reinterpret_cast<uint8_t*>(result.attestationObject->data()), attestationObjectLength.value(), 1))
+            return WTF::nullopt;
+
         return result;
     }
 
-    result.authenticatorData = decodeArrayBuffer(decoder);
-    if (!result.authenticatorData)
+    Optional<uint64_t> authenticatorDataLength;
+    decoder >> authenticatorDataLength;
+    if (!authenticatorDataLength)
         return WTF::nullopt;
 
-    result.signature = decodeArrayBuffer(decoder);
-    if (!result.signature)
+    result.authenticatorData = ArrayBuffer::create(authenticatorDataLength.value(), sizeof(uint8_t));
+    if (!decoder.decodeFixedLengthData(reinterpret_cast<uint8_t*>(result.authenticatorData->data()), authenticatorDataLength.value(), 1))
+        return WTF::nullopt;
+
+    Optional<uint64_t> signatureLength;
+    decoder >> signatureLength;
+    if (!signatureLength)
+        return WTF::nullopt;
+
+    result.signature = ArrayBuffer::create(signatureLength.value(), sizeof(uint8_t));
+    if (!decoder.decodeFixedLengthData(reinterpret_cast<uint8_t*>(result.signature->data()), signatureLength.value(), 1))
         return WTF::nullopt;
 
     Optional<Optional<bool>> appid;
@@ -163,8 +165,13 @@ Optional<AuthenticatorResponseData> AuthenticatorResponseData::decode(Decoder& d
     if (!*hasUserHandle)
         return result;
 
-    result.userHandle = decodeArrayBuffer(decoder);
-    if (!result.userHandle)
+    Optional<uint64_t> userHandleLength;
+    decoder >> userHandleLength;
+    if (!userHandleLength)
+        return WTF::nullopt;
+
+    result.userHandle = ArrayBuffer::create(userHandleLength.value(), sizeof(uint8_t));
+    if (!decoder.decodeFixedLengthData(reinterpret_cast<uint8_t*>(result.userHandle->data()), userHandleLength.value(), 1))
         return WTF::nullopt;
 
     return result;

@@ -27,6 +27,7 @@
 #include "RegExpGlobalData.h"
 
 #include "JSCInlines.h"
+#include "JSString.h"
 
 namespace JSC {
 

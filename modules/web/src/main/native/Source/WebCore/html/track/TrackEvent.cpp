@@ -25,7 +25,7 @@
 
 #include "config.h"
 
-#if ENABLE(VIDEO)
+#if ENABLE(VIDEO_TRACK)
 
 #include "TrackEvent.h"
 #include <wtf/IsoMallocInlines.h>

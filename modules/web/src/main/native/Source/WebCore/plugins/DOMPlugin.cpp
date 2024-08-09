@@ -19,8 +19,8 @@
 #include "config.h"
 #include "DOMPlugin.h"
 
-#include "DOMMimeType.h"
-#include "Navigator.h"
+#include "PluginData.h"
+#include "Frame.h"
 #include <wtf/IsoMallocInlines.h>
 #include <wtf/text/AtomString.h>
 
@@ -28,29 +28,10 @@ namespace WebCore {
 
 WTF_MAKE_ISO_ALLOCATED_IMPL(DOMPlugin);
 
-Ref<DOMPlugin> DOMPlugin::create(Navigator& navigator, const PluginInfo& info)
-{
-    return adoptRef(*new DOMPlugin(navigator, info));
-}
-
-static Vector<Ref<DOMMimeType>> makeMimeTypes(Navigator& navigator, const PluginInfo& info, DOMPlugin& self)
-{
-    Vector<Ref<DOMMimeType>> types;
-    types.reserveInitialCapacity(info.mimes.size());
-    for (auto& type : info.mimes)
-        types.uncheckedAppend(DOMMimeType::create(navigator, type, self));
-
-    std::sort(types.begin(), types.end(), [](const Ref<DOMMimeType>& a, const Ref<DOMMimeType>& b) {
-        return codePointCompareLessThan(a->type(), b->type());
-    });
-
-    return types;
-}
-
-DOMPlugin::DOMPlugin(Navigator& navigator, const PluginInfo& info)
-    : m_navigator(makeWeakPtr(navigator))
-    , m_info(info)
-    , m_mimeTypes(makeMimeTypes(navigator, info, *this))
+DOMPlugin::DOMPlugin(PluginData* pluginData, Frame* frame, PluginInfo pluginInfo)
+    : FrameDestructionObserver(frame)
+    , m_pluginData(pluginData)
+    , m_pluginInfo(WTFMove(pluginInfo))
 {
 }
 
@@ -58,47 +39,60 @@ DOMPlugin::~DOMPlugin() = default;
 
 String DOMPlugin::name() const
 {
-    return m_info.name;
+    return m_pluginInfo.name;
 }
 
 String DOMPlugin::filename() const
 {
-    return m_info.file;
+    return m_pluginInfo.file;
 }
 
 String DOMPlugin::description() const
 {
-    return m_info.desc;
+    return m_pluginInfo.desc;
 }
 
 unsigned DOMPlugin::length() const
 {
-    return m_mimeTypes.size();
+    return m_pluginInfo.mimes.size();
 }
 
 RefPtr<DOMMimeType> DOMPlugin::item(unsigned index)
 {
-    if (index >= m_mimeTypes.size())
+    if (index >= m_pluginInfo.mimes.size() || !m_frame || !m_frame->page())
         return nullptr;
-    return m_mimeTypes[index].ptr();
+
+    MimeClassInfo mime = m_pluginInfo.mimes[index];
+
+    Vector<MimeClassInfo> mimes;
+    Vector<size_t> mimePluginIndices;
+    Vector<PluginInfo> plugins = m_pluginData->webVisiblePlugins();
+    m_pluginData->getWebVisibleMimesAndPluginIndices(mimes, mimePluginIndices);
+    for (unsigned i = 0; i < mimes.size(); ++i) {
+        if (mimes[i] == mime && plugins[mimePluginIndices[i]] == m_pluginInfo)
+            return DOMMimeType::create(m_pluginData.get(), m_frame, i);
+    }
+    return nullptr;
 }
 
 RefPtr<DOMMimeType> DOMPlugin::namedItem(const AtomString& propertyName)
 {
-    for (auto& type : m_mimeTypes) {
-        if (type->type() == propertyName)
-            return type.ptr();
-    }
+    if (!m_frame || !m_frame->page())
+        return nullptr;
+
+    Vector<MimeClassInfo> mimes;
+    Vector<size_t> mimePluginIndices;
+    m_pluginData->getWebVisibleMimesAndPluginIndices(mimes, mimePluginIndices);
+    for (unsigned i = 0; i < mimes.size(); ++i)
+        if (mimes[i].type == propertyName)
+            return DOMMimeType::create(m_pluginData.get(), m_frame, i);
     return nullptr;
 }
 
 Vector<AtomString> DOMPlugin::supportedPropertyNames()
 {
-    Vector<AtomString> result;
-    result.reserveInitialCapacity(m_mimeTypes.size());
-    for (auto& type : m_mimeTypes)
-        result.uncheckedAppend(type->type());
-    return result;
+    // FIXME: Should be implemented.
+    return Vector<AtomString>();
 }
 
 } // namespace WebCore

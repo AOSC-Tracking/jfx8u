@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2015-2019 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -27,6 +27,7 @@
 #include "JSModuleNamespaceObject.h"
 
 #include "AbstractModuleRecord.h"
+#include "Error.h"
 #include "JSCInlines.h"
 #include "JSModuleEnvironment.h"
 
@@ -157,7 +158,6 @@ bool JSModuleNamespaceObject::getOwnPropertySlotCommon(JSGlobalObject* globalObj
     }
 
     case PropertySlot::InternalMethodType::VMInquiry:
-        slot.setValue(this, static_cast<unsigned>(JSC::PropertyAttribute::None), jsUndefined());
         return false;
     }
 
@@ -199,12 +199,12 @@ bool JSModuleNamespaceObject::putByIndex(JSCell*, JSGlobalObject* globalObject, 
     return false;
 }
 
-bool JSModuleNamespaceObject::deleteProperty(JSCell* cell, JSGlobalObject* globalObject, PropertyName propertyName, DeletePropertySlot& slot)
+bool JSModuleNamespaceObject::deleteProperty(JSCell* cell, JSGlobalObject* globalObject, PropertyName propertyName)
 {
     // http://www.ecma-international.org/ecma-262/6.0/#sec-module-namespace-exotic-objects-delete-p
     JSModuleNamespaceObject* thisObject = jsCast<JSModuleNamespaceObject*>(cell);
     if (propertyName.isSymbol())
-        return JSObject::deleteProperty(thisObject, globalObject, propertyName, slot);
+        return JSObject::deleteProperty(thisObject, globalObject, propertyName);
 
     return !thisObject->m_exports.contains(propertyName.uid());
 }

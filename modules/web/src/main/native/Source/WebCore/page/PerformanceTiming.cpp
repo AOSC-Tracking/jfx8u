@@ -120,14 +120,14 @@ unsigned long long PerformanceTiming::domainLookupStart() const
     if (!loader)
         return fetchStart();
 
-    const NetworkLoadMetrics* timing = loader->response().deprecatedNetworkLoadMetricsOrNull();
+    const NetworkLoadMetrics& timing = loader->response().deprecatedNetworkLoadMetrics();
 
     // This will be -1 when a DNS request is not performed.
     // Rather than exposing a special value that indicates no DNS, we "backfill" with fetchStart.
-    if (!timing || timing->domainLookupStart < 0_ms)
+    if (timing.domainLookupStart < 0_ms)
         return fetchStart();
 
-    return resourceLoadTimeRelativeToFetchStart(timing->domainLookupStart);
+    return resourceLoadTimeRelativeToFetchStart(timing.domainLookupStart);
 }
 
 unsigned long long PerformanceTiming::domainLookupEnd() const
@@ -136,14 +136,14 @@ unsigned long long PerformanceTiming::domainLookupEnd() const
     if (!loader)
         return domainLookupStart();
 
-    const NetworkLoadMetrics* timing = loader->response().deprecatedNetworkLoadMetricsOrNull();
+    const NetworkLoadMetrics& timing = loader->response().deprecatedNetworkLoadMetrics();
 
     // This will be -1 when a DNS request is not performed.
     // Rather than exposing a special value that indicates no DNS, we "backfill" with domainLookupStart.
-    if (!timing || timing->domainLookupEnd < 0_ms)
+    if (timing.domainLookupEnd < 0_ms)
         return domainLookupStart();
 
-    return resourceLoadTimeRelativeToFetchStart(timing->domainLookupEnd);
+    return resourceLoadTimeRelativeToFetchStart(timing.domainLookupEnd);
 }
 
 unsigned long long PerformanceTiming::connectStart() const
@@ -152,20 +152,18 @@ unsigned long long PerformanceTiming::connectStart() const
     if (!loader)
         return domainLookupEnd();
 
-    const NetworkLoadMetrics* timing = loader->response().deprecatedNetworkLoadMetricsOrNull();
+    const NetworkLoadMetrics& timing = loader->response().deprecatedNetworkLoadMetrics();
 
     // connectStart will be -1 when a network request is not made.
     // Rather than exposing a special value that indicates no new connection, we "backfill" with domainLookupEnd.
-    if (!timing)
-        return domainLookupEnd();
-    Seconds connectStart = timing->connectStart;
+    Seconds connectStart = timing.connectStart;
     if (connectStart < 0_ms)
         return domainLookupEnd();
 
     // NetworkLoadMetrics's connect phase includes DNS, however Navigation Timing's
     // connect phase should not. So if there is DNS time, trim it from the start.
-    if (timing->domainLookupEnd >= 0_ms && timing->domainLookupEnd > connectStart)
-        connectStart = timing->domainLookupEnd;
+    if (timing.domainLookupEnd >= 0_ms && timing.domainLookupEnd > connectStart)
+        connectStart = timing.domainLookupEnd;
 
     return resourceLoadTimeRelativeToFetchStart(connectStart);
 }
@@ -176,14 +174,14 @@ unsigned long long PerformanceTiming::connectEnd() const
     if (!loader)
         return connectStart();
 
-    const NetworkLoadMetrics* timing = loader->response().deprecatedNetworkLoadMetricsOrNull();
+    const NetworkLoadMetrics& timing = loader->response().deprecatedNetworkLoadMetrics();
 
     // connectEnd will be -1 when a network request is not made.
     // Rather than exposing a special value that indicates no new connection, we "backfill" with connectStart.
-    if (!timing || timing->connectEnd < 0_ms)
+    if (timing.connectEnd < 0_ms)
         return connectStart();
 
-    return resourceLoadTimeRelativeToFetchStart(timing->connectEnd);
+    return resourceLoadTimeRelativeToFetchStart(timing.connectEnd);
 }
 
 unsigned long long PerformanceTiming::secureConnectionStart() const
@@ -192,12 +190,12 @@ unsigned long long PerformanceTiming::secureConnectionStart() const
     if (!loader)
         return 0;
 
-    const NetworkLoadMetrics* timing = loader->response().deprecatedNetworkLoadMetricsOrNull();
+    const NetworkLoadMetrics& timing = loader->response().deprecatedNetworkLoadMetrics();
 
-    if (!timing || timing->secureConnectionStart < 0_ms)
+    if (timing.secureConnectionStart < 0_ms)
         return 0;
 
-    return resourceLoadTimeRelativeToFetchStart(timing->secureConnectionStart);
+    return resourceLoadTimeRelativeToFetchStart(timing.secureConnectionStart);
 }
 
 unsigned long long PerformanceTiming::requestStart() const
@@ -206,12 +204,10 @@ unsigned long long PerformanceTiming::requestStart() const
     if (!loader)
         return connectEnd();
 
-    Seconds requestStart = 0_ms;
-    if (const NetworkLoadMetrics* timing = loader->response().deprecatedNetworkLoadMetricsOrNull())
-        requestStart = timing->requestStart;
+    const NetworkLoadMetrics& timing = loader->response().deprecatedNetworkLoadMetrics();
 
-    ASSERT(requestStart >= 0_ms);
-    return resourceLoadTimeRelativeToFetchStart(requestStart);
+    ASSERT(timing.requestStart >= 0_ms);
+    return resourceLoadTimeRelativeToFetchStart(timing.requestStart);
 }
 
 unsigned long long PerformanceTiming::responseStart() const
@@ -220,12 +216,10 @@ unsigned long long PerformanceTiming::responseStart() const
     if (!loader)
         return requestStart();
 
-    Seconds responseStart = 0_ms;
-    if (const NetworkLoadMetrics* timing = loader->response().deprecatedNetworkLoadMetricsOrNull())
-        responseStart = timing->responseStart;
+    const NetworkLoadMetrics& timing = loader->response().deprecatedNetworkLoadMetrics();
 
-    ASSERT(responseStart >= 0_ms);
-    return resourceLoadTimeRelativeToFetchStart(responseStart);
+    ASSERT(timing.responseStart >= 0_ms);
+    return resourceLoadTimeRelativeToFetchStart(timing.responseStart);
 }
 
 unsigned long long PerformanceTiming::responseEnd() const

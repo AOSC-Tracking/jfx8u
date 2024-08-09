@@ -26,6 +26,7 @@
 #include "config.h"
 #include "ICStatusMap.h"
 
+#include "InlineCallFrame.h"
 #include "TerminatedCodeOrigin.h"
 
 namespace JSC {

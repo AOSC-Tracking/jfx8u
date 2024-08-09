@@ -73,6 +73,8 @@ private:
         : Base(vm, structure, sizeHint)
     {
     }
+
+    static String toStringName(const JSObject*, JSGlobalObject*);
 };
 
 static_assert(std::is_final<JSSet>::value, "Required for JSType based casting");

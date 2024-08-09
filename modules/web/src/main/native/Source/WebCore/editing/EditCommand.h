@@ -38,6 +38,7 @@ namespace WebCore {
 class CompositeEditCommand;
 class Document;
 class Element;
+class Frame;
 
 String inputTypeNameForEditingAction(EditAction);
 
@@ -63,6 +64,8 @@ protected:
     explicit EditCommand(Document&, EditAction = EditAction::Unspecified);
     EditCommand(Document&, const VisibleSelection&, const VisibleSelection&);
 
+    const Frame& frame() const;
+    Frame& frame();
     const Document& document() const { return m_document; }
     Document& document() { return m_document; }
     CompositeEditCommand* parent() const { return m_parent; }

@@ -587,15 +587,16 @@ void TextureMapperShaderProgram::setMatrix(GLuint location, const Transformation
     glUniformMatrix4fv(location, 1, false, floatMatrix.data());
 }
 
-GLuint TextureMapperShaderProgram::getLocation(VariableID variable, ASCIILiteral name, VariableType type)
+GLuint TextureMapperShaderProgram::getLocation(const AtomString& name, VariableType type)
 {
-    auto addResult = m_variables.ensure(variable,
+    auto addResult = m_variables.ensure(name,
         [this, &name, type] {
+            CString nameCString = name.string().utf8();
             switch (type) {
             case UniformVariable:
-                return glGetUniformLocation(m_id, name);
+                return glGetUniformLocation(m_id, nameCString.data());
             case AttribVariable:
-                return glGetAttribLocation(m_id, name);
+                return glGetAttribLocation(m_id, nameCString.data());
             }
             ASSERT_NOT_REACHED();
             return 0;

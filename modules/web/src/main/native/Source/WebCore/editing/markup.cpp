@@ -38,6 +38,7 @@
 #include "ChildListMutationScope.h"
 #include "Comment.h"
 #include "ComposedTreeIterator.h"
+#include "CustomHeaderFields.h"
 #include "DocumentFragment.h"
 #include "DocumentLoader.h"
 #include "DocumentType.h"
@@ -74,7 +75,7 @@
 #include "SocketProvider.h"
 #include "StyleProperties.h"
 #include "TextIterator.h"
-#include "TextManipulationController.h"
+#include "TypedElementDescendantIterator.h"
 #include "VisibleSelection.h"
 #include "VisibleUnits.h"
 #include <wtf/StdLibExtras.h>
@@ -86,7 +87,7 @@ namespace WebCore {
 
 using namespace HTMLNames;
 
-static bool propertyMissingOrEqualToNone(const StyleProperties*, CSSPropertyID);
+static bool propertyMissingOrEqualToNone(StyleProperties*, CSSPropertyID);
 
 class AttributeChange {
 public:
@@ -231,7 +232,7 @@ public:
     bool needRelativeStyleWrapper() const { return m_needRelativeStyleWrapper; }
     bool needClearingDiv() const { return m_needClearingDiv; }
 
-    using MarkupAccumulator::append;
+    using MarkupAccumulator::appendString;
 
     ContainerNode* parentNode(Node& node)
     {
@@ -240,14 +241,7 @@ public:
         return node.parentOrShadowHostNode();
     }
 
-    void prependMetaCharsetUTF8TagIfNonASCIICharactersArePresent()
-    {
-        if (!isAllASCII())
-            m_reversedPrecedingMarkup.append("<meta charset=\"UTF-8\">"_s);
-    }
-
 private:
-    bool isAllASCII() const;
     void appendStyleNodeOpenTag(StringBuilder&, StyleProperties*, Document&, bool isBlock = false);
     const String& styleNodeCloseTag(bool isBlock = false);
 
@@ -331,8 +325,9 @@ private:
     bool m_inMSOList { false };
 };
 
-inline StyledMarkupAccumulator::StyledMarkupAccumulator(const Position& start, const Position& end, Vector<Node*>* nodes, ResolveURLs resolveURLs, SerializeComposedTree serializeComposedTree, AnnotateForInterchange annotate, StandardFontFamilySerializationMode standardFontFamilySerializationMode, MSOListMode msoListMode, bool needsPositionStyleConversion, Node* highestNodeToBeSerialized)
-    : MarkupAccumulator(nodes, resolveURLs)
+inline StyledMarkupAccumulator::StyledMarkupAccumulator(const Position& start, const Position& end, Vector<Node*>* nodes, ResolveURLs urlsToResolve, SerializeComposedTree serializeComposedTree,
+    AnnotateForInterchange annotate, StandardFontFamilySerializationMode standardFontFamilySerializationMode, MSOListMode msoListMode, bool needsPositionStyleConversion, Node* highestNodeToBeSerialized)
+    : MarkupAccumulator(nodes, urlsToResolve)
     , m_start(start)
     , m_end(end)
     , m_annotate(annotate)
@@ -362,7 +357,7 @@ void StyledMarkupAccumulator::wrapWithStyleNode(StyleProperties* style, Document
     StringBuilder openTag;
     appendStyleNodeOpenTag(openTag, style, document, isBlock);
     m_reversedPrecedingMarkup.append(openTag.toString());
-    append(styleNodeCloseTag(isBlock));
+    appendString(styleNodeCloseTag(isBlock));
 }
 
 void StyledMarkupAccumulator::appendStyleNodeOpenTag(StringBuilder& out, StyleProperties* style, Document& document, bool isBlock)
@@ -384,26 +379,17 @@ const String& StyledMarkupAccumulator::styleNodeCloseTag(bool isBlock)
     return isBlock ? divClose : styleSpanClose;
 }
 
-bool StyledMarkupAccumulator::isAllASCII() const
-{
-    for (auto& preceding : m_reversedPrecedingMarkup) {
-        if (!preceding.isAllASCII())
-            return false;
-    }
-    return MarkupAccumulator::isAllASCII();
-}
-
 String StyledMarkupAccumulator::takeResults()
 {
-    CheckedUint32 length = this->length();
-    for (auto& string : m_reversedPrecedingMarkup)
-        length += string.length();
     StringBuilder result;
-    result.reserveCapacity(length.unsafeGet());
-    for (auto& string : makeReversedRange(m_reversedPrecedingMarkup))
-        result.append(string);
-    result.append(takeMarkup());
-    // Remove '\0' characters because they are not visibly rendered to the user.
+    result.reserveCapacity(totalLength(m_reversedPrecedingMarkup) + length());
+
+    for (size_t i = m_reversedPrecedingMarkup.size(); i > 0; --i)
+        result.append(m_reversedPrecedingMarkup[i - 1]);
+
+    concatenateMarkup(result);
+
+    // We remove '\0' characters because they are not visibly rendered to the user.
     return result.toString().replaceWithLiteral('\0', "");
 }
 
@@ -412,7 +398,7 @@ void StyledMarkupAccumulator::appendText(StringBuilder& out, const Text& text)
     const bool parentIsTextarea = is<HTMLTextAreaElement>(text.parentElement());
     const bool wrappingSpan = shouldApplyWrappingStyle(text) && !parentIsTextarea;
     if (wrappingSpan) {
-        auto wrappingStyle = m_wrappingStyle->copy();
+        RefPtr<EditingStyle> wrappingStyle = m_wrappingStyle->copy();
         // FIXME: <rdar://problem/5371536> Style rules that match pasted content can change it's appearance
         // Make sure spans are inline style in paste side e.g. span { display: block }.
         wrappingStyle->forceInline();
@@ -450,8 +436,7 @@ String StyledMarkupAccumulator::renderedTextRespectingRange(const Text& text)
             behavior = TextIteratorBehavesAsIfNodesFollowing;
     }
 
-    auto range = makeSimpleRange(start, end);
-    return range ? plainText(*range, behavior) : emptyString();
+    return plainText(Range::create(text.document(), start, end).ptr(), behavior);
 }
 
 String StyledMarkupAccumulator::textContentRespectingRange(const Text& text)
@@ -567,7 +552,7 @@ void StyledMarkupAccumulator::appendStartTag(StringBuilder& out, const Element& 
         if (!newInlineStyle->isEmpty()) {
             out.appendLiteral(" style=\"");
             appendAttributeValue(out, newInlineStyle->style()->asText(), documentIsHTML);
-            out.append('"');
+            out.append('\"');
         }
     }
 
@@ -668,7 +653,7 @@ Node* StyledMarkupAccumulator::traverseNodesForSerialization(Node* startNode, No
         if (!enterNode(*n)) {
             next = nextSkippingChildren(*n);
             // Don't skip over pastEnd.
-            if (pastEnd && (isDescendantOf(*pastEnd, *n) || !next))
+            if (pastEnd && isDescendantOf(*pastEnd, *n))
                 next = pastEnd;
             ASSERT(next || !pastEnd);
         } else {
@@ -724,9 +709,9 @@ bool StyledMarkupAccumulator::appendNodeToPreserveMSOList(Node& node)
         if (msoListDefinitionsEnd == notFound || start >= msoListDefinitionsEnd)
             return false;
 
-        append("<head><style class=\"" WebKitMSOListQuirksStyle "\">\n<!--\n",
-            StringView(textChild.data()).substring(start, msoListDefinitionsEnd - start + 3),
-            "\n-->\n</style></head>");
+        appendString("<head><style class=\"" WebKitMSOListQuirksStyle "\">\n<!--\n");
+        appendStringView(StringView(textChild.data()).substring(start, msoListDefinitionsEnd - start + 3));
+        appendString("\n-->\n</style></head>");
 
         return true;
     }
@@ -757,12 +742,16 @@ static inline Node* ancestorToRetainStructureAndAppearance(Node* commonAncestor)
     return ancestorToRetainStructureAndAppearanceForBlock(enclosingBlock(commonAncestor));
 }
 
-static bool propertyMissingOrEqualToNone(const StyleProperties* style, CSSPropertyID propertyID)
+static bool propertyMissingOrEqualToNone(StyleProperties* style, CSSPropertyID propertyID)
 {
     if (!style)
         return false;
-    auto value = style->getPropertyCSSValue(propertyID);
-    return !value || (is<CSSPrimitiveValue>(*value) && downcast<CSSPrimitiveValue>(*value).valueID() == CSSValueNone);
+    RefPtr<CSSValue> value = style->getPropertyCSSValue(propertyID);
+    if (!value)
+        return true;
+    if (!is<CSSPrimitiveValue>(*value))
+        return false;
+    return downcast<CSSPrimitiveValue>(*value).valueID() == CSSValueNone;
 }
 
 static bool needInterchangeNewlineAfter(const VisiblePosition& v)
@@ -834,7 +823,7 @@ static Node* highestAncestorToWrapMarkup(const Position& start, const Position& 
     return specialCommonAncestor;
 }
 
-static String serializePreservingVisualAppearanceInternal(const Position& start, const Position& end, Vector<Node*>* nodes, ResolveURLs resolveURLs, SerializeComposedTree serializeComposedTree,
+static String serializePreservingVisualAppearanceInternal(const Position& start, const Position& end, Vector<Node*>* nodes, ResolveURLs urlsToResolve, SerializeComposedTree serializeComposedTree,
     AnnotateForInterchange annotate, ConvertBlocksToInlines convertBlocksToInlines, StandardFontFamilySerializationMode standardFontFamilySerializationMode, MSOListMode msoListMode)
 {
     static NeverDestroyed<const String> interchangeNewlineString(MAKE_STATIC_STRING_IMPL("<br class=\"" AppleInterchangeNewline "\">"));
@@ -861,14 +850,14 @@ static String serializePreservingVisualAppearanceInternal(const Position& start,
 
     Node* specialCommonAncestor = highestAncestorToWrapMarkup(start, end, *commonAncestor, annotate);
 
-    StyledMarkupAccumulator accumulator(start, end, nodes, resolveURLs, serializeComposedTree, annotate, standardFontFamilySerializationMode, msoListMode, needsPositionStyleConversion, specialCommonAncestor);
+    StyledMarkupAccumulator accumulator(start, end, nodes, urlsToResolve, serializeComposedTree, annotate, standardFontFamilySerializationMode, msoListMode, needsPositionStyleConversion, specialCommonAncestor);
 
     Position startAdjustedForInterchangeNewline = start;
     if (annotate == AnnotateForInterchange::Yes && needInterchangeNewlineAfter(visibleStart)) {
         if (visibleStart == visibleEnd.previous())
             return interchangeNewlineString;
 
-        accumulator.append(interchangeNewlineString.get());
+        accumulator.appendString(interchangeNewlineString);
         startAdjustedForInterchangeNewline = visibleStart.next().deepEquivalent();
 
         if (comparePositions(startAdjustedForInterchangeNewline, end) >= 0)
@@ -914,7 +903,7 @@ static String serializePreservingVisualAppearanceInternal(const Position& start,
 
     if (accumulator.needRelativeStyleWrapper() && needsPositionStyleConversion) {
         if (accumulator.needClearingDiv())
-            accumulator.append("<div style=\"clear: both;\"></div>");
+            accumulator.appendString("<div style=\"clear: both;\"></div>");
         RefPtr<EditingStyle> positionRelativeStyle = styleFromMatchedRulesAndInlineDecl(*body);
         positionRelativeStyle->style()->setProperty(CSSPropertyPosition, CSSValueRelative);
         accumulator.wrapWithStyleNode(positionRelativeStyle->style(), document, true);
@@ -922,21 +911,14 @@ static String serializePreservingVisualAppearanceInternal(const Position& start,
 
     // FIXME: The interchange newline should be placed in the block that it's in, not after all of the content, unconditionally.
     if (annotate == AnnotateForInterchange::Yes && needInterchangeNewlineAfter(visibleEnd.previous()))
-        accumulator.append(interchangeNewlineString.get());
-
-#if PLATFORM(COCOA)
-    // On Cocoa platforms, this markup is eventually persisted to the pasteboard and read back as UTF-8 data,
-    // so this meta tag is needed for clients that read this data in the future from the pasteboard and load it.
-    accumulator.prependMetaCharsetUTF8TagIfNonASCIICharactersArePresent();
-#endif
+        accumulator.appendString(interchangeNewlineString);
 
     return accumulator.takeResults();
 }
 
-String serializePreservingVisualAppearance(const SimpleRange& range, Vector<Node*>* nodes, AnnotateForInterchange annotate, ConvertBlocksToInlines convertBlocksToInlines, ResolveURLs resolveURLs)
+String serializePreservingVisualAppearance(const Range& range, Vector<Node*>* nodes, AnnotateForInterchange annotate, ConvertBlocksToInlines convertBlocksToInlines, ResolveURLs urlsToReslve)
 {
-    return serializePreservingVisualAppearanceInternal(createLegacyEditingPosition(range.start), createLegacyEditingPosition(range.end),
-        nodes, resolveURLs, SerializeComposedTree::No,
+    return serializePreservingVisualAppearanceInternal(range.startPosition(), range.endPosition(), nodes, urlsToReslve, SerializeComposedTree::No,
         annotate, convertBlocksToInlines, StandardFontFamilySerializationMode::Keep, MSOListMode::DoNotPreserve);
 }
 
@@ -946,16 +928,17 @@ String serializePreservingVisualAppearance(const VisibleSelection& selection, Re
         AnnotateForInterchange::Yes, ConvertBlocksToInlines::No, StandardFontFamilySerializationMode::Keep, MSOListMode::DoNotPreserve);
 }
 
-static bool shouldPreserveMSOLists(StringView markup)
+
+static bool shouldPreserveMSOLists(const String& markup)
 {
     if (!markup.startsWith("<html xmlns:"))
         return false;
     auto tagClose = markup.find('>');
     if (tagClose == notFound)
         return false;
-    auto tag = markup.substring(0, tagClose);
-    return tag.contains("xmlns:o=\"urn:schemas-microsoft-com:office:office\"")
-        && tag.contains("xmlns:w=\"urn:schemas-microsoft-com:office:word\"");
+    auto htmlTag = markup.substring(0, tagClose);
+    return htmlTag.contains("xmlns:o=\"urn:schemas-microsoft-com:office:office\"")
+        && htmlTag.contains("xmlns:w=\"urn:schemas-microsoft-com:office:word\"");
 }
 
 String sanitizedMarkupForFragmentInDocument(Ref<DocumentFragment>&& fragment, Document& document, MSOListQuirks msoListQuirks, const String& originalMarkup)
@@ -971,16 +954,18 @@ String sanitizedMarkupForFragmentInDocument(Ref<DocumentFragment>&& fragment, Do
     auto result = serializePreservingVisualAppearanceInternal(firstPositionInNode(bodyElement.get()), lastPositionInNode(bodyElement.get()), nullptr,
         ResolveURLs::YesExcludingLocalFileURLsForPrivacy, SerializeComposedTree::No, AnnotateForInterchange::Yes, ConvertBlocksToInlines::No,  StandardFontFamilySerializationMode::Strip, msoListMode);
 
-    if (msoListMode != MSOListMode::Preserve)
-        return result;
+    if (msoListMode == MSOListMode::Preserve) {
+        StringBuilder builder;
+        builder.appendLiteral("<html xmlns:o=\"urn:schemas-microsoft-com:office:office\"\n"
+            "xmlns:w=\"urn:schemas-microsoft-com:office:word\"\n"
+            "xmlns:m=\"http://schemas.microsoft.com/office/2004/12/omml\"\n"
+            "xmlns=\"http://www.w3.org/TR/REC-html40\">");
+        builder.append(result);
+        builder.appendLiteral("</html>");
+        return builder.toString();
+    }
 
-    return makeString(
-        "<html xmlns:o=\"urn:schemas-microsoft-com:office:office\"\n"
-        "xmlns:w=\"urn:schemas-microsoft-com:office:word\"\n"
-        "xmlns:m=\"http://schemas.microsoft.com/office/2004/12/omml\"\n"
-        "xmlns=\"http://www.w3.org/TR/REC-html40\">",
-        result,
-        "</html>");
+    return result;
 }
 
 static void restoreAttachmentElementsInFragment(DocumentFragment& fragment)
@@ -1037,15 +1022,15 @@ Ref<DocumentFragment> createFragmentFromMarkup(Document& document, const String&
 
     fragment->parseHTML(markup, fakeBody.ptr(), parserContentPolicy);
     restoreAttachmentElementsInFragment(fragment);
-    if (!baseURL.isEmpty() && baseURL != aboutBlankURL() && baseURL != document.baseURL())
+    if (!baseURL.isEmpty() && baseURL != WTF::blankURL() && baseURL != document.baseURL())
         completeURLs(fragment.ptr(), baseURL);
 
     return fragment;
 }
 
-String serializeFragment(const Node& node, SerializedNodes root, Vector<Node*>* nodes, ResolveURLs resolveURLs, Vector<QualifiedName>* tagNamesToSkip, SerializationSyntax serializationSyntax)
+String serializeFragment(const Node& node, SerializedNodes root, Vector<Node*>* nodes, ResolveURLs urlsToResolve, Vector<QualifiedName>* tagNamesToSkip, SerializationSyntax serializationSyntax)
 {
-    MarkupAccumulator accumulator(nodes, resolveURLs, serializationSyntax);
+    MarkupAccumulator accumulator(nodes, urlsToResolve, serializationSyntax);
     return accumulator.serializeNodes(const_cast<Node&>(node), root, tagNamesToSkip);
 }
 
@@ -1112,16 +1097,20 @@ bool isPlainTextMarkup(Node* node)
     return isTabSpanTextNode(firstChild->firstChild()) && secondChild->isTextNode();
 }
 
-static bool contextPreservesNewline(const SimpleRange& context)
+static bool contextPreservesNewline(const Range& context)
 {
-    auto container = VisiblePosition(createLegacyEditingPosition(context.start)).deepEquivalent().containerNode();
-    return container && container->renderer() && container->renderer()->style().preserveNewline();
+    VisiblePosition position(context.startPosition());
+    Node* container = position.deepEquivalent().containerNode();
+    if (!container || !container->renderer())
+        return false;
+
+    return container->renderer()->style().preserveNewline();
 }
 
-Ref<DocumentFragment> createFragmentFromText(const SimpleRange& context, const String& text)
+Ref<DocumentFragment> createFragmentFromText(Range& context, const String& text)
 {
-    auto& document = context.start.container->document();
-    auto fragment = document.createDocumentFragment();
+    Document& document = context.ownerDocument();
+    Ref<DocumentFragment> fragment = document.createDocumentFragment();
 
     if (text.isEmpty())
         return fragment;
@@ -1157,13 +1146,14 @@ Ref<DocumentFragment> createFragmentFromText(const SimpleRange& context, const S
     }
 
     // Break string into paragraphs. Extra line breaks turn into empty paragraphs.
-    auto start = createLegacyEditingPosition(context.start);
-    auto block = enclosingBlock(start.firstNode().get());
-    bool useClonesOfEnclosingBlock = block
+    Node* blockNode = enclosingBlock(context.firstNode());
+    Element* block = downcast<Element>(blockNode);
+    bool useClonesOfEnclosingBlock = blockNode
+        && blockNode->isElementNode()
         && !block->hasTagName(bodyTag)
         && !block->hasTagName(htmlTag)
-        && block != editableRootForPosition(start);
-    bool useLineBreak = enclosingTextFormControl(start);
+        && block != editableRootForPosition(context.startPosition());
+    bool useLineBreak = enclosingTextFormControl(context.startPosition());
 
     Vector<String> list = string.splitAllowingEmptyEntries('\n');
     size_t numLines = list.size();

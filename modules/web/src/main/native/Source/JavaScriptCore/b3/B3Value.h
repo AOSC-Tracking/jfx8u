@@ -290,8 +290,8 @@ public:
     bool isRounded() const;
 
     TriState asTriState() const;
-    bool isLikeZero() const { return asTriState() == TriState::False; }
-    bool isLikeNonZero() const { return asTriState() == TriState::True; }
+    bool isLikeZero() const { return asTriState() == FalseTriState; }
+    bool isLikeNonZero() const { return asTriState() == TrueTriState; }
 
     Effects effects() const;
 
@@ -391,7 +391,6 @@ protected:
         case Const64:
         case ConstFloat:
         case ConstDouble:
-        case BottomTuple:
         case Fence:
         case SlotBase:
         case Get:

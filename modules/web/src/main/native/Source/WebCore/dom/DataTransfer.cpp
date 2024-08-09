@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2006-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2006, 2007, 2008, 2013 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -424,24 +424,16 @@ Ref<DataTransfer> DataTransfer::createForInputEvent(const String& plainText, con
 void DataTransfer::commitToPasteboard(Pasteboard& nativePasteboard)
 {
     ASSERT(is<StaticPasteboard>(*m_pasteboard) && !is<StaticPasteboard>(nativePasteboard));
-    auto& staticPasteboard = downcast<StaticPasteboard>(*m_pasteboard);
-    if (!staticPasteboard.hasNonDefaultData()) {
-        // We clear the platform pasteboard here to ensure that the pasteboard doesn't contain any data
-        // that may have been written before starting the drag or copying, and after ending the last
-        // drag session or paste. After pushing the static pasteboard's contents to the platform, the
-        // pasteboard should only contain data that was in the static pasteboard.
-        nativePasteboard.clear();
+    PasteboardCustomData customData = downcast<StaticPasteboard>(*m_pasteboard).takeCustomData();
+    if (!customData.hasData())
         return;
-    }
 
-    auto customData = staticPasteboard.takeCustomData();
     if (RuntimeEnabledFeatures::sharedFeatures().customPasteboardDataEnabled()) {
         customData.setOrigin(m_originIdentifier);
         nativePasteboard.writeCustomData({ customData });
         return;
     }
 
-    nativePasteboard.clear();
     customData.forEachPlatformString([&] (auto& type, auto& string) {
         nativePasteboard.writeString(type, string);
     });
@@ -489,18 +481,18 @@ Ref<DataTransfer> DataTransfer::createForDragStartEvent(const Document& document
     return dataTransfer;
 }
 
-Ref<DataTransfer> DataTransfer::createForDrop(const Document& document, std::unique_ptr<Pasteboard>&& pasteboard, OptionSet<DragOperation> sourceOperationMask, bool draggingFiles)
+Ref<DataTransfer> DataTransfer::createForDrop(const Document& document, std::unique_ptr<Pasteboard>&& pasteboard, DragOperation sourceOperation, bool draggingFiles)
 {
     auto dataTransfer = adoptRef(*new DataTransfer(DataTransfer::StoreMode::Readonly, WTFMove(pasteboard), draggingFiles ? Type::DragAndDropFiles : Type::DragAndDropData));
-    dataTransfer->setSourceOperationMask(sourceOperationMask);
+    dataTransfer->setSourceOperation(sourceOperation);
     dataTransfer->m_originIdentifier = document.originIdentifierForPasteboard();
     return dataTransfer;
 }
 
-Ref<DataTransfer> DataTransfer::createForUpdatingDropTarget(const Document& document, std::unique_ptr<Pasteboard>&& pasteboard, OptionSet<DragOperation> sourceOperationMask, bool draggingFiles)
+Ref<DataTransfer> DataTransfer::createForUpdatingDropTarget(const Document& document, std::unique_ptr<Pasteboard>&& pasteboard, DragOperation sourceOperation, bool draggingFiles)
 {
     auto dataTransfer = adoptRef(*new DataTransfer(DataTransfer::StoreMode::Protected, WTFMove(pasteboard), draggingFiles ? Type::DragAndDropFiles : Type::DragAndDropData));
-    dataTransfer->setSourceOperationMask(sourceOperationMask);
+    dataTransfer->setSourceOperation(sourceOperation);
     dataTransfer->m_originIdentifier = document.originIdentifierForPasteboard();
     return dataTransfer;
 }
@@ -596,74 +588,74 @@ void DragImageLoader::imageChanged(CachedImage*, const IntRect*)
     m_dataTransfer->updateDragImage();
 }
 
-static OptionSet<DragOperation> dragOpFromIEOp(const String& operation)
+static DragOperation dragOpFromIEOp(const String& operation)
 {
     if (operation == "uninitialized")
-        return anyDragOperation();
+        return DragOperationEvery;
     if (operation == "none")
-        return { };
+        return DragOperationNone;
     if (operation == "copy")
-        return { DragOperation::Copy };
+        return DragOperationCopy;
     if (operation == "link")
-        return { DragOperation::Link };
+        return DragOperationLink;
     if (operation == "move")
-        return { DragOperation::Generic, DragOperation::Move };
+        return (DragOperation)(DragOperationGeneric | DragOperationMove);
     if (operation == "copyLink")
-        return { DragOperation::Copy, DragOperation::Link };
+        return (DragOperation)(DragOperationCopy | DragOperationLink);
     if (operation == "copyMove")
-        return { DragOperation::Copy, DragOperation::Generic, DragOperation::Move };
+        return (DragOperation)(DragOperationCopy | DragOperationGeneric | DragOperationMove);
     if (operation == "linkMove")
-        return { DragOperation::Link, DragOperation::Generic, DragOperation::Move };
+        return (DragOperation)(DragOperationLink | DragOperationGeneric | DragOperationMove);
     if (operation == "all")
-        return anyDragOperation();
-    return { DragOperation::Private }; // Really a marker for "no conversion".
+        return DragOperationEvery;
+    return DragOperationPrivate; // really a marker for "no conversion"
 }
 
-static const char* IEOpFromDragOp(OptionSet<DragOperation> operationMask)
+static const char* IEOpFromDragOp(DragOperation operation)
 {
-    bool isGenericMove = operationMask.containsAny({ DragOperation::Generic, DragOperation::Move });
+    bool isGenericMove = operation & (DragOperationGeneric | DragOperationMove);
 
-    if ((isGenericMove && operationMask.containsAll({ DragOperation::Copy, DragOperation::Link })) || operationMask.containsAll({ DragOperation::Copy, DragOperation::Link, DragOperation::Generic, DragOperation::Private, DragOperation::Move, DragOperation::Delete }))
+    if ((isGenericMove && (operation & DragOperationCopy) && (operation & DragOperationLink)) || operation == DragOperationEvery)
         return "all";
-    if (isGenericMove && operationMask.contains(DragOperation::Copy))
+    if (isGenericMove && (operation & DragOperationCopy))
         return "copyMove";
-    if (isGenericMove && operationMask.contains(DragOperation::Link))
+    if (isGenericMove && (operation & DragOperationLink))
         return "linkMove";
-    if (operationMask.containsAll({ DragOperation::Copy, DragOperation::Link }))
+    if ((operation & DragOperationCopy) && (operation & DragOperationLink))
         return "copyLink";
     if (isGenericMove)
         return "move";
-    if (operationMask.contains(DragOperation::Copy))
+    if (operation & DragOperationCopy)
         return "copy";
-    if (operationMask.contains(DragOperation::Link))
+    if (operation & DragOperationLink)
         return "link";
     return "none";
 }
 
-OptionSet<DragOperation> DataTransfer::sourceOperationMask() const
+DragOperation DataTransfer::sourceOperation() const
 {
-    auto operationMask = dragOpFromIEOp(m_effectAllowed);
-    ASSERT(operationMask != DragOperation::Private);
-    return operationMask;
+    DragOperation operation = dragOpFromIEOp(m_effectAllowed);
+    ASSERT(operation != DragOperationPrivate);
+    return operation;
 }
 
-OptionSet<DragOperation> DataTransfer::destinationOperationMask() const
+DragOperation DataTransfer::destinationOperation() const
 {
-    auto operationMask = dragOpFromIEOp(m_dropEffect);
-    ASSERT(operationMask == DragOperation::Copy || operationMask.isEmpty() || operationMask == DragOperation::Link || operationMask == OptionSet<DragOperation>({ DragOperation::Generic, DragOperation::Move }) || operationMask.containsAll({ DragOperation::Copy, DragOperation::Link, DragOperation::Generic, DragOperation::Private, DragOperation::Move, DragOperation::Delete }));
-    return operationMask;
+    DragOperation operation = dragOpFromIEOp(m_dropEffect);
+    ASSERT(operation == DragOperationCopy || operation == DragOperationNone || operation == DragOperationLink || operation == (DragOperation)(DragOperationGeneric | DragOperationMove) || operation == DragOperationEvery);
+    return operation;
 }
 
-void DataTransfer::setSourceOperationMask(OptionSet<DragOperation> operationMask)
+void DataTransfer::setSourceOperation(DragOperation operation)
 {
-    ASSERT_ARG(operationMask, operationMask != DragOperation::Private);
-    m_effectAllowed = IEOpFromDragOp(operationMask);
+    ASSERT_ARG(operation, operation != DragOperationPrivate);
+    m_effectAllowed = IEOpFromDragOp(operation);
 }
 
-void DataTransfer::setDestinationOperationMask(OptionSet<DragOperation> operationMask)
+void DataTransfer::setDestinationOperation(DragOperation operation)
 {
-    ASSERT_ARG(operationMask, operationMask == DragOperation::Copy || operationMask.isEmpty() || operationMask == DragOperation::Link || operationMask == DragOperation::Generic || operationMask == DragOperation::Move || operationMask == OptionSet<DragOperation>({ DragOperation::Generic, DragOperation::Move }));
-    m_dropEffect = IEOpFromDragOp(operationMask);
+    ASSERT_ARG(operation, operation == DragOperationCopy || operation == DragOperationNone || operation == DragOperationLink || operation == DragOperationGeneric || operation == DragOperationMove || operation == (DragOperation)(DragOperationGeneric | DragOperationMove));
+    m_dropEffect = IEOpFromDragOp(operation);
 }
 
 String DataTransfer::dropEffect() const
@@ -698,7 +690,7 @@ void DataTransfer::setEffectAllowed(const String& effect)
         return;
 
     // Ignore any attempts to set it to an unknown value.
-    if (dragOpFromIEOp(effect) == DragOperation::Private)
+    if (dragOpFromIEOp(effect) == DragOperationPrivate)
         return;
 
     if (!canWriteData())
@@ -710,6 +702,11 @@ void DataTransfer::setEffectAllowed(const String& effect)
 void DataTransfer::moveDragState(Ref<DataTransfer>&& other)
 {
     RELEASE_ASSERT(is<StaticPasteboard>(other->pasteboard()));
+    // We clear the platform pasteboard here to ensure that the pasteboard doesn't contain any data
+    // that may have been written before starting the drag, and after ending the last drag session.
+    // After pushing the static pasteboard's contents to the platform, the pasteboard should only
+    // contain data that was in the static pasteboard.
+    m_pasteboard->clear();
     other->commitToPasteboard(*m_pasteboard);
 
     m_dropEffect = other->m_dropEffect;

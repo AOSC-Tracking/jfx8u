@@ -1536,7 +1536,7 @@ static JSValueRef waitForPolicyDelegateCallback(JSContextRef context, JSObjectRe
     return JSValueMakeUndefined(context);
 }
 
-static JSValueRef addOriginAccessAllowListEntryCallback(JSContextRef context, JSObjectRef, JSObjectRef thisObject, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception)
+static JSValueRef addOriginAccessWhitelistEntryCallback(JSContextRef context, JSObjectRef, JSObjectRef thisObject, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception)
 {
     if (argumentCount != 4)
         return JSValueMakeUndefined(context);
@@ -1550,11 +1550,11 @@ static JSValueRef addOriginAccessAllowListEntryCallback(JSContextRef context, JS
     bool allowDestinationSubdomains = JSValueToBoolean(context, arguments[3]);
 
     TestRunner* controller = static_cast<TestRunner*>(JSObjectGetPrivate(thisObject));
-    controller->addOriginAccessAllowListEntry(sourceOrigin.get(), destinationProtocol.get(), destinationHost.get(), allowDestinationSubdomains);
+    controller->addOriginAccessWhitelistEntry(sourceOrigin.get(), destinationProtocol.get(), destinationHost.get(), allowDestinationSubdomains);
     return JSValueMakeUndefined(context);
 }
 
-static JSValueRef removeOriginAccessAllowListEntryCallback(JSContextRef context, JSObjectRef, JSObjectRef thisObject, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception)
+static JSValueRef removeOriginAccessWhitelistEntryCallback(JSContextRef context, JSObjectRef, JSObjectRef thisObject, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception)
 {
     if (argumentCount != 4)
         return JSValueMakeUndefined(context);
@@ -1568,7 +1568,7 @@ static JSValueRef removeOriginAccessAllowListEntryCallback(JSContextRef context,
     bool allowDestinationSubdomains = JSValueToBoolean(context, arguments[3]);
 
     TestRunner* controller = static_cast<TestRunner*>(JSObjectGetPrivate(thisObject));
-    controller->removeOriginAccessAllowListEntry(sourceOrigin.get(), destinationProtocol.get(), destinationHost.get(), allowDestinationSubdomains);
+    controller->removeOriginAccessWhitelistEntry(sourceOrigin.get(), destinationProtocol.get(), destinationHost.get(), allowDestinationSubdomains);
     return JSValueMakeUndefined(context);
 }
 
@@ -1776,6 +1776,16 @@ static JSValueRef setSpellCheckerLoggingEnabledCallback(JSContextRef context, JS
     return JSValueMakeUndefined(context);
 }
 
+static JSValueRef setSpellCheckerResultsCallback(JSContextRef context, JSObjectRef function, JSObjectRef thisObject, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception)
+{
+    if (argumentCount < 1)
+        return JSValueMakeUndefined(context);
+
+    auto* runner = static_cast<TestRunner*>(JSObjectGetPrivate(thisObject));
+    runner->setSpellCheckerResults(context, JSValueToObject(context, arguments[0], nullptr));
+    return JSValueMakeUndefined(context);
+}
+
 static JSValueRef setOpenPanelFilesCallback(JSContextRef context, JSObjectRef function, JSObjectRef thisObject, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception)
 {
     if (argumentCount == 1)
@@ -1783,14 +1793,14 @@ static JSValueRef setOpenPanelFilesCallback(JSContextRef context, JSObjectRef fu
     return JSValueMakeUndefined(context);
 }
 
+#if PLATFORM(IOS_FAMILY)
 static JSValueRef SetOpenPanelFilesMediaIconCallback(JSContextRef context, JSObjectRef function, JSObjectRef thisObject, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception)
 {
-#if PLATFORM(IOS_FAMILY)
     if (argumentCount == 1)
         static_cast<TestRunner*>(JSObjectGetPrivate(thisObject))->setOpenPanelFilesMediaIcon(context, arguments[0]);
-#endif
     return JSValueMakeUndefined(context);
 }
+#endif
 
 // Static Values
 
@@ -2199,7 +2209,7 @@ JSStaticFunction* TestRunner::staticFunctions()
         { "queueNonLoadingScript", queueNonLoadingScriptCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
         { "queueReload", queueReloadCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
         { "removeAllVisitedLinks", removeAllVisitedLinksCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
-        { "removeOriginAccessAllowListEntry", removeOriginAccessAllowListEntryCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
+        { "removeOriginAccessWhitelistEntry", removeOriginAccessWhitelistEntryCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
         { "repaintSweepHorizontally", repaintSweepHorizontallyCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
         { "resetPageVisibility", resetPageVisibilityCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
         { "setAcceptsEditing", setAcceptsEditingCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
@@ -2268,7 +2278,7 @@ JSStaticFunction* TestRunner::staticFunctions()
         { "waitForPolicyDelegate", waitForPolicyDelegateCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
         { "waitUntilDone", waitUntilDoneCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
         { "windowCount", windowCountCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
-        { "addOriginAccessAllowListEntry", addOriginAccessAllowListEntryCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
+        { "addOriginAccessWhitelistEntry", addOriginAccessWhitelistEntryCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
         { "setScrollbarPolicy", setScrollbarPolicyCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
         { "authenticateSession", authenticateSessionCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
         { "setShouldPaintBrokenImage", setShouldPaintBrokenImageCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
@@ -2293,8 +2303,11 @@ JSStaticFunction* TestRunner::staticFunctions()
         { "runUIScript", runUIScriptCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
         { "imageCountInGeneralPasteboard", imageCountInGeneralPasteboardCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
         { "setSpellCheckerLoggingEnabled", setSpellCheckerLoggingEnabledCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
+        { "setSpellCheckerResults", setSpellCheckerResultsCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
         { "setOpenPanelFiles", setOpenPanelFilesCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
+#if PLATFORM(IOS_FAMILY)
         { "setOpenPanelFilesMediaIcon", SetOpenPanelFilesMediaIconCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
+#endif
         { "forceImmediateCompletion", forceImmediateCompletionCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
         { 0, 0, 0 }
     };
@@ -2471,7 +2484,7 @@ void TestRunner::runUIScript(JSContextRef context, JSStringRef script, JSValueRe
     if (!m_UIScriptContext)
         m_UIScriptContext = makeUniqueWithoutFastMallocCheck<WTR::UIScriptContext>(*this);
 
-    String scriptString(reinterpret_cast<const UChar*>(JSStringGetCharactersPtr(script)), JSStringGetLength(script));
+    String scriptString(JSStringGetCharactersPtr(script), JSStringGetLength(script));
     m_UIScriptContext->runUIScript(scriptString, callbackID);
 }
 

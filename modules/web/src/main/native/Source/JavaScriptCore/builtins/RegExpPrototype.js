@@ -191,14 +191,14 @@ function replace(strArg, replace)
         var result = "";
         var lastStart = 0;
 
-        for (var start = 0; start = @stringIndexOfInternal.@call(replacement, "$", lastStart), start !== -1; lastStart = start) {
+        for (var start = 0; start = replacement.indexOf("$", lastStart), start !== -1; lastStart = start) {
             if (start - lastStart > 0)
-                result = result + @stringSubstringInternal.@call(replacement, lastStart, start);
+                result = result + replacement.substring(lastStart, start);
             start++;
-            if (start >= replacementLength)
+            var ch = replacement.charAt(start);
+            if (ch === "")
                 result = result + "$";
             else {
-                var ch = replacement[start];
                 switch (ch)
                 {
                 case "$":
@@ -211,20 +211,20 @@ function replace(strArg, replace)
                     break;
                 case "`":
                     if (position > 0)
-                        result = result + @stringSubstringInternal.@call(str, 0, position);
+                        result = result + str.substring(0, position);
                     start++;
                     break;
                 case "'":
                     if (tailPos < stringLength)
-                        result = result + @stringSubstringInternal.@call(str, tailPos);
+                        result = result + str.substring(tailPos);
                     start++;
                     break;
                 case "<":
                     if (namedCaptures !== @undefined) {
                         var groupNameStartIndex = start + 1;
-                        var groupNameEndIndex = @stringIndexOfInternal.@call(replacement, ">", groupNameStartIndex);
+                        var groupNameEndIndex = replacement.indexOf(">", groupNameStartIndex);
                         if (groupNameEndIndex !== -1) {
-                            var groupName = @stringSubstringInternal.@call(replacement, groupNameStartIndex, groupNameEndIndex);
+                            var groupName = replacement.substring(groupNameStartIndex, groupNameEndIndex);
                             var capture = namedCaptures[groupName];
                             if (capture !== @undefined)
                                 result = result + @toString(capture);
@@ -238,19 +238,19 @@ function replace(strArg, replace)
                     start++;
                     break;
                 default:
-                    var chCode = ch.@charCodeAt(0);
+                    var chCode = ch.charCodeAt(0);
                     if (chCode >= 0x30 && chCode <= 0x39) {
                         var originalStart = start - 1;
                         start++;
 
                         var n = chCode - 0x30;
                         if (n > m) {
-                            result = result + @stringSubstringInternal.@call(replacement, originalStart, start);
+                            result = result + replacement.substring(originalStart, start);
                             break;
                         }
 
                         if (start < replacementLength) {
-                            var nextChCode = replacement.@charCodeAt(start);
+                            var nextChCode = replacement.charCodeAt(start);
                             if (nextChCode >= 0x30 && nextChCode <= 0x39) {
                                 var nn = 10 * n + nextChCode - 0x30;
                                 if (nn <= m) {
@@ -261,7 +261,7 @@ function replace(strArg, replace)
                         }
 
                         if (n == 0) {
-                            result = result + @stringSubstringInternal.@call(replacement, originalStart, start);
+                            result = result + replacement.substring(originalStart, start);
                             break;
                         }
 
@@ -275,7 +275,7 @@ function replace(strArg, replace)
             }
         }
 
-        return result + @stringSubstringInternal.@call(replacement, lastStart);
+        return result + replacement.substring(lastStart);
     }
 
     if (!@isObject(this))
@@ -313,16 +313,15 @@ function replace(strArg, replace)
             else {
                 var matchStr = @toString(result[0]);
 
-                if (!matchStr.length) {
-                    var thisIndex = @toLength(regexp.lastIndex);
-                    regexp.lastIndex = @advanceStringIndex(str, thisIndex, unicode);
-                }
+                if (!matchStr.length)
+                    regexp.lastIndex = @advanceStringIndex(str, regexp.lastIndex, unicode);
             }
         }
     }
 
     var accumulatedResult = "";
     var nextSourcePosition = 0;
+    var lastPosition = 0;
 
     for (var i = 0, resultListLength = resultList.length; i < resultListLength; ++i) {
         var result = resultList[i];
@@ -331,7 +330,7 @@ function replace(strArg, replace)
             nCaptures = 0;
         var matched = @toString(result[0]);
         var matchLength = matched.length;
-        var position = @toInteger(result.index);
+        var position = result.index;
         position = (position > stringLength) ? stringLength : position;
         position = (position < 0) ? 0 : position;
 
@@ -347,10 +346,7 @@ function replace(strArg, replace)
         var namedCaptures = result.groups;
 
         if (functionalReplace) {
-            var replacerArgs = [ matched ];
-            for (var j = 0; j < captures.length; j++)
-                replacerArgs.@push(captures[j]);
-
+            var replacerArgs = [ matched ].concat(captures);
             replacerArgs.@push(position);
             replacerArgs.@push(str);
 
@@ -366,16 +362,17 @@ function replace(strArg, replace)
             replacement = getSubstitution(matched, str, position, captures, namedCaptures, replace);
         }
 
-        if (position >= nextSourcePosition) {
-            accumulatedResult = accumulatedResult + @stringSubstringInternal.@call(str, nextSourcePosition, position) + replacement;
+        if (position >= nextSourcePosition && position >= lastPosition) {
+            accumulatedResult = accumulatedResult + str.substring(nextSourcePosition, position) + replacement;
             nextSourcePosition = position + matchLength;
+            lastPosition = position;
         }
     }
 
     if (nextSourcePosition >= stringLength)
         return  accumulatedResult;
 
-    return accumulatedResult + @stringSubstringInternal.@call(str, nextSourcePosition);
+    return accumulatedResult + str.substring(nextSourcePosition);
 }
 
 // 21.2.5.9 RegExp.prototype[@@search] (string)
@@ -403,9 +400,10 @@ function search(strArg)
     // 4. Let previousLastIndex be ? Get(rx, "lastIndex").
     var previousLastIndex = regexp.lastIndex;
 
-    // 5. If SameValue(previousLastIndex, 0) is false, then
+    // 5.If SameValue(previousLastIndex, 0) is false, then
     // 5.a. Perform ? Set(rx, "lastIndex", 0, true).
-    if (!@sameValue(previousLastIndex, 0))
+    // FIXME: Add SameValue support. https://bugs.webkit.org/show_bug.cgi?id=173226
+    if (previousLastIndex !== 0)
         regexp.lastIndex = 0;
 
     // 6. Let result be ? RegExpExec(rx, S).
@@ -414,7 +412,8 @@ function search(strArg)
     // 7. Let currentLastIndex be ? Get(rx, "lastIndex").
     // 8. If SameValue(currentLastIndex, previousLastIndex) is false, then
     // 8.a. Perform ? Set(rx, "lastIndex", previousLastIndex, true).
-    if (!@sameValue(regexp.lastIndex, previousLastIndex))
+    // FIXME: Add SameValue support. https://bugs.webkit.org/show_bug.cgi?id=173226
+    if (regexp.lastIndex !== previousLastIndex)
         regexp.lastIndex = previousLastIndex;
 
     // 9. If result is null, return -1.
@@ -460,12 +459,9 @@ function hasObservableSideEffectsForRegExpSplit(regexp)
     if (regexpUnicode !== @regExpProtoUnicodeGetter)
         return true;
     
-    // These are accessed by the RegExp species constructor.
+    // This is accessed by the RegExp species constructor.
     var regexpSource = @tryGetById(regexp, "source");
     if (regexpSource !== @regExpProtoSourceGetter)
-        return true;
-    var regexpSymbolMatch = @tryGetByIdWithWellKnownSymbol(regexp, "match");
-    if (regexpSymbolMatch !== @regExpPrototypeSymbolMatch)
         return true;
 
     return typeof regexp.lastIndex !== "number";
@@ -529,7 +525,7 @@ function split(string, limit)
         // a. Let z be ? RegExpExec(splitter, S).
         var z = @regExpExec(splitter, str);
         // b. If z is not null, return A.
-        if (z !== null)
+        if (z != null)
             return result;
         // c. Perform ! CreateDataProperty(A, "0", S).
         @putByValDirect(result, 0, str);
@@ -563,7 +559,7 @@ function split(string, limit)
             // iv. Else e != p,
             else {
                 // 1. Let T be a String value equal to the substring of S consisting of the elements at indices p (inclusive) through q (exclusive).
-                var subStr = @stringSubstringInternal.@call(str, position, matchPosition);
+                var subStr = @stringSubstrInternal.@call(str, position, matchPosition - position);
                 // 2. Perform ! CreateDataProperty(A, ! ToString(lengthA), T).
                 // 3. Let lengthA be lengthA + 1.
                 @putByValDirect(result, result.length, subStr);
@@ -598,7 +594,7 @@ function split(string, limit)
         }
     }
     // 20. Let T be a String value equal to the substring of S consisting of the elements at indices p (inclusive) through size (exclusive).
-    var remainingStr = @stringSubstringInternal.@call(str, position, size);
+    var remainingStr = @stringSubstrInternal.@call(str, position, size);
     // 21. Perform ! CreateDataProperty(A, ! ToString(lengthA), T).
     @putByValDirect(result, result.length, remainingStr);
     // 22. Return A.

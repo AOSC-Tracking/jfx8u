@@ -37,7 +37,7 @@ ServiceWorkerRegistrationKey::ServiceWorkerRegistrationKey(SecurityOriginData&& 
     : m_topOrigin(WTFMove(topOrigin))
     , m_scope(WTFMove(scope))
 {
-    ASSERT(!m_scope.hasFragmentIdentifier());
+    ASSERT(!m_scope.hasFragment());
 }
 
 ServiceWorkerRegistrationKey ServiceWorkerRegistrationKey::emptyKey()
@@ -49,7 +49,7 @@ unsigned ServiceWorkerRegistrationKey::hash() const
 {
     unsigned hashes[2];
     hashes[0] = SecurityOriginDataHash::hash(m_topOrigin);
-    hashes[1] = StringHash::hash(m_scope.string());
+    hashes[1] = StringHash::hash(m_scope);
 
     return StringHasher::hashMemory(hashes, sizeof(hashes));
 }
@@ -66,7 +66,7 @@ ServiceWorkerRegistrationKey ServiceWorkerRegistrationKey::isolatedCopy() const
 
 bool ServiceWorkerRegistrationKey::isMatching(const SecurityOriginData& topOrigin, const URL& clientURL) const
 {
-    return originIsMatching(topOrigin, clientURL) && clientURL.string().startsWith(m_scope.string());
+    return originIsMatching(topOrigin, clientURL) && clientURL.string().startsWith(m_scope);
 }
 
 bool ServiceWorkerRegistrationKey::originIsMatching(const SecurityOriginData& topOrigin, const URL& clientURL) const

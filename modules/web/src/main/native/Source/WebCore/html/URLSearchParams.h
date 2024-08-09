@@ -24,14 +24,12 @@
 
 #pragma once
 
-#include "ExceptionOr.h"
+#include "DOMURL.h"
 #include <wtf/Variant.h>
 #include <wtf/Vector.h>
 #include <wtf/text/WTFString.h>
 
 namespace WebCore {
-
-class DOMURL;
 
 class URLSearchParams : public RefCounted<URLSearchParams> {
 public:

@@ -26,7 +26,6 @@
 #pragma once
 
 #include "FrameLoaderTypes.h"
-#include "ReferrerPolicy.h"
 #include "ResourceRequest.h"
 #include "SubstituteData.h"
 #include <wtf/Forward.h>
@@ -39,8 +38,8 @@ class SecurityOrigin;
 
 class FrameLoadRequest {
 public:
-    WEBCORE_EXPORT FrameLoadRequest(Document&, SecurityOrigin&, ResourceRequest&&, const String& frameName, InitiatedByMainFrame, const AtomString& downloadAttribute = { }, const SystemPreviewInfo& = { });
-    WEBCORE_EXPORT FrameLoadRequest(Frame&, const ResourceRequest&, const SubstituteData& = SubstituteData());
+    WEBCORE_EXPORT FrameLoadRequest(Document&, SecurityOrigin&, const ResourceRequest&, const String& frameName, LockHistory, LockBackForwardList, ShouldSendReferrer, AllowNavigationToInvalidURL, NewFrameOpenerPolicy, ShouldOpenExternalURLsPolicy, InitiatedByMainFrame, ShouldReplaceDocumentIfJavaScriptURL = ReplaceDocumentIfJavaScriptURL, const AtomString& downloadAttribute = { }, const SystemPreviewInfo& = { });
+    WEBCORE_EXPORT FrameLoadRequest(Frame&, const ResourceRequest&, ShouldOpenExternalURLsPolicy, const SubstituteData& = SubstituteData());
 
     WEBCORE_EXPORT ~FrameLoadRequest();
 
@@ -72,24 +71,18 @@ public:
     void setLockHistory(LockHistory value) { m_lockHistory = value; }
 
     LockBackForwardList lockBackForwardList() const { return m_lockBackForwardList; }
-    void setLockBackForwardList(LockBackForwardList value) { m_lockBackForwardList = value; }
+    void setlockBackForwardList(LockBackForwardList value) { m_lockBackForwardList = value; }
 
     const String& clientRedirectSourceForHistory() const { return m_clientRedirectSourceForHistory; }
     void setClientRedirectSourceForHistory(const String& clientRedirectSourceForHistory) { m_clientRedirectSourceForHistory = clientRedirectSourceForHistory; }
 
-    ReferrerPolicy referrerPolicy() const { return m_referrerPolicy; }
-    void setReferrerPolicy(const ReferrerPolicy& referrerPolicy) { m_referrerPolicy = referrerPolicy; }
-
+    ShouldSendReferrer shouldSendReferrer() const { return m_shouldSendReferrer; }
     AllowNavigationToInvalidURL allowNavigationToInvalidURL() const { return m_allowNavigationToInvalidURL; }
-    void disableNavigationToInvalidURL() { m_allowNavigationToInvalidURL = AllowNavigationToInvalidURL::No; }
-
     NewFrameOpenerPolicy newFrameOpenerPolicy() const { return m_newFrameOpenerPolicy; }
-    void setNewFrameOpenerPolicy(NewFrameOpenerPolicy newFrameOpenerPolicy) { m_newFrameOpenerPolicy = newFrameOpenerPolicy; }
 
     // The shouldReplaceDocumentIfJavaScriptURL parameter will go away when the FIXME to eliminate the
     // corresponding parameter from ScriptController::executeIfJavaScriptURL() is addressed.
     ShouldReplaceDocumentIfJavaScriptURL shouldReplaceDocumentIfJavaScriptURL() const { return m_shouldReplaceDocumentIfJavaScriptURL; }
-    void disableShouldReplaceDocumentIfJavaScriptURL() { m_shouldReplaceDocumentIfJavaScriptURL = DoNotReplaceDocumentIfJavaScriptURL; }
 
     void setShouldOpenExternalURLsPolicy(ShouldOpenExternalURLsPolicy policy) { m_shouldOpenExternalURLsPolicy = policy; }
     ShouldOpenExternalURLsPolicy shouldOpenExternalURLsPolicy() const { return m_shouldOpenExternalURLsPolicy; }
@@ -114,12 +107,12 @@ private:
 
     bool m_shouldCheckNewWindowPolicy { false };
     bool m_shouldTreatAsContinuingLoad { false };
-    LockHistory m_lockHistory { LockHistory::No };
-    LockBackForwardList m_lockBackForwardList { LockBackForwardList::No };
-    ReferrerPolicy m_referrerPolicy { ReferrerPolicy::EmptyString };
-    AllowNavigationToInvalidURL m_allowNavigationToInvalidURL { AllowNavigationToInvalidURL::Yes };
-    NewFrameOpenerPolicy m_newFrameOpenerPolicy { NewFrameOpenerPolicy::Allow };
-    ShouldReplaceDocumentIfJavaScriptURL m_shouldReplaceDocumentIfJavaScriptURL { ReplaceDocumentIfJavaScriptURL };
+    LockHistory m_lockHistory;
+    LockBackForwardList m_lockBackForwardList;
+    ShouldSendReferrer m_shouldSendReferrer;
+    AllowNavigationToInvalidURL m_allowNavigationToInvalidURL;
+    NewFrameOpenerPolicy m_newFrameOpenerPolicy;
+    ShouldReplaceDocumentIfJavaScriptURL m_shouldReplaceDocumentIfJavaScriptURL;
     ShouldOpenExternalURLsPolicy m_shouldOpenExternalURLsPolicy { ShouldOpenExternalURLsPolicy::ShouldNotAllow };
     AtomString m_downloadAttribute;
     InitiatedByMainFrame m_initiatedByMainFrame { InitiatedByMainFrame::Unknown };

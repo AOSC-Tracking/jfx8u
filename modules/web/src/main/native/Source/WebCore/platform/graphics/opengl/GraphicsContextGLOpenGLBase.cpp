@@ -189,11 +189,7 @@ bool GraphicsContextGLOpenGL::reshapeFBOs(const IntSize& size)
     ::glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, m_texture);
     setRenderbufferStorageFromDrawable(m_currentWidth, m_currentHeight);
 #else
-    if (!allocateIOSurfaceBackingStore(size)) {
-        RELEASE_LOG(WebGL, "Fatal: Unable to allocate backing store of size %d x %d", width, height);
-        forceContextLost();
-        return true;
-    }
+    allocateIOSurfaceBackingStore(IntSize(width, height));
     updateFramebufferTextureBackingStoreFromLayer();
     ::glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_RECTANGLE_ARB, m_texture, 0);
 #endif // !USE(OPENGL_ES))
@@ -217,13 +213,12 @@ bool GraphicsContextGLOpenGL::reshapeFBOs(const IntSize& size)
     attachDepthAndStencilBufferIfNeeded(internalDepthStencilFormat, width, height);
 
     bool mustRestoreFBO = true;
-    ASSERT(m_state.boundReadFBO == m_state.boundDrawFBO);
     if (attrs.antialias) {
         ::glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, m_multisampleFBO);
-        if (m_state.boundDrawFBO == m_multisampleFBO)
+        if (m_state.boundFBO == m_multisampleFBO)
             mustRestoreFBO = false;
     } else {
-        if (m_state.boundDrawFBO == m_fbo)
+        if (m_state.boundFBO == m_fbo)
             mustRestoreFBO = false;
     }
 
@@ -501,18 +496,17 @@ void GraphicsContextGLOpenGL::readPixels(GCGLint x, GCGLint y, GCGLsizei width, 
     // all previous rendering calls should be done before reading pixels.
     makeContextCurrent();
     ::glFlush();
-    ASSERT(m_state.boundReadFBO == m_state.boundDrawFBO);
-    if (attrs.antialias && m_state.boundDrawFBO == m_multisampleFBO) {
+    if (attrs.antialias && m_state.boundFBO == m_multisampleFBO) {
         resolveMultisamplingIfNecessary(IntRect(x, y, width, height));
         ::glBindFramebufferEXT(GraphicsContextGL::FRAMEBUFFER, m_fbo);
         ::glFlush();
     }
     ::glReadPixels(x, y, width, height, format, type, data);
-    if (attrs.antialias && m_state.boundDrawFBO == m_multisampleFBO)
+    if (attrs.antialias && m_state.boundFBO == m_multisampleFBO)
         ::glBindFramebufferEXT(GraphicsContextGL::FRAMEBUFFER, m_multisampleFBO);
 
 #if PLATFORM(MAC)
-    if (!attrs.alpha && (format == GraphicsContextGL::RGBA || format == GraphicsContextGL::BGRA) && (m_state.boundDrawFBO == m_fbo || (attrs.antialias && m_state.boundDrawFBO == m_multisampleFBO)))
+    if (!attrs.alpha && (format == GraphicsContextGL::RGBA || format == GraphicsContextGL::BGRA) && (m_state.boundFBO == m_fbo || (attrs.antialias && m_state.boundFBO == m_multisampleFBO)))
         wipeAlphaChannelFromPixels(width, height, static_cast<unsigned char*>(data));
 #endif
 }

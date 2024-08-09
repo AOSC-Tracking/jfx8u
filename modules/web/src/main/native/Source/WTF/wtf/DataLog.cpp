@@ -31,7 +31,13 @@
 #include <wtf/FilePrintStream.h>
 #include <wtf/LockedPrintStream.h>
 #include <wtf/ProcessID.h>
+#include <wtf/Threading.h>
 #include <mutex>
+#include <thread>
+
+#if OS(UNIX) || OS(DARWIN)
+#include <unistd.h>
+#endif
 
 #define DATA_LOG_TO_FILE 0
 
@@ -127,7 +133,9 @@ void setDataFile(const char* path)
             if (pathCharactersAvailable) {
                 int pidTextLength = snprintf(nextDest, pathCharactersAvailable, "%d", getCurrentProcessID());
 
-                if (pidTextLength >= 0 && static_cast<size_t>(pidTextLength) < pathCharactersAvailable) {
+                if (pidTextLength < 0 || static_cast<size_t>(pidTextLength) >= pathCharactersAvailable)
+                    pathCharactersAvailable = 0;
+                else {
                     pathCharactersAvailable -= static_cast<size_t>(pidTextLength);
                     nextDest += pidTextLength;
                     strncpy(nextDest, pidFormat + 4, pathCharactersAvailable);
@@ -150,17 +158,12 @@ void setDataFile(const char* path)
         file = new (s_fileData) FilePrintStream(stderr, FilePrintStream::Borrow);
     }
 
-    setvbuf(file->file(), nullptr, _IONBF, 0); // Prefer unbuffered output, so that we get a full log upon crash or deadlock.
+    setvbuf(file->file(), 0, _IONBF, 0); // Prefer unbuffered output, so that we get a full log upon crash or deadlock.
 
     if (s_file)
         s_file->flush();
 
     s_file = new (s_lockedFileData) LockedPrintStream(std::unique_ptr<FilePrintStream>(file));
-}
-
-void setDataFile(std::unique_ptr<PrintStream>&& file)
-{
-    s_file = file.release();
 }
 
 PrintStream& dataFile()

@@ -53,8 +53,8 @@ public:
     ~UniqueIDBDatabaseConnection();
 
     const IDBResourceIdentifier& openRequestIdentifier() { return m_openRequestIdentifier; }
-    UniqueIDBDatabase* database() { return m_database.get(); }
-    IDBServer* server() { return &m_server; }
+    UniqueIDBDatabase* database() { return m_database; }
+    IDBServer* server() { return &m_database->server(); }
     IDBConnectionToClient& connectionToClient() { return m_connectionToClient; }
 
     void connectionPendingCloseFromClient();
@@ -89,8 +89,7 @@ public:
 private:
     UniqueIDBDatabaseConnection(UniqueIDBDatabase&, ServerOpenDBRequest&);
 
-    WeakPtr<UniqueIDBDatabase> m_database;
-    IDBServer& m_server;
+    UniqueIDBDatabase* m_database;
     Ref<IDBConnectionToClient> m_connectionToClient;
     IDBResourceIdentifier m_openRequestIdentifier;
 

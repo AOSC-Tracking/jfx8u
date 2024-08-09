@@ -39,8 +39,10 @@
 #include "B3ProcedureInlines.h"
 #include "B3SlotBaseValue.h"
 #include "B3StackSlot.h"
+#include "B3UpsilonValue.h"
 #include "B3ValueInlines.h"
 #include "B3ValueKeyInlines.h"
+#include "B3VariableValue.h"
 #include "B3WasmBoundsCheckValue.h"
 #include <wtf/CommaPrinter.h>
 #include <wtf/ListDump.h>
@@ -377,57 +379,57 @@ Value* Value::sqrtConstant(Procedure&) const
 
 TriState Value::equalConstant(const Value*) const
 {
-    return TriState::Indeterminate;
+    return MixedTriState;
 }
 
 TriState Value::notEqualConstant(const Value*) const
 {
-    return TriState::Indeterminate;
+    return MixedTriState;
 }
 
 TriState Value::lessThanConstant(const Value*) const
 {
-    return TriState::Indeterminate;
+    return MixedTriState;
 }
 
 TriState Value::greaterThanConstant(const Value*) const
 {
-    return TriState::Indeterminate;
+    return MixedTriState;
 }
 
 TriState Value::lessEqualConstant(const Value*) const
 {
-    return TriState::Indeterminate;
+    return MixedTriState;
 }
 
 TriState Value::greaterEqualConstant(const Value*) const
 {
-    return TriState::Indeterminate;
+    return MixedTriState;
 }
 
 TriState Value::aboveConstant(const Value*) const
 {
-    return TriState::Indeterminate;
+    return MixedTriState;
 }
 
 TriState Value::belowConstant(const Value*) const
 {
-    return TriState::Indeterminate;
+    return MixedTriState;
 }
 
 TriState Value::aboveEqualConstant(const Value*) const
 {
-    return TriState::Indeterminate;
+    return MixedTriState;
 }
 
 TriState Value::belowEqualConstant(const Value*) const
 {
-    return TriState::Indeterminate;
+    return MixedTriState;
 }
 
 TriState Value::equalOrUnorderedConstant(const Value*) const
 {
-    return TriState::Indeterminate;
+    return MixedTriState;
 }
 
 Value* Value::invertedCompare(Procedure& proc) const
@@ -518,7 +520,7 @@ TriState Value::asTriState() const
     case ConstFloat:
         return triState(asFloat() != 0.);
     default:
-        return TriState::Indeterminate;
+        return MixedTriState;
     }
 }
 
@@ -533,7 +535,6 @@ Effects Value::effects() const
     case Const64:
     case ConstDouble:
     case ConstFloat:
-    case BottomTuple:
     case SlotBase:
     case ArgumentReg:
     case FramePointer:
@@ -749,8 +750,6 @@ ValueKey Value::key() const
         return ValueKey(ConstDouble, type(), asDouble());
     case ConstFloat:
         return ValueKey(ConstFloat, type(), asFloat());
-    case BottomTuple:
-        return ValueKey(BottomTuple, type());
     case ArgumentReg:
         return ValueKey(
             ArgumentReg, type(),

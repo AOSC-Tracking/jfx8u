@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2011 Google Inc. All rights reserved.
- * Copyright (C) 2011-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2011-2017 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -32,7 +32,7 @@
 #include "config.h"
 #include "VideoTrack.h"
 
-#if ENABLE(VIDEO)
+#if ENABLE(VIDEO_TRACK)
 
 #include "HTMLMediaElement.h"
 #include "VideoTrackList.h"
@@ -46,37 +46,37 @@ namespace WebCore {
 
 const AtomString& VideoTrack::alternativeKeyword()
 {
-    static MainThreadNeverDestroyed<const AtomString> alternative("alternative", AtomString::ConstructFromLiteral);
+    static NeverDestroyed<const AtomString> alternative("alternative", AtomString::ConstructFromLiteral);
     return alternative;
 }
 
 const AtomString& VideoTrack::captionsKeyword()
 {
-    static MainThreadNeverDestroyed<const AtomString> captions("captions", AtomString::ConstructFromLiteral);
+    static NeverDestroyed<const AtomString> captions("captions", AtomString::ConstructFromLiteral);
     return captions;
 }
 
 const AtomString& VideoTrack::mainKeyword()
 {
-    static MainThreadNeverDestroyed<const AtomString> captions("main", AtomString::ConstructFromLiteral);
+    static NeverDestroyed<const AtomString> captions("main", AtomString::ConstructFromLiteral);
     return captions;
 }
 
 const AtomString& VideoTrack::signKeyword()
 {
-    static MainThreadNeverDestroyed<const AtomString> sign("sign", AtomString::ConstructFromLiteral);
+    static NeverDestroyed<const AtomString> sign("sign", AtomString::ConstructFromLiteral);
     return sign;
 }
 
 const AtomString& VideoTrack::subtitlesKeyword()
 {
-    static MainThreadNeverDestroyed<const AtomString> subtitles("subtitles", AtomString::ConstructFromLiteral);
+    static NeverDestroyed<const AtomString> subtitles("subtitles", AtomString::ConstructFromLiteral);
     return subtitles;
 }
 
 const AtomString& VideoTrack::commentaryKeyword()
 {
-    static MainThreadNeverDestroyed<const AtomString> commentary("commentary", AtomString::ConstructFromLiteral);
+    static NeverDestroyed<const AtomString> commentary("commentary", AtomString::ConstructFromLiteral);
     return commentary;
 }
 
@@ -86,6 +86,9 @@ VideoTrack::VideoTrack(VideoTrackClient& client, VideoTrackPrivate& trackPrivate
     , m_private(trackPrivate)
     , m_selected(trackPrivate.selected())
 {
+#if !RELEASE_LOG_DISABLED
+    m_private->setLogger(logger(), logIdentifier());
+#endif
     m_private->setClient(this);
     updateKindFromPrivate();
 }
@@ -244,15 +247,10 @@ void VideoTrack::updateKindFromPrivate()
 void VideoTrack::setMediaElement(WeakPtr<HTMLMediaElement> element)
 {
     TrackBase::setMediaElement(element);
-}
-
 #if !RELEASE_LOG_DISABLED
-void VideoTrack::setLogger(const Logger& logger, const void* logIdentifier)
-{
-    TrackBase::setLogger(logger, logIdentifier);
-    m_private->setLogger(logger, this->logIdentifier());
-}
+    m_private->setLogger(logger(), logIdentifier());
 #endif
+}
 
 } // namespace WebCore
 

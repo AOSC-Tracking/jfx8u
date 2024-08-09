@@ -62,29 +62,30 @@ namespace WebCore {
 
 using namespace HTMLNames;
 
-FrameLoader::SubframeLoader::SubframeLoader(Frame& frame)
-    : m_frame(frame)
+SubframeLoader::SubframeLoader(Frame& frame)
+    : m_containsPlugins(false)
+    , m_frame(frame)
 {
 }
 
-void FrameLoader::SubframeLoader::clear()
+void SubframeLoader::clear()
 {
     m_containsPlugins = false;
 }
 
-bool FrameLoader::SubframeLoader::requestFrame(HTMLFrameOwnerElement& ownerElement, const String& urlString, const AtomString& frameName, LockHistory lockHistory, LockBackForwardList lockBackForwardList)
+bool SubframeLoader::requestFrame(HTMLFrameOwnerElement& ownerElement, const String& urlString, const AtomString& frameName, LockHistory lockHistory, LockBackForwardList lockBackForwardList)
 {
     // Support for <frame src="javascript:string">
     URL scriptURL;
     URL url;
     if (WTF::protocolIsJavaScript(urlString)) {
         scriptURL = completeURL(urlString); // completeURL() encodes the URL.
-        url = aboutBlankURL();
+        url = WTF::blankURL();
     } else
         url = completeURL(urlString);
 
     if (shouldConvertInvalidURLsToBlank() && !url.isValid())
-        url = aboutBlankURL();
+        url = WTF::blankURL();
 
     // If we will schedule a JavaScript URL load, we need to delay the firing of the load event at least until we've run the JavaScript in the URL.
     CompletionHandlerCallingScope stopDelayingLoadEvent;
@@ -103,7 +104,7 @@ bool FrameLoader::SubframeLoader::requestFrame(HTMLFrameOwnerElement& ownerEleme
         // FIXME: Some sites rely on the javascript:'' loading synchronously, which is why we have this special case.
         // Blink has the same workaround (https://bugs.chromium.org/p/chromium/issues/detail?id=923585).
         if (urlString == "javascript:''" || urlString == "javascript:\"\"")
-            frame->script().executeJavaScriptURL(scriptURL);
+            frame->script().executeIfJavaScriptURL(scriptURL);
         else
             frame->navigationScheduler().scheduleLocationChange(ownerElement.document(), ownerElement.document().securityOrigin(), scriptURL, m_frame.loader().outgoingReferrer(), lockHistory, lockBackForwardList, stopDelayingLoadEvent.release());
     }
@@ -111,7 +112,7 @@ bool FrameLoader::SubframeLoader::requestFrame(HTMLFrameOwnerElement& ownerEleme
     return true;
 }
 
-bool FrameLoader::SubframeLoader::resourceWillUsePlugin(const String& url, const String& mimeType)
+bool SubframeLoader::resourceWillUsePlugin(const String& url, const String& mimeType)
 {
     URL completedURL;
     if (!url.isEmpty())
@@ -121,7 +122,7 @@ bool FrameLoader::SubframeLoader::resourceWillUsePlugin(const String& url, const
     return shouldUsePlugin(completedURL, mimeType, false, useFallback);
 }
 
-bool FrameLoader::SubframeLoader::pluginIsLoadable(const URL& url, const String& mimeType)
+bool SubframeLoader::pluginIsLoadable(const URL& url, const String& mimeType)
 {
     auto* document = m_frame.document();
 
@@ -148,12 +149,12 @@ bool FrameLoader::SubframeLoader::pluginIsLoadable(const URL& url, const String&
     return true;
 }
 
-bool FrameLoader::SubframeLoader::requestPlugin(HTMLPlugInImageElement& ownerElement, const URL& url, const String& mimeType, const Vector<String>& paramNames, const Vector<String>& paramValues, bool useFallback)
+bool SubframeLoader::requestPlugin(HTMLPlugInImageElement& ownerElement, const URL& url, const String& mimeType, const Vector<String>& paramNames, const Vector<String>& paramValues, bool useFallback)
 {
     // Application plug-ins are plug-ins implemented by the user agent, for example Qt plug-ins,
     // as opposed to third-party code such as Flash. The user agent decides whether or not they are
     // permitted, rather than WebKit.
-    if (!(m_frame.settings().arePluginsEnabled() || MIMETypeRegistry::isApplicationPluginMIMEType(mimeType)))
+    if ((!allowPlugins() && !MIMETypeRegistry::isApplicationPluginMIMEType(mimeType)))
         return false;
 
     if (!pluginIsLoadable(url, mimeType))
@@ -163,25 +164,30 @@ bool FrameLoader::SubframeLoader::requestPlugin(HTMLPlugInImageElement& ownerEle
     return loadPlugin(ownerElement, url, mimeType, paramNames, paramValues, useFallback);
 }
 
-static String findPluginMIMETypeFromURL(Page& page, const StringView& url)
+static String findPluginMIMETypeFromURL(Page* page, const String& url)
 {
     if (!url)
-        return { };
+        return String();
 
     size_t dotIndex = url.reverseFind('.');
     if (dotIndex == notFound)
-        return { };
+        return String();
 
-    auto extensionFromURL = url.substring(dotIndex + 1);
+    String extension = url.substring(dotIndex + 1);
 
-    for (auto& type : page.pluginData().webVisibleMimeTypes()) {
-        for (auto& extension : type.extensions) {
-            if (equalIgnoringASCIICase(extensionFromURL, extension))
-                return type.type;
+    const PluginData& pluginData = page->pluginData();
+
+    Vector<MimeClassInfo> mimes;
+    Vector<size_t> mimePluginIndices;
+    pluginData.getWebVisibleMimesAndPluginIndices(mimes, mimePluginIndices);
+    for (auto& mime : mimes) {
+        for (auto& mimeExtension : mime.extensions) {
+            if (equalIgnoringASCIICase(extension, mimeExtension))
+                return mime.type;
         }
     }
 
-    return { };
+    return String();
 }
 
 static void logPluginRequest(Page* page, const String& mimeType, const String& url, bool success)
@@ -192,7 +198,7 @@ static void logPluginRequest(Page* page, const String& mimeType, const String& u
     String newMIMEType = mimeType;
     if (!newMIMEType) {
         // Try to figure out the MIME type from the URL extension.
-        newMIMEType = findPluginMIMETypeFromURL(*page, url);
+        newMIMEType = findPluginMIMETypeFromURL(page, url);
         if (!newMIMEType)
             return;
     }
@@ -212,7 +218,7 @@ static void logPluginRequest(Page* page, const String& mimeType, const String& u
     page->sawPlugin(description);
 }
 
-bool FrameLoader::SubframeLoader::requestObject(HTMLPlugInImageElement& ownerElement, const String& url, const AtomString& frameName, const String& mimeType, const Vector<String>& paramNames, const Vector<String>& paramValues)
+bool SubframeLoader::requestObject(HTMLPlugInImageElement& ownerElement, const String& url, const AtomString& frameName, const String& mimeType, const Vector<String>& paramNames, const Vector<String>& paramValues)
 {
     if (url.isEmpty() && mimeType.isEmpty())
         return false;
@@ -230,7 +236,7 @@ bool FrameLoader::SubframeLoader::requestObject(HTMLPlugInImageElement& ownerEle
     bool useFallback;
     if (shouldUsePlugin(completedURL, mimeType, hasFallbackContent, useFallback)) {
         bool success = requestPlugin(ownerElement, completedURL, mimeType, paramNames, paramValues, useFallback);
-        logPluginRequest(document.page(), mimeType, completedURL.string(), success);
+        logPluginRequest(document.page(), mimeType, completedURL, success);
         return success;
     }
 
@@ -240,7 +246,7 @@ bool FrameLoader::SubframeLoader::requestObject(HTMLPlugInImageElement& ownerEle
     return loadOrRedirectSubframe(ownerElement, completedURL, frameName, LockHistory::Yes, LockBackForwardList::Yes);
 }
 
-RefPtr<Widget> FrameLoader::SubframeLoader::createJavaAppletWidget(const IntSize& size, HTMLAppletElement& element, const Vector<String>& paramNames, const Vector<String>& paramValues)
+RefPtr<Widget> SubframeLoader::createJavaAppletWidget(const IntSize& size, HTMLAppletElement& element, const Vector<String>& paramNames, const Vector<String>& paramValues)
 {
     String baseURLString;
     String codeBaseURLString;
@@ -273,7 +279,7 @@ RefPtr<Widget> FrameLoader::SubframeLoader::createJavaAppletWidget(const IntSize
     URL baseURL = completeURL(baseURLString);
 
     RefPtr<Widget> widget;
-    if (m_frame.settings().arePluginsEnabled())
+    if (allowPlugins())
         widget = m_frame.loader().client().createJavaAppletWidget(size, element, baseURL, paramNames, paramValues);
 
     logPluginRequest(m_frame.page(), element.serviceType(), String(), widget);
@@ -290,7 +296,7 @@ RefPtr<Widget> FrameLoader::SubframeLoader::createJavaAppletWidget(const IntSize
     return widget;
 }
 
-Frame* FrameLoader::SubframeLoader::loadOrRedirectSubframe(HTMLFrameOwnerElement& ownerElement, const URL& requestURL, const AtomString& frameName, LockHistory lockHistory, LockBackForwardList lockBackForwardList)
+Frame* SubframeLoader::loadOrRedirectSubframe(HTMLFrameOwnerElement& ownerElement, const URL& requestURL, const AtomString& frameName, LockHistory lockHistory, LockBackForwardList lockBackForwardList)
 {
     auto& initiatingDocument = ownerElement.document();
 
@@ -310,7 +316,7 @@ Frame* FrameLoader::SubframeLoader::loadOrRedirectSubframe(HTMLFrameOwnerElement
     return ownerElement.contentFrame();
 }
 
-RefPtr<Frame> FrameLoader::SubframeLoader::loadSubframe(HTMLFrameOwnerElement& ownerElement, const URL& url, const String& name, const String& referrer)
+RefPtr<Frame> SubframeLoader::loadSubframe(HTMLFrameOwnerElement& ownerElement, const URL& url, const String& name, const String& referrer)
 {
     Ref<Frame> protect(m_frame);
     auto document = makeRef(ownerElement.document());
@@ -326,26 +332,19 @@ RefPtr<Frame> FrameLoader::SubframeLoader::loadSubframe(HTMLFrameOwnerElement& o
     if (!m_frame.page() || m_frame.page()->subframeCount() >= Page::maxNumberOfFrames)
         return nullptr;
 
-    // Prevent initial empty document load from triggering load events.
-    document->incrementLoadEventDelayCount();
-
-    auto frame = m_frame.loader().client().createFrame(name, ownerElement);
-    if (!frame)  {
-        m_frame.loader().checkCallImplicitClose();
-        document->decrementLoadEventDelayCount();
-        return nullptr;
-    }
     ReferrerPolicy policy = ownerElement.referrerPolicy();
     if (policy == ReferrerPolicy::EmptyString)
         policy = document->referrerPolicy();
     String referrerToUse = SecurityPolicy::generateReferrerHeader(policy, url, referrer);
 
-    m_frame.loader().loadURLIntoChildFrame(url, referrerToUse, frame.get());
+    // Prevent initial empty document load from triggering load events.
+    document->incrementLoadEventDelayCount();
+
+    auto frame = m_frame.loader().client().createFrame(url, name, ownerElement, referrerToUse);
 
     document->decrementLoadEventDelayCount();
 
-    // The frame's onload handler may have removed it from the document.
-    if (!frame || !frame->tree().parent()) {
+    if (!frame)  {
         m_frame.loader().checkCallImplicitClose();
         return nullptr;
     }
@@ -383,7 +382,12 @@ RefPtr<Frame> FrameLoader::SubframeLoader::loadSubframe(HTMLFrameOwnerElement& o
     return frame;
 }
 
-bool FrameLoader::SubframeLoader::shouldUsePlugin(const URL& url, const String& mimeType, bool hasFallback, bool& useFallback)
+bool SubframeLoader::allowPlugins()
+{
+    return m_frame.settings().arePluginsEnabled();
+}
+
+bool SubframeLoader::shouldUsePlugin(const URL& url, const String& mimeType, bool hasFallback, bool& useFallback)
 {
     if (m_frame.loader().client().shouldAlwaysUsePluginDocument(mimeType)) {
         useFallback = false;
@@ -398,7 +402,7 @@ bool FrameLoader::SubframeLoader::shouldUsePlugin(const URL& url, const String& 
     return objectType == ObjectContentType::None || objectType == ObjectContentType::PlugIn;
 }
 
-bool FrameLoader::SubframeLoader::loadPlugin(HTMLPlugInImageElement& pluginElement, const URL& url, const String& mimeType, const Vector<String>& paramNames, const Vector<String>& paramValues, bool useFallback)
+bool SubframeLoader::loadPlugin(HTMLPlugInImageElement& pluginElement, const URL& url, const String& mimeType, const Vector<String>& paramNames, const Vector<String>& paramValues, bool useFallback)
 {
     if (useFallback)
         return false;
@@ -441,13 +445,13 @@ bool FrameLoader::SubframeLoader::loadPlugin(HTMLPlugInImageElement& pluginEleme
     return true;
 }
 
-URL FrameLoader::SubframeLoader::completeURL(const String& url) const
+URL SubframeLoader::completeURL(const String& url) const
 {
     ASSERT(m_frame.document());
     return m_frame.document()->completeURL(url);
 }
 
-bool FrameLoader::SubframeLoader::shouldConvertInvalidURLsToBlank() const
+bool SubframeLoader::shouldConvertInvalidURLsToBlank() const
 {
     return m_frame.settings().shouldConvertInvalidURLsToBlank();
 }

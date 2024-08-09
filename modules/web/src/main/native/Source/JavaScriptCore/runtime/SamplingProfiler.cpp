@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2016-2019 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -28,26 +28,35 @@
 
 #if ENABLE(SAMPLING_PROFILER)
 
+#include "CallFrame.h"
+#include "CatchScope.h"
 #include "CodeBlock.h"
 #include "CodeBlockSet.h"
 #include "HeapIterationScope.h"
 #include "HeapUtil.h"
 #include "InlineCallFrame.h"
+#include "Interpreter.h"
 #include "JSCInlines.h"
+#include "JSFunction.h"
 #include "LLIntPCRanges.h"
 #include "MachineContext.h"
-#include "MarkedBlockInlines.h"
+#include "MarkedBlock.h"
 #include "MarkedBlockSet.h"
+#include "MarkedSpaceInlines.h"
 #include "NativeExecutable.h"
+#include "PCToCodeOriginMap.h"
+#include "SlotVisitor.h"
+#include "StrongInlines.h"
 #include "VM.h"
 #include "WasmCallee.h"
 #include "WasmCalleeRegistry.h"
-#include "WasmCapabilities.h"
+#include <thread>
 #include <wtf/FilePrintStream.h>
 #include <wtf/HashSet.h>
 #include <wtf/RefPtr.h>
 #include <wtf/StackTrace.h>
 #include <wtf/text/StringBuilder.h>
+#include <wtf/text/StringConcatenateNumbers.h>
 
 namespace JSC {
 
@@ -74,7 +83,7 @@ ALWAYS_INLINE static void reportStats()
 
 class FrameWalker {
 public:
-    FrameWalker(VM& vm, CallFrame* callFrame, const AbstractLocker& codeBlockSetLocker, const AbstractLocker& machineThreadsLocker, const Optional<LockHolder>& wasmCalleeLocker)
+    FrameWalker(VM& vm, CallFrame* callFrame, const AbstractLocker& codeBlockSetLocker, const AbstractLocker& machineThreadsLocker, const AbstractLocker& wasmCalleeLocker)
         : m_vm(vm)
         , m_callFrame(callFrame)
         , m_entryFrame(vm.topEntryFrame)
@@ -122,9 +131,9 @@ protected:
         }
         stackTrace[m_depth] = UnprocessedStackFrame(codeBlock, unsafeCallee, callSiteIndex);
 #if ENABLE(WEBASSEMBLY)
-        if (Wasm::isSupported() && unsafeCallee.isWasm()) {
+        if (unsafeCallee.isWasm()) {
             auto* wasmCallee = unsafeCallee.asWasmCallee();
-            if (Wasm::CalleeRegistry::singleton().isValidCallee(*m_wasmCalleeLocker, wasmCallee)) {
+            if (Wasm::CalleeRegistry::singleton().isValidCallee(m_wasmCalleeLocker, wasmCallee)) {
                 // At this point, Wasm::Callee would be dying (ref count is 0), but its fields are still live.
                 // And we can safely copy Wasm::IndexOrName even when any lock is held by suspended threads.
                 stackTrace[m_depth].wasmIndexOrName = wasmCallee->indexOrName();
@@ -200,7 +209,7 @@ protected:
     EntryFrame* m_entryFrame;
     const AbstractLocker& m_codeBlockSetLocker;
     const AbstractLocker& m_machineThreadsLocker;
-    const Optional<LockHolder>& m_wasmCalleeLocker;
+    const AbstractLocker& m_wasmCalleeLocker;
     bool m_bailingOut { false };
     size_t m_depth { 0 };
 };
@@ -209,7 +218,7 @@ class CFrameWalker : public FrameWalker {
 public:
     typedef FrameWalker Base;
 
-    CFrameWalker(VM& vm, void* machineFrame, CallFrame* callFrame, const AbstractLocker& codeBlockSetLocker, const AbstractLocker& machineThreadsLocker, const Optional<LockHolder>& wasmCalleeLocker)
+    CFrameWalker(VM& vm, void* machineFrame, CallFrame* callFrame, const AbstractLocker& codeBlockSetLocker, const AbstractLocker& machineThreadsLocker, const AbstractLocker& wasmCalleeLocker)
         : Base(vm, callFrame, codeBlockSetLocker, machineThreadsLocker, wasmCalleeLocker)
         , m_machineFrame(machineFrame)
     {
@@ -284,7 +293,7 @@ private:
     void* m_machineFrame;
 };
 
-SamplingProfiler::SamplingProfiler(VM& vm, Ref<Stopwatch>&& stopwatch)
+SamplingProfiler::SamplingProfiler(VM& vm, RefPtr<Stopwatch>&& stopwatch)
     : m_isPaused(false)
     , m_isShutDown(false)
     , m_vm(vm)
@@ -352,10 +361,10 @@ void SamplingProfiler::takeSample(const AbstractLocker&, Seconds& stackTraceProc
         auto machineThreadsLocker = holdLock(m_vm.heap.machineThreads().getLock());
         auto codeBlockSetLocker = holdLock(m_vm.heap.codeBlockSet().getLock());
         auto executableAllocatorLocker = holdLock(ExecutableAllocator::singleton().getLock());
-        Optional<LockHolder> wasmCalleesLocker;
 #if ENABLE(WEBASSEMBLY)
-        if (Wasm::isSupported())
-            wasmCalleesLocker = holdLock(Wasm::CalleeRegistry::singleton().getLock());
+        auto wasmCalleesLocker = holdLock(Wasm::CalleeRegistry::singleton().getLock());
+#else
+        LockHolder wasmCalleesLocker(NoLockingNecessary);
 #endif
 
         auto didSuspend = m_jscExecutionThread->suspend();
@@ -514,8 +523,10 @@ void SamplingProfiler::processUnverifiedStackTraces(const AbstractLocker&)
             auto setFallbackFrameType = [&] {
                 ASSERT(!alreadyHasExecutable);
                 FrameType result = FrameType::Unknown;
-                auto callData = getCallData(m_vm, calleeCell);
-                if (callData.type == CallData::Type::Native)
+                CallData callData;
+                CallType callType;
+                callType = getCallData(m_vm, calleeCell, callData);
+                if (callType == CallType::Host)
                     result = FrameType::Host;
 
                 stackFrame.frameType = result;
@@ -728,7 +739,7 @@ String SamplingProfiler::StackFrame::nameFromCallee(VM& vm)
     auto scope = DECLARE_CATCH_SCOPE(vm);
     JSGlobalObject* globalObject = callee->globalObject(vm);
     auto getPropertyIfPureOperation = [&] (const Identifier& ident) -> String {
-        PropertySlot slot(callee, PropertySlot::InternalMethodType::VMInquiry, &vm);
+        PropertySlot slot(callee, PropertySlot::InternalMethodType::VMInquiry);
         PropertyName propertyName(ident);
         bool hasProperty = callee->getPropertySlot(globalObject, propertyName, slot);
         scope.assertNoException();
@@ -1141,10 +1152,15 @@ void SamplingProfiler::reportTopBytecodes(PrintStream& out)
     }
 }
 
-Thread* SamplingProfiler::thread() const
+#if OS(DARWIN)
+mach_port_t SamplingProfiler::machThread()
 {
-    return m_thread.get();
+    if (!m_thread)
+        return MACH_PORT_NULL;
+
+    return m_thread->machThread();
 }
+#endif
 
 } // namespace JSC
 

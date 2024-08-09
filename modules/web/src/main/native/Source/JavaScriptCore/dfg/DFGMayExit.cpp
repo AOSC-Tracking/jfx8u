@@ -29,9 +29,10 @@
 #if ENABLE(DFG_JIT)
 
 #include "DFGAtTailAbstractState.h"
+#include "DFGGraph.h"
 #include "DFGNode.h"
 #include "DFGNullAbstractState.h"
-#include "JSCJSValueInlines.h"
+#include "Operations.h"
 
 namespace JSC { namespace DFG {
 
@@ -70,7 +71,7 @@ ExitMode mayExitImpl(Graph& graph, Node* node, StateType& state)
     case BottomValue:
     case PutHint:
     case PhantomNewObject:
-    case PhantomNewInternalFieldObject:
+    case PhantomNewArrayIterator:
     case PutStack:
     case KillStack:
     case GetStack:
@@ -108,7 +109,6 @@ ExitMode mayExitImpl(Graph& graph, Node* node, StateType& state)
     case FilterGetByStatus:
     case FilterPutByIdStatus:
     case FilterInByIdStatus:
-    case FilterDeleteByStatus:
         break;
 
     case StrCat:
@@ -129,7 +129,7 @@ ExitMode mayExitImpl(Graph& graph, Node* node, StateType& state)
     case NewAsyncGeneratorFunction:
     case NewStringObject:
     case NewSymbol:
-    case NewInternalFieldObject:
+    case NewArrayIterator:
     case NewRegexp:
     case ToNumber:
     case ToNumeric:

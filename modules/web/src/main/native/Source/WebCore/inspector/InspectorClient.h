@@ -64,12 +64,7 @@ public:
     virtual void elementSelectionChanged(bool) { }
     virtual void timelineRecordingChanged(bool) { }
 
-    enum class DeveloperPreference {
-        AdClickAttributionDebugModeEnabled,
-        ITPDebugModeEnabled,
-        MockCaptureDevicesEnabled,
-    };
-    virtual void setDeveloperPreferenceOverride(DeveloperPreference, Optional<bool>) { }
+    virtual void setMockCaptureDevicesEnabledOverride(Optional<bool>) { }
 
 #if ENABLE(REMOTE_INSPECTOR)
     virtual bool allowRemoteInspectionToPageDirectly() const { return false; }
@@ -77,16 +72,3 @@ public:
 };
 
 } // namespace WebCore
-
-namespace WTF {
-
-template<> struct EnumTraits<WebCore::InspectorClient::DeveloperPreference> {
-    using values = EnumValues<
-        WebCore::InspectorClient::DeveloperPreference,
-        WebCore::InspectorClient::DeveloperPreference::AdClickAttributionDebugModeEnabled,
-        WebCore::InspectorClient::DeveloperPreference::ITPDebugModeEnabled,
-        WebCore::InspectorClient::DeveloperPreference::MockCaptureDevicesEnabled
-    >;
-};
-
-} // namespace WTF

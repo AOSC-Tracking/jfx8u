@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2016-2019 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -74,24 +74,21 @@ public:
         NonNumeric       = 1 << 2,
         Int32Overflow    = 1 << 3,
         Int52Overflow    = 1 << 4,
-        HeapBigInt       = 1 << 5,
-        BigInt32         = 1 << 6,
+        BigInt           = 1 << 5,
     };
-    static constexpr uint32_t numBitsNeeded = 7;
+    static constexpr uint32_t numBitsNeeded = 6;
 
     ObservedResults() = default;
     explicit ObservedResults(uint8_t bits)
         : m_bits(bits)
     { }
 
-    bool didObserveNonInt32() { return m_bits & (NonNegZeroDouble | NegZeroDouble | NonNumeric | HeapBigInt | BigInt32); }
+    bool didObserveNonInt32() { return m_bits & (NonNegZeroDouble | NegZeroDouble | NonNumeric | BigInt); }
     bool didObserveDouble() { return m_bits & (NonNegZeroDouble | NegZeroDouble); }
     bool didObserveNonNegZeroDouble() { return m_bits & NonNegZeroDouble; }
     bool didObserveNegZeroDouble() { return m_bits & NegZeroDouble; }
     bool didObserveNonNumeric() { return m_bits & NonNumeric; }
-    bool didObserveBigInt() { return m_bits & (HeapBigInt | BigInt32); }
-    bool didObserveHeapBigInt() { return m_bits & HeapBigInt; }
-    bool didObserveBigInt32() { return m_bits & BigInt32; }
+    bool didObserveBigInt() { return m_bits & BigInt; }
     bool didObserveInt32Overflow() { return m_bits & Int32Overflow; }
     bool didObserveInt52Overflow() { return m_bits & Int52Overflow; }
 
@@ -112,16 +109,13 @@ public:
     bool didObserveNegZeroDouble() const { return observedResults().didObserveNegZeroDouble(); }
     bool didObserveNonNumeric() const { return observedResults().didObserveNonNumeric(); }
     bool didObserveBigInt() const { return observedResults().didObserveBigInt(); }
-    bool didObserveHeapBigInt() const { return observedResults().didObserveHeapBigInt(); }
-    bool didObserveBigInt32() const { return observedResults().didObserveBigInt32(); }
     bool didObserveInt32Overflow() const { return observedResults().didObserveInt32Overflow(); }
     bool didObserveInt52Overflow() const { return observedResults().didObserveInt52Overflow(); }
 
     void setObservedNonNegZeroDouble() { setBit(ObservedResults::NonNegZeroDouble); }
     void setObservedNegZeroDouble() { setBit(ObservedResults::NegZeroDouble); }
     void setObservedNonNumeric() { setBit(ObservedResults::NonNumeric); }
-    void setObservedHeapBigInt() { setBit(ObservedResults::HeapBigInt); }
-    void setObservedBigInt32() { setBit(ObservedResults::BigInt32); }
+    void setObservedBigInt() { setBit(ObservedResults::BigInt); }
     void setObservedInt32Overflow() { setBit(ObservedResults::Int32Overflow); }
     void setObservedInt52Overflow() { setBit(ObservedResults::Int52Overflow); }
 
@@ -133,12 +127,8 @@ public:
             m_bits |= ObservedResults::Int32Overflow | ObservedResults::Int52Overflow | ObservedResults::NonNegZeroDouble | ObservedResults::NegZeroDouble;
             return;
         }
-        if (value.isBigInt32()) {
-            m_bits |= ObservedResults::BigInt32;
-            return;
-        }
-        if (value && value.isHeapBigInt()) {
-            m_bits |= ObservedResults::HeapBigInt;
+        if (value && value.isBigInt()) {
+            m_bits |= ObservedResults::BigInt;
             return;
         }
         m_bits |= ObservedResults::NonNumeric;
@@ -149,22 +139,19 @@ public:
 #if ENABLE(JIT)
     // Sets (Int32Overflow | Int52Overflow | NonNegZeroDouble | NegZeroDouble) if it sees a
     // double. Sets NonNumeric if it sees a non-numeric.
-    void emitObserveResult(CCallHelpers&, JSValueRegs, GPRReg tempGPR, TagRegistersMode = HaveTagRegisters);
+    void emitObserveResult(CCallHelpers&, JSValueRegs, TagRegistersMode = HaveTagRegisters);
 
     // Sets (Int32Overflow | Int52Overflow | NonNegZeroDouble | NegZeroDouble).
     bool shouldEmitSetDouble() const;
     void emitSetDouble(CCallHelpers&) const;
 
+    // Sets NonNumeric
     void emitSetNonNumeric(CCallHelpers&) const;
     bool shouldEmitSetNonNumeric() const;
 
-    bool shouldEmitSetHeapBigInt() const;
-    void emitSetHeapBigInt(CCallHelpers&) const;
-
-    bool shouldEmitSetBigInt32() const;
-#if USE(BIGINT32)
-    void emitSetBigInt32(CCallHelpers&) const;
-#endif
+    // Sets BigInt
+    void emitSetBigInt(CCallHelpers&) const;
+    bool shouldEmitSetBigInt() const;
 
     void emitUnconditionalSet(CCallHelpers&, BitfieldType) const;
 #endif // ENABLE(JIT)
@@ -188,7 +175,7 @@ using UnaryArithProfileBase = uint16_t;
 class UnaryArithProfile : public ArithProfile<UnaryArithProfileBase> {
     static constexpr unsigned argObservedTypeShift = ObservedResults::numBitsNeeded;
 
-    static_assert(argObservedTypeShift + ObservedType::numBitsNeeded <= sizeof(UnaryArithProfileBase) * 8, "Should fit in the type of the underlying bitfield.");
+    static_assert(argObservedTypeShift + ObservedType::numBitsNeeded <= sizeof(UnaryArithProfileBase) * 8, "Should fit in a the type of the underlying bitfield.");
 
     static constexpr UnaryArithProfileBase clearArgObservedTypeBitMask = static_cast<UnaryArithProfileBase>(~(0b111 << argObservedTypeShift));
 
@@ -270,7 +257,7 @@ class BinaryArithProfile : public ArithProfile<BinaryArithProfileBase> {
 
 public:
     static constexpr BinaryArithProfileBase specialFastPathBit = 1 << (lhsObservedTypeShift + ObservedType::numBitsNeeded);
-    static_assert((lhsObservedTypeShift + ObservedType::numBitsNeeded + 1) <= sizeof(BinaryArithProfileBase) * 8, "Should fit in the underlying type.");
+    static_assert((lhsObservedTypeShift + ObservedType::numBitsNeeded + 1) <= sizeof(BinaryArithProfileBase) * 8, "Should fit in a uint32_t.");
     static_assert(!(specialFastPathBit & ~clearLhsObservedTypeBitMask), "These bits should not intersect.");
     static_assert(specialFastPathBit & clearLhsObservedTypeBitMask, "These bits should intersect.");
     static_assert(static_cast<unsigned>(specialFastPathBit) > static_cast<unsigned>(static_cast<BinaryArithProfileBase>(~clearLhsObservedTypeBitMask)), "These bits should not intersect and specialFastPathBit should be a higher bit.");

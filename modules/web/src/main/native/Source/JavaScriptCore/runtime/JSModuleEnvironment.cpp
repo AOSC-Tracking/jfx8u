@@ -30,7 +30,9 @@
 #include "JSModuleEnvironment.h"
 
 #include "AbstractModuleRecord.h"
+#include "Interpreter.h"
 #include "JSCInlines.h"
+#include "JSFunction.h"
 
 namespace JSC {
 
@@ -125,7 +127,7 @@ bool JSModuleEnvironment::put(JSCell* cell, JSGlobalObject* globalObject, Proper
     RELEASE_AND_RETURN(scope, Base::put(thisObject, globalObject, propertyName, value, slot));
 }
 
-bool JSModuleEnvironment::deleteProperty(JSCell* cell, JSGlobalObject* globalObject, PropertyName propertyName, DeletePropertySlot& slot)
+bool JSModuleEnvironment::deleteProperty(JSCell* cell, JSGlobalObject* globalObject, PropertyName propertyName)
 {
     VM& vm = globalObject->vm();
     auto scope = DECLARE_THROW_SCOPE(vm);
@@ -136,7 +138,7 @@ bool JSModuleEnvironment::deleteProperty(JSCell* cell, JSGlobalObject* globalObj
     RETURN_IF_EXCEPTION(scope, false);
     if (resolution.type == AbstractModuleRecord::Resolution::Type::Resolved)
         return false;
-    return Base::deleteProperty(thisObject, globalObject, propertyName, slot);
+    return Base::deleteProperty(thisObject, globalObject, propertyName);
 }
 
 } // namespace JSC

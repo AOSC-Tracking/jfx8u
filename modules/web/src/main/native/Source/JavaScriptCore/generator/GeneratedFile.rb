@@ -61,6 +61,7 @@ module GeneratedFile
         yield template
 
         file = File.open(filename, "w")
+        self.sha1(file, template, dependencies)
         self.license(file, template, dependencies)
 
         unless template.prefix.nil?
@@ -72,13 +73,10 @@ module GeneratedFile
         unless template.suffix.nil?
             write(file, template.suffix.to_s, "\n")
         end
-
-        file.fsync
-        self.sha1(file, template, dependencies)
     end
 
     def self.sha1(file, template, dependencies)
-        write(file, template.line_comment, " SHA1Hash: ", Digest::SHA1.hexdigest(dependencies.join), "\n")
+      write(file, template.line_comment, " SHA1Hash: ", Digest::SHA1.hexdigest(dependencies.join), "\n")
     end
 
     def self.license(file, template, dependencies)

@@ -28,13 +28,14 @@
 
 #if ENABLE(DFG_JIT)
 
-#include "ButterflyInlines.h"
 #include "DFGBlockMapInlines.h"
 #include "DFGGraph.h"
 #include "DFGInsertionSet.h"
 #include "DFGPhase.h"
 #include "DFGPreciseLocalClobberize.h"
 #include "DFGSSACalculator.h"
+#include "DFGValidate.h"
+#include "JSCInlines.h"
 #include "OperandsInlines.h"
 
 namespace JSC { namespace DFG {

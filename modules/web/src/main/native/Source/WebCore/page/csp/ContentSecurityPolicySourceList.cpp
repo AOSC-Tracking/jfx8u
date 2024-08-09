@@ -35,7 +35,6 @@
 #include <wtf/NeverDestroyed.h>
 #include <wtf/URL.h>
 #include <wtf/text/Base64.h>
-#include <wtf/text/StringParsingBuffer.h>
 
 namespace WebCore {
 
@@ -57,41 +56,48 @@ static bool isCSPDirectiveName(const String& name)
         || equalIgnoringASCIICase(name, ContentSecurityPolicyDirectiveNames::styleSrc);
 }
 
-template<typename CharacterType> static bool isSourceCharacter(CharacterType c)
+static bool isSourceCharacter(UChar c)
 {
     return !isASCIISpace(c);
 }
 
-template<typename CharacterType> static bool isHostCharacter(CharacterType c)
+static bool isHostCharacter(UChar c)
 {
     return isASCIIAlphanumeric(c) || c == '-';
 }
 
-template<typename CharacterType> static bool isPathComponentCharacter(CharacterType c)
+static bool isPathComponentCharacter(UChar c)
 {
     return c != '?' && c != '#';
 }
 
-template<typename CharacterType> static bool isSchemeContinuationCharacter(CharacterType c)
+static bool isSchemeContinuationCharacter(UChar c)
 {
     return isASCIIAlphanumeric(c) || c == '+' || c == '-' || c == '.';
 }
 
-template<typename CharacterType> static bool isNotColonOrSlash(CharacterType c)
+static bool isNotColonOrSlash(UChar c)
 {
     return c != ':' && c != '/';
 }
 
-template<typename CharacterType> static bool isSourceListNone(StringParsingBuffer<CharacterType> buffer)
+static bool isSourceListNone(const String& value)
 {
-    skipWhile<isASCIISpace>(buffer);
+    auto characters = StringView(value).upconvertedCharacters();
+    const UChar* begin = characters;
+    const UChar* end = characters + value.length();
+    skipWhile<UChar, isASCIISpace>(begin, end);
 
-    if (!skipExactlyIgnoringASCIICase(buffer, "'none'"))
+    const UChar* position = begin;
+    skipWhile<UChar, isSourceCharacter>(position, end);
+    if (!equalLettersIgnoringASCIICase(begin, position - begin, "'none'"))
         return false;
 
-    skipWhile<isASCIISpace>(buffer);
+    skipWhile<UChar, isASCIISpace>(position, end);
+    if (position != end)
+        return false;
 
-    return buffer.atEnd();
+    return true;
 }
 
 ContentSecurityPolicySourceList::ContentSecurityPolicySourceList(const ContentSecurityPolicy& policy, const String& directiveName)
@@ -102,14 +108,12 @@ ContentSecurityPolicySourceList::ContentSecurityPolicySourceList(const ContentSe
 
 void ContentSecurityPolicySourceList::parse(const String& value)
 {
-    readCharactersForParsing(value, [&](auto buffer) {
-        if (isSourceListNone(buffer)) {
-            m_isNone = true;
-            return;
-        }
-
-        parse(buffer);
-    });
+    if (isSourceListNone(value)) {
+        m_isNone = true;
+        return;
+    }
+    auto characters = StringView(value).upconvertedCharacters();
+    parse(characters, characters + value.length());
 }
 
 bool ContentSecurityPolicySourceList::isProtocolAllowedByStar(const URL& url) const
@@ -156,37 +160,42 @@ bool ContentSecurityPolicySourceList::matches(const String& nonce) const
 // source-list       = *WSP [ source *( 1*WSP source ) *WSP ]
 //                   / *WSP "'none'" *WSP
 //
-template<typename CharacterType> void ContentSecurityPolicySourceList::parse(StringParsingBuffer<CharacterType> buffer)
+void ContentSecurityPolicySourceList::parse(const UChar* begin, const UChar* end)
 {
-    while (buffer.hasCharactersRemaining()) {
-        skipWhile<isASCIISpace>(buffer);
-        if (buffer.atEnd())
+    const UChar* position = begin;
+
+    while (position < end) {
+        skipWhile<UChar, isASCIISpace>(position, end);
+        if (position == end)
             return;
 
-        auto beginSource = buffer.position();
-        skipWhile<isSourceCharacter>(buffer);
+        const UChar* beginSource = position;
+        skipWhile<UChar, isSourceCharacter>(position, end);
 
-        auto sourceBuffer = StringParsingBuffer { beginSource, buffer.position() };
+        String scheme, host, path;
+        Optional<uint16_t> port;
+        bool hostHasWildcard = false;
+        bool portHasWildcard = false;
 
-        if (parseNonceSource(sourceBuffer))
+        if (parseNonceSource(beginSource, position))
             continue;
 
-        if (parseHashSource(sourceBuffer))
+        if (parseHashSource(beginSource, position))
             continue;
 
-        if (auto source = parseSource(sourceBuffer)) {
+        if (parseSource(beginSource, position, scheme, host, port, path, hostHasWildcard, portHasWildcard)) {
             // Wildcard hosts and keyword sources ('self', 'unsafe-inline',
             // etc.) aren't stored in m_list, but as attributes on the source
             // list itself.
-            if (source->scheme.isEmpty() && source->host.value.isEmpty())
+            if (scheme.isEmpty() && host.isEmpty())
                 continue;
-            if (isCSPDirectiveName(source->host.value))
-                m_policy.reportDirectiveAsSourceExpression(m_directiveName, source->host.value);
-            m_list.append(ContentSecurityPolicySource(m_policy, source->scheme, source->host.value, source->port.value, source->path, source->host.hasWildcard, source->port.hasWildcard));
+            if (isCSPDirectiveName(host))
+                m_policy.reportDirectiveAsSourceExpression(m_directiveName, host);
+            m_list.append(ContentSecurityPolicySource(m_policy, scheme, host, port, path, hostHasWildcard, portHasWildcard));
         } else
-            m_policy.reportInvalidSourceExpression(m_directiveName, String(beginSource, buffer.position() - beginSource));
+            m_policy.reportInvalidSourceExpression(m_directiveName, String(beginSource, position - beginSource));
 
-        ASSERT(buffer.atEnd() || isASCIISpace(*buffer));
+        ASSERT(position == end || isASCIISpace(*position));
     }
 
     m_list.shrinkToFit();
@@ -196,294 +205,270 @@ template<typename CharacterType> void ContentSecurityPolicySourceList::parse(Str
 //                   / ( [ scheme "://" ] host [ port ] [ path ] )
 //                   / "'self'"
 //
-template<typename CharacterType> Optional<ContentSecurityPolicySourceList::Source> ContentSecurityPolicySourceList::parseSource(StringParsingBuffer<CharacterType> buffer)
+bool ContentSecurityPolicySourceList::parseSource(const UChar* begin, const UChar* end, String& scheme, String& host, Optional<uint16_t>& port, String& path, bool& hostHasWildcard, bool& portHasWildcard)
 {
-    if (buffer.atEnd())
-        return WTF::nullopt;
+    if (begin == end)
+        return false;
 
-    if (skipExactlyIgnoringASCIICase(buffer, "'none'"))
-        return WTF::nullopt;
+    if (equalLettersIgnoringASCIICase(begin, end - begin, "'none'"))
+        return false;
 
-    Source source;
-
-    if (buffer.lengthRemaining() == 1 && *buffer == '*') {
+    if (end - begin == 1 && *begin == '*') {
         m_allowStar = true;
-        return source;
+        return true;
     }
 
-    if (skipExactlyIgnoringASCIICase(buffer, "'self'")) {
+    if (equalLettersIgnoringASCIICase(begin, end - begin, "'self'")) {
         m_allowSelf = true;
-        return source;
+        return true;
     }
 
-    if (skipExactlyIgnoringASCIICase(buffer, "'unsafe-inline'")) {
+    if (equalLettersIgnoringASCIICase(begin, end - begin, "'unsafe-inline'")) {
         m_allowInline = true;
-        return source;
+        return true;
     }
 
-    if (skipExactlyIgnoringASCIICase(buffer, "'unsafe-eval'")) {
+    if (equalLettersIgnoringASCIICase(begin, end - begin, "'unsafe-eval'")) {
         m_allowEval = true;
-        return source;
+        return true;
     }
 
-    auto begin = buffer.position();
-    auto beginHost = begin;
-    auto beginPath = buffer.end();
-    const CharacterType* beginPort = nullptr;
+    const UChar* position = begin;
+    const UChar* beginHost = begin;
+    const UChar* beginPath = end;
+    const UChar* beginPort = nullptr;
 
-    skipWhile<isNotColonOrSlash>(buffer);
+    skipWhile<UChar, isNotColonOrSlash>(position, end);
 
-    if (buffer.atEnd()) {
+    if (position == end) {
         // host
         //     ^
-        auto host = parseHost(StringParsingBuffer { beginHost, buffer.position() });
-        if (!host)
-            return WTF::nullopt;
-
-        source.host = WTFMove(*host);
-        return source;
+        return parseHost(beginHost, position, host, hostHasWildcard);
     }
 
-    if (buffer.hasCharactersRemaining() && *buffer == '/') {
+    if (position < end && *position == '/') {
         // host/path || host/ || /
         //     ^            ^    ^
-        auto host = parseHost(StringParsingBuffer { beginHost, buffer.position() });
-        if (!host)
-            return WTF::nullopt;
-
-        auto path = parsePath(buffer);
-        if (!path)
-            return WTF::nullopt;
-
-        source.host = WTFMove(*host);
-        source.path = WTFMove(*path);
-        return source;
+        return parseHost(beginHost, position, host, hostHasWildcard) && parsePath(position, end, path);
     }
 
-    if (buffer.hasCharactersRemaining() && *buffer == ':') {
-        if (buffer.lengthRemaining() == 1) {
+    if (position < end && *position == ':') {
+        if (end - position == 1) {
             // scheme:
             //       ^
-            auto scheme = parseScheme(StringParsingBuffer { begin, buffer.position() });
-            if (!scheme)
-                return WTF::nullopt;
-
-            source.scheme = WTFMove(*scheme);
-            return source;
+            return parseScheme(begin, position, scheme);
         }
 
-        if (buffer[1] == '/') {
+        if (position[1] == '/') {
             // scheme://host || scheme://
             //       ^                ^
-            auto scheme = parseScheme(StringParsingBuffer { begin, buffer.position() });
-            if (!scheme
-                || !skipExactly(buffer, ':')
-                || !skipExactly(buffer, '/')
-                || !skipExactly(buffer, '/'))
-                return WTF::nullopt;
-            if (buffer.atEnd())
-                return WTF::nullopt;
-
-            source.scheme = WTFMove(*scheme);
-
-            beginHost = buffer.position();
-            skipWhile<isNotColonOrSlash>(buffer);
+            if (!parseScheme(begin, position, scheme)
+                || !skipExactly<UChar>(position, end, ':')
+                || !skipExactly<UChar>(position, end, '/')
+                || !skipExactly<UChar>(position, end, '/'))
+                return false;
+            if (position == end)
+                return false;
+            beginHost = position;
+            skipWhile<UChar, isNotColonOrSlash>(position, end);
         }
 
-        if (buffer.hasCharactersRemaining() && *buffer == ':') {
+        if (position < end && *position == ':') {
             // host:port || scheme://host:port
             //     ^                     ^
-            beginPort = buffer.position();
-            skipUntil(buffer, '/');
+            beginPort = position;
+            skipUntil<UChar>(position, end, '/');
         }
     }
 
-    if (buffer.hasCharactersRemaining() && *buffer == '/') {
+    if (position < end && *position == '/') {
         // scheme://host/path || scheme://host:port/path
         //              ^                          ^
-        if (buffer.position() == beginHost)
-            return WTF::nullopt;
+        if (position == beginHost)
+            return false;
 
-        beginPath = buffer.position();
+        beginPath = position;
     }
 
-    auto host = parseHost(StringParsingBuffer { beginHost, beginPort ? beginPort : beginPath });
-    if (!host)
-        return WTF::nullopt;
+    if (!parseHost(beginHost, beginPort ? beginPort : beginPath, host, hostHasWildcard))
+        return false;
 
-    if (beginPort) {
-        auto port = parsePort(StringParsingBuffer { beginPort, beginPath });
-        if (!port)
-            return WTF::nullopt;
-
-        source.port = WTFMove(*port);
+    if (!beginPort)
+        port = WTF::nullopt;
+    else {
+        if (!parsePort(beginPort, beginPath, port, portHasWildcard))
+            return false;
     }
 
-    if (beginPath != buffer.end()) {
-        auto path = parsePath(StringParsingBuffer { beginPath, buffer.end() });
-        if (!path)
-            return WTF::nullopt;
-
-        source.path = WTFMove(*path);
+    if (beginPath != end) {
+        if (!parsePath(beginPath, end, path))
+            return false;
     }
 
-    source.host = WTFMove(*host);
-    return source;
+    return true;
 }
 
 //                     ; <scheme> production from RFC 3986
 // scheme      = ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )
 //
-template<typename CharacterType> Optional<String> ContentSecurityPolicySourceList::parseScheme(StringParsingBuffer<CharacterType> buffer)
+bool ContentSecurityPolicySourceList::parseScheme(const UChar* begin, const UChar* end, String& scheme)
 {
-    ASSERT(buffer.position() <= buffer.end());
+    ASSERT(begin <= end);
+    ASSERT(scheme.isEmpty());
 
-    if (buffer.atEnd())
-        return WTF::nullopt;
+    if (begin == end)
+        return false;
 
-    auto begin = buffer.position();
+    const UChar* position = begin;
 
-    if (!skipExactly<isASCIIAlpha>(buffer))
-        return WTF::nullopt;
+    if (!skipExactly<UChar, isASCIIAlpha>(position, end))
+        return false;
 
-    skipWhile<isSchemeContinuationCharacter>(buffer);
+    skipWhile<UChar, isSchemeContinuationCharacter>(position, end);
 
-    if (!buffer.atEnd())
-        return WTF::nullopt;
+    if (position != end)
+        return false;
 
-    return String(begin, buffer.position() - begin);
+    scheme = String(begin, end - begin);
+    return true;
 }
 
 // host              = [ "*." ] 1*host-char *( "." 1*host-char )
 //                   / "*"
 // host-char         = ALPHA / DIGIT / "-"
 //
-template<typename CharacterType> Optional<ContentSecurityPolicySourceList::Host> ContentSecurityPolicySourceList::parseHost(StringParsingBuffer<CharacterType> buffer)
+bool ContentSecurityPolicySourceList::parseHost(const UChar* begin, const UChar* end, String& host, bool& hostHasWildcard)
 {
-    ASSERT(buffer.position() <= buffer.end());
+    ASSERT(begin <= end);
+    ASSERT(host.isEmpty());
+    ASSERT(!hostHasWildcard);
 
-    if (buffer.atEnd())
-        return WTF::nullopt;
+    if (begin == end)
+        return false;
 
-    Host host;
+    const UChar* position = begin;
 
-    if (skipExactly(buffer, '*')) {
-        host.hasWildcard = true;
+    if (skipExactly<UChar>(position, end, '*')) {
+        hostHasWildcard = true;
 
-        if (buffer.atEnd())
-            return host;
+        if (position == end)
+            return true;
 
-        if (!skipExactly(buffer, '.'))
-            return WTF::nullopt;
+        if (!skipExactly<UChar>(position, end, '.'))
+            return false;
     }
 
-    auto hostBegin = buffer.position();
+    const UChar* hostBegin = position;
 
-    while (buffer.hasCharactersRemaining()) {
-        if (!skipExactly<isHostCharacter>(buffer))
-            return WTF::nullopt;
+    while (position < end) {
+        if (!skipExactly<UChar, isHostCharacter>(position, end))
+            return false;
 
-        skipWhile<isHostCharacter>(buffer);
+        skipWhile<UChar, isHostCharacter>(position, end);
 
-        if (buffer.hasCharactersRemaining() && !skipExactly(buffer, '.'))
-            return WTF::nullopt;
+        if (position < end && !skipExactly<UChar>(position, end, '.'))
+            return false;
     }
 
-    ASSERT(buffer.atEnd());
-    host.value = String(hostBegin, buffer.position() - hostBegin);
-    return host;
+    ASSERT(position == end);
+    host = String(hostBegin, end - hostBegin);
+    return true;
 }
 
-template<typename CharacterType> Optional<String> ContentSecurityPolicySourceList::parsePath(StringParsingBuffer<CharacterType> buffer)
+bool ContentSecurityPolicySourceList::parsePath(const UChar* begin, const UChar* end, String& path)
 {
-    ASSERT(buffer.position() <= buffer.end());
+    ASSERT(begin <= end);
+    ASSERT(path.isEmpty());
 
-    auto begin = buffer.position();
-    skipWhile<isPathComponentCharacter>(buffer);
+    const UChar* position = begin;
+    skipWhile<UChar, isPathComponentCharacter>(position, end);
     // path/to/file.js?query=string || path/to/file.js#anchor
     //                ^                               ^
-    if (buffer.hasCharactersRemaining())
-        m_policy.reportInvalidPathCharacter(m_directiveName, String(begin, buffer.end() - begin), *buffer);
+    if (position < end)
+        m_policy.reportInvalidPathCharacter(m_directiveName, String(begin, end - begin), *position);
 
-    ASSERT(buffer.position() <= buffer.end());
-    ASSERT(buffer.atEnd() || (*buffer == '#' || *buffer == '?'));
+    path = decodeURLEscapeSequences(String(begin, position - begin));
 
-    return decodeURLEscapeSequences(StringView(begin, buffer.position() - begin));
+    ASSERT(position <= end);
+    ASSERT(position == end || (*position == '#' || *position == '?'));
+    return true;
 }
 
 // port              = ":" ( 1*DIGIT / "*" )
 //
-template<typename CharacterType> Optional<ContentSecurityPolicySourceList::Port> ContentSecurityPolicySourceList::parsePort(StringParsingBuffer<CharacterType> buffer)
+bool ContentSecurityPolicySourceList::parsePort(const UChar* begin, const UChar* end, Optional<uint16_t>& port, bool& portHasWildcard)
 {
-    ASSERT(buffer.position() <= buffer.end());
+    ASSERT(begin <= end);
+    ASSERT(!port);
+    ASSERT(!portHasWildcard);
 
-    if (!skipExactly(buffer, ':'))
+    if (!skipExactly<UChar>(begin, end, ':'))
         ASSERT_NOT_REACHED();
 
-    if (buffer.atEnd())
-        return WTF::nullopt;
+    if (begin == end)
+        return false;
 
-    if (buffer.lengthRemaining() == 1 && *buffer == '*') {
-        Port port;
-        port.hasWildcard = true;
-        return port;
+    if (end - begin == 1 && *begin == '*') {
+        port = WTF::nullopt;
+        portHasWildcard = true;
+        return true;
     }
 
-    auto begin = buffer.position();
-    skipWhile<isASCIIDigit>(buffer);
+    const UChar* position = begin;
+    skipWhile<UChar, isASCIIDigit>(position, end);
 
-    if (!buffer.atEnd())
-        return WTF::nullopt;
+    if (position != end)
+        return false;
 
     bool ok;
-    int portInt = charactersToIntStrict(begin, buffer.position() - begin, &ok);
-    if (!ok || portInt < 0 || portInt > std::numeric_limits<uint16_t>::max())
-        return WTF::nullopt;
-
-    Port port;
-    port.value = portInt;
-    return port;
+    int portInt = charactersToIntStrict(begin, end - begin, &ok);
+    if (portInt < 0 || portInt > std::numeric_limits<uint16_t>::max())
+        return false;
+    port = portInt;
+    return ok;
 }
 
 // Match Blink's behavior of allowing an equal sign to appear anywhere in the value of the nonce
 // even though this does not match the behavior of Content Security Policy Level 3 spec.,
 // <https://w3c.github.io/webappsec-csp/> (29 February 2016).
-template<typename CharacterType> static bool isNonceCharacter(CharacterType c)
+static bool isNonceCharacter(UChar c)
 {
     return isBase64OrBase64URLCharacter(c) || c == '=';
 }
 
 // nonce-source    = "'nonce-" nonce-value "'"
 // nonce-value     = base64-value
-template<typename CharacterType> bool ContentSecurityPolicySourceList::parseNonceSource(StringParsingBuffer<CharacterType> buffer)
+bool ContentSecurityPolicySourceList::parseNonceSource(const UChar* begin, const UChar* end)
 {
-    if (!skipExactlyIgnoringASCIICase(buffer, "'nonce-"))
+    const unsigned noncePrefixLength = 7;
+    if (!StringView(begin, end - begin).startsWithIgnoringASCIICase("'nonce-"))
         return false;
-
-    auto beginNonceValue = buffer.position();
-    skipWhile<isNonceCharacter>(buffer);
-    if (buffer.atEnd() || buffer.position() == beginNonceValue || *buffer != '\'')
+    const UChar* position = begin + noncePrefixLength;
+    const UChar* beginNonceValue = position;
+    skipWhile<UChar, isNonceCharacter>(position, end);
+    if (position >= end || position == beginNonceValue || *position != '\'')
         return false;
-    m_nonces.add(String(beginNonceValue, buffer.position() - beginNonceValue));
+    m_nonces.add(String(beginNonceValue, position - beginNonceValue));
     return true;
 }
 
 // hash-source    = "'" hash-algorithm "-" base64-value "'"
 // hash-algorithm = "sha256" / "sha384" / "sha512"
 // base64-value  = 1*( ALPHA / DIGIT / "+" / "/" / "-" / "_" )*2( "=" )
-template<typename CharacterType> bool ContentSecurityPolicySourceList::parseHashSource(StringParsingBuffer<CharacterType> buffer)
+bool ContentSecurityPolicySourceList::parseHashSource(const UChar* begin, const UChar* end)
 {
-    if (buffer.atEnd())
+    if (begin == end)
         return false;
 
-    if (!skipExactly(buffer, '\''))
+    const UChar* position = begin;
+    if (!skipExactly<UChar>(position, end, '\''))
         return false;
 
-    auto digest = parseCryptographicDigest(buffer);
+    auto digest = parseCryptographicDigest(position, end);
     if (!digest)
         return false;
 
-    if (buffer.atEnd() || *buffer != '\'')
+    if (position >= end || *position != '\'')
         return false;
 
     if (digest->value.size() > ContentSecurityPolicyHash::maximumDigestLength)

@@ -21,15 +21,15 @@
 
 #pragma once
 
-#include "JSInternalFieldObjectImpl.h"
+#include "JSObject.h"
 
 namespace JSC {
 
 // This class is used as a base for classes such as String,
 // Number, Boolean and Symbol which are wrappers for primitive types.
-class JSWrapperObject : public JSInternalFieldObjectImpl<1> {
+class JSWrapperObject : public JSNonFinalObject {
 public:
-    using Base = JSInternalFieldObjectImpl<1>;
+    using Base = JSNonFinalObject;
 
     template<typename, SubspaceAccess>
     static void subspaceFor(VM&)
@@ -43,15 +43,15 @@ public:
         return sizeof(JSWrapperObject);
     }
 
-    enum class Field : uint32_t {
-        WrappedValue = 0,
-    };
-    static_assert(numberOfInternalFields == 1);
-
     JSValue internalValue() const;
     void setInternalValue(VM&, JSValue);
 
-    static ptrdiff_t internalValueOffset() { return offsetOfInternalField(static_cast<unsigned>(Field::WrappedValue)); }
+    static Structure* createStructure(VM& vm, JSGlobalObject* globalObject, JSValue prototype)
+    {
+        return Structure::create(vm, globalObject, prototype, TypeInfo(ObjectType, StructureFlags), info());
+    }
+
+    static ptrdiff_t internalValueOffset() { return OBJECT_OFFSETOF(JSWrapperObject, m_internalValue); }
     static ptrdiff_t internalValueCellOffset()
     {
 #if USE(JSVALUE64)
@@ -65,6 +65,9 @@ protected:
     explicit JSWrapperObject(VM&, Structure*);
 
     JS_EXPORT_PRIVATE static void visitChildren(JSCell*, SlotVisitor&);
+
+private:
+    WriteBarrier<Unknown> m_internalValue;
 };
 
 inline JSWrapperObject::JSWrapperObject(VM& vm, Structure* structure)
@@ -74,14 +77,14 @@ inline JSWrapperObject::JSWrapperObject(VM& vm, Structure* structure)
 
 inline JSValue JSWrapperObject::internalValue() const
 {
-    return internalField(static_cast<unsigned>(Field::WrappedValue)).get();
+    return m_internalValue.get();
 }
 
 inline void JSWrapperObject::setInternalValue(VM& vm, JSValue value)
 {
     ASSERT(value);
     ASSERT(!value.isObject());
-    internalField(static_cast<unsigned>(Field::WrappedValue)).set(vm, this, value);
+    m_internalValue.set(vm, this, value);
 }
 
 } // namespace JSC

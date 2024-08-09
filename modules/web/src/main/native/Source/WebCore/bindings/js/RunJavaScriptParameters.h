@@ -26,7 +26,6 @@
 #pragma once
 
 #include <wtf/HashMap.h>
-#include <wtf/URL.h>
 #include <wtf/Vector.h>
 #include <wtf/text/WTFString.h>
 
@@ -38,27 +37,24 @@ enum class ForceUserGesture : bool { No, Yes };
 using ArgumentWireBytesMap = HashMap<String, Vector<uint8_t>>;
 
 struct RunJavaScriptParameters {
-    RunJavaScriptParameters(String&& source, URL&& sourceURL, RunAsAsyncFunction runAsAsyncFunction, Optional<ArgumentWireBytesMap>&& arguments, ForceUserGesture forceUserGesture)
+    RunJavaScriptParameters(String&& source, RunAsAsyncFunction runAsAsyncFunction, Optional<ArgumentWireBytesMap>&& arguments, ForceUserGesture forceUserGesture)
         : source(WTFMove(source))
-        , sourceURL(WTFMove(sourceURL))
         , runAsAsyncFunction(runAsAsyncFunction)
         , arguments(WTFMove(arguments))
         , forceUserGesture(forceUserGesture)
     {
     }
 
-    RunJavaScriptParameters(const String& source, URL&& sourceURL, bool runAsAsyncFunction, Optional<ArgumentWireBytesMap>&& arguments, bool forceUserGesture)
+    RunJavaScriptParameters(const String& source, bool runAsAsyncFunction, Optional<ArgumentWireBytesMap>&& arguments, bool forceUserGesture)
         : source(source)
-        , sourceURL(WTFMove(sourceURL))
         , runAsAsyncFunction(runAsAsyncFunction ? RunAsAsyncFunction::Yes : RunAsAsyncFunction::No)
         , arguments(WTFMove(arguments))
         , forceUserGesture(forceUserGesture ? ForceUserGesture::Yes : ForceUserGesture::No)
     {
     }
 
-    RunJavaScriptParameters(String&& source, URL&& sourceURL, bool runAsAsyncFunction, Optional<ArgumentWireBytesMap>&& arguments, bool forceUserGesture)
+    RunJavaScriptParameters(String&& source, bool runAsAsyncFunction, Optional<ArgumentWireBytesMap>&& arguments, bool forceUserGesture)
         : source(WTFMove(source))
-        , sourceURL(WTFMove(sourceURL))
         , runAsAsyncFunction(runAsAsyncFunction ? RunAsAsyncFunction::Yes : RunAsAsyncFunction::No)
         , arguments(WTFMove(arguments))
         , forceUserGesture(forceUserGesture ? ForceUserGesture::Yes : ForceUserGesture::No)
@@ -66,24 +62,19 @@ struct RunJavaScriptParameters {
     }
 
     String source;
-    URL sourceURL;
     RunAsAsyncFunction runAsAsyncFunction;
     Optional<ArgumentWireBytesMap> arguments;
     ForceUserGesture forceUserGesture;
 
     template<typename Encoder> void encode(Encoder& encoder) const
     {
-        encoder << source << sourceURL << runAsAsyncFunction << arguments << forceUserGesture;
+        encoder << source << runAsAsyncFunction << arguments << forceUserGesture;
     }
 
     template<typename Decoder> static Optional<RunJavaScriptParameters> decode(Decoder& decoder)
     {
         String source;
         if (!decoder.decode(source))
-            return WTF::nullopt;
-
-        URL sourceURL;
-        if (!decoder.decode(sourceURL))
             return WTF::nullopt;
 
         RunAsAsyncFunction runAsAsyncFunction;
@@ -98,7 +89,7 @@ struct RunJavaScriptParameters {
         if (!decoder.decode(forceUserGesture))
             return WTF::nullopt;
 
-        return { RunJavaScriptParameters { WTFMove(source), WTFMove(sourceURL), runAsAsyncFunction, WTFMove(arguments), forceUserGesture } };
+        return { RunJavaScriptParameters { WTFMove(source), runAsAsyncFunction, WTFMove(arguments), forceUserGesture } };
     }
 };
 

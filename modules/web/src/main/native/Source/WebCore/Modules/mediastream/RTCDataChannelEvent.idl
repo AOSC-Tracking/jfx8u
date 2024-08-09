@@ -25,10 +25,9 @@
 
 [
     Conditional=WEB_RTC,
-    EnabledAtRuntime=PeerConnection
+    Constructor(DOMString type, RTCDataChannelEventInit eventInitDict),
+    EnabledAtRuntime=PeerConnection,
 ] interface RTCDataChannelEvent : Event {
-    constructor(DOMString type, RTCDataChannelEventInit eventInitDict);
-
     readonly attribute RTCDataChannel channel;
 };
 

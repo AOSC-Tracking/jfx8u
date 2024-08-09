@@ -1,5 +1,7 @@
 /*
- * Copyright (C) 2020 Apple, Inc. All rights reserved.
+ * Copyright (C) 2008, 2009, 2010, 2011 Apple Inc. All rights reserved.
+ * Copyright (C) 2012 Google Inc.
+ * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -25,42 +27,49 @@
 
 #pragma once
 
-#include "JSObject.h"
+#if ENABLE(VIDEO)
 
-namespace JSC {
+#include "RenderBlockFlow.h"
+#include "RenderFlexibleBox.h"
 
-class FinalizationRegistryPrototype final : public JSNonFinalObject {
+namespace WebCore {
+
+class RenderMediaVolumeSliderContainer final : public RenderBlockFlow {
+    WTF_MAKE_ISO_ALLOCATED(RenderMediaVolumeSliderContainer);
 public:
-    using Base = JSNonFinalObject;
-
-    template<typename CellType, SubspaceAccess>
-    static IsoSubspace* subspaceFor(VM& vm)
-    {
-        STATIC_ASSERT_ISO_SUBSPACE_SHARABLE(FinalizationRegistryPrototype, Base);
-        return &vm.plainObjectSpace;
-    }
-
-    static FinalizationRegistryPrototype* create(VM& vm, JSGlobalObject* globalObject, Structure* structure)
-    {
-        FinalizationRegistryPrototype* prototype = new (NotNull, allocateCell<FinalizationRegistryPrototype>(vm.heap)) FinalizationRegistryPrototype(vm, structure);
-        prototype->finishCreation(vm, globalObject);
-        return prototype;
-    }
-
-    DECLARE_INFO;
-
-    static Structure* createStructure(VM& vm, JSGlobalObject* globalObject, JSValue prototype)
-    {
-        return Structure::create(vm, globalObject, prototype, TypeInfo(ObjectType, StructureFlags), info());
-    }
+    RenderMediaVolumeSliderContainer(Element&, RenderStyle&&);
 
 private:
-    FinalizationRegistryPrototype(VM& vm, Structure* structure)
-        : Base(vm, structure)
-    { }
-
-    void finishCreation(VM&, JSGlobalObject*);
+    void layout() override;
 };
 
-}
+// ----------------------------
 
+class RenderMediaControlTimelineContainer final : public RenderFlexibleBox {
+    WTF_MAKE_ISO_ALLOCATED(RenderMediaControlTimelineContainer);
+public:
+    RenderMediaControlTimelineContainer(Element&, RenderStyle&&);
+
+private:
+    void layout() override;
+    bool isFlexibleBoxImpl() const override { return true; }
+};
+
+// ----------------------------
+
+#if ENABLE(VIDEO_TRACK)
+
+class RenderTextTrackContainerElement final : public RenderBlockFlow {
+    WTF_MAKE_ISO_ALLOCATED(RenderTextTrackContainerElement);
+public:
+    RenderTextTrackContainerElement(Element&, RenderStyle&&);
+
+private:
+    void layout() override;
+};
+
+#endif // ENABLE(VIDEO_TRACK)
+
+} // namespace WebCore
+
+#endif // ENABLE(VIDEO)

@@ -258,19 +258,19 @@ void InitDataRegistry::registerInitDataType(const AtomString& initDataType, Init
 
 const AtomString& InitDataRegistry::cencName()
 {
-    static MainThreadNeverDestroyed<const AtomString> sinf { MAKE_STATIC_STRING_IMPL("cenc") };
+    static NeverDestroyed<AtomString> sinf { MAKE_STATIC_STRING_IMPL("cenc") };
     return sinf;
 }
 
 const AtomString& InitDataRegistry::keyidsName()
 {
-    static MainThreadNeverDestroyed<const AtomString> sinf { MAKE_STATIC_STRING_IMPL("keyids") };
+    static NeverDestroyed<AtomString> sinf { MAKE_STATIC_STRING_IMPL("keyids") };
     return sinf;
 }
 
 const AtomString& InitDataRegistry::webmName()
 {
-    static MainThreadNeverDestroyed<const AtomString> sinf { MAKE_STATIC_STRING_IMPL("webm") };
+    static NeverDestroyed<AtomString> sinf { MAKE_STATIC_STRING_IMPL("webm") };
     return sinf;
 }
 

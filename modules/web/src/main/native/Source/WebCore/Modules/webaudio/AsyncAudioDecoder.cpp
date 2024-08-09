@@ -41,7 +41,7 @@ AsyncAudioDecoder::AsyncAudioDecoder()
     LockHolder lock(m_threadCreationMutex);
     m_thread = Thread::create("Audio Decoder", [this] {
         runLoop();
-    }, ThreadType::Audio);
+    });
 }
 
 AsyncAudioDecoder::~AsyncAudioDecoder()
@@ -52,11 +52,11 @@ AsyncAudioDecoder::~AsyncAudioDecoder()
     m_thread->waitForCompletion();
 }
 
-void AsyncAudioDecoder::decodeAsync(Ref<ArrayBuffer>&& audioData, float sampleRate, Function<void(ExceptionOr<Ref<AudioBuffer>>&&)>&& callback)
+void AsyncAudioDecoder::decodeAsync(Ref<ArrayBuffer>&& audioData, float sampleRate, RefPtr<AudioBufferCallback>&& successCallback, RefPtr<AudioBufferCallback>&& errorCallback)
 {
     ASSERT(isMainThread());
 
-    auto decodingTask = makeUnique<DecodingTask>(WTFMove(audioData), sampleRate, WTFMove(callback));
+    auto decodingTask = makeUnique<DecodingTask>(WTFMove(audioData), sampleRate, WTFMove(successCallback), WTFMove(errorCallback));
     m_queue.append(WTFMove(decodingTask)); // note that ownership of the task is effectively taken by the queue.
 }
 
@@ -77,10 +77,11 @@ void AsyncAudioDecoder::runLoop()
     }
 }
 
-AsyncAudioDecoder::DecodingTask::DecodingTask(Ref<ArrayBuffer>&& audioData, float sampleRate, Function<void(ExceptionOr<Ref<AudioBuffer>>&&)>&& callback)
+AsyncAudioDecoder::DecodingTask::DecodingTask(Ref<ArrayBuffer>&& audioData, float sampleRate, RefPtr<AudioBufferCallback>&& successCallback, RefPtr<AudioBufferCallback>&& errorCallback)
     : m_audioData(WTFMove(audioData))
     , m_sampleRate(sampleRate)
-    , m_callback(WTFMove(callback))
+    , m_successCallback(WTFMove(successCallback))
+    , m_errorCallback(WTFMove(errorCallback))
 {
 }
 
@@ -97,10 +98,10 @@ void AsyncAudioDecoder::DecodingTask::decode()
 
 void AsyncAudioDecoder::DecodingTask::notifyComplete()
 {
-    if (auto* audioBuffer = this->audioBuffer())
-        callback()(makeRef(*audioBuffer));
-    else
-        callback()(Exception { EncodingError, "Decoding failed"_s });
+    if (audioBuffer() && successCallback())
+        successCallback()->handleEvent(audioBuffer());
+    else if (errorCallback())
+        errorCallback()->handleEvent(audioBuffer());
 
     // Our ownership was given up in AsyncAudioDecoder::runLoop()
     // Make sure to clean up here.

@@ -40,13 +40,13 @@ NetworkSendQueue::NetworkSendQueue(Document& document, WriteString&& writeString
 
 NetworkSendQueue::~NetworkSendQueue() = default;
 
-void NetworkSendQueue::enqueue(CString&& utf8)
+void NetworkSendQueue::enqueue(const String& data)
 {
     if (m_queue.isEmpty()) {
-        m_writeString(utf8);
+        m_writeString(data);
         return;
     }
-    m_queue.append(WTFMove(utf8));
+    m_queue.append(data);
 }
 
 void NetworkSendQueue::enqueue(const JSC::ArrayBuffer& binaryData, unsigned byteOffset, unsigned byteLength)
@@ -80,13 +80,12 @@ void NetworkSendQueue::processMessages()
 {
     while (!m_queue.isEmpty()) {
         bool shouldStopProcessing = false;
-        switchOn(m_queue.first(), [this](const CString& utf8) {
-            m_writeString(utf8);
+        switchOn(m_queue.first(), [this](const String& message) {
+            m_writeString(message);
         }, [this](Ref<SharedBuffer>& data) {
             m_writeRawData(data->data(), data->size());
         }, [this, &shouldStopProcessing](UniqueRef<BlobLoader>& loader) {
-            auto errorCode = loader->errorCode();
-            if (loader->isLoading() || (errorCode && errorCode.value() == AbortError)) {
+            if (loader->isLoading() || loader->errorCode() == FileError::ABORT_ERR) {
                 shouldStopProcessing = true;
                 return;
             }
@@ -95,8 +94,8 @@ void NetworkSendQueue::processMessages()
                 m_writeRawData(static_cast<const char*>(result->data()), result->byteLength());
                 return;
             }
-            ASSERT(errorCode);
-            shouldStopProcessing = m_processError(errorCode.value()) == Continue::No;
+            ASSERT(loader->errorCode());
+            shouldStopProcessing = m_processError(loader->errorCode()) == Continue::No;
         });
         if (shouldStopProcessing)
             return;

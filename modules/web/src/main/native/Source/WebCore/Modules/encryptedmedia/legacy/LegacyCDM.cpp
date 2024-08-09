@@ -43,53 +43,49 @@
 
 namespace WebCore {
 
-struct LegacyCDMFactory {
+struct CDMFactory {
+    WTF_MAKE_NONCOPYABLE(CDMFactory); WTF_MAKE_FAST_ALLOCATED;
+public:
+    CDMFactory(CreateCDM&& constructor, CDMSupportsKeySystem supportsKeySystem, CDMSupportsKeySystemAndMimeType supportsKeySystemAndMimeType)
+        : constructor(WTFMove(constructor))
+        , supportsKeySystem(supportsKeySystem)
+        , supportsKeySystemAndMimeType(supportsKeySystemAndMimeType)
+    {
+    }
+
     CreateCDM constructor;
     CDMSupportsKeySystem supportsKeySystem;
     CDMSupportsKeySystemAndMimeType supportsKeySystemAndMimeType;
 };
 
-static void platformRegisterFactories(Vector<LegacyCDMFactory>& factories)
+static Vector<CDMFactory*>& installedCDMFactories()
 {
-    factories.append({ [](LegacyCDM* cdm) { return makeUnique<LegacyCDMPrivateClearKey>(cdm); }, LegacyCDMPrivateClearKey::supportsKeySystem, LegacyCDMPrivateClearKey::supportsKeySystemAndMimeType });
-    // FIXME: initialize specific UA CDMs. http://webkit.org/b/109318, http://webkit.org/b/109320
-    factories.append({ [](LegacyCDM* cdm) { return makeUnique<CDMPrivateMediaPlayer>(cdm); }, CDMPrivateMediaPlayer::supportsKeySystem, CDMPrivateMediaPlayer::supportsKeySystemAndMimeType });
-#if (HAVE(AVCONTENTKEYSESSION) || HAVE(AVSTREAMSESSION)) && ENABLE(MEDIA_SOURCE)
-    factories.append({ [](LegacyCDM* cdm) { return makeUnique<CDMPrivateMediaSourceAVFObjC>(cdm); }, CDMPrivateMediaSourceAVFObjC::supportsKeySystem, CDMPrivateMediaSourceAVFObjC::supportsKeySystemAndMimeType });
-#endif
-}
+    static auto cdms = makeNeverDestroyed(Vector<CDMFactory*> {
+        new CDMFactory([](LegacyCDM* cdm) { return makeUnique<LegacyCDMPrivateClearKey>(cdm); },
+            LegacyCDMPrivateClearKey::supportsKeySystem, LegacyCDMPrivateClearKey::supportsKeySystemAndMimeType),
 
-static Vector<LegacyCDMFactory>& installedCDMFactories()
-{
-    static auto cdms = makeNeverDestroyed<Vector<LegacyCDMFactory>>({ });
-    static std::once_flag registerDefaults;
-    std::call_once(registerDefaults, [&] {
-        platformRegisterFactories(cdms);
+        // FIXME: initialize specific UA CDMs. http://webkit.org/b/109318, http://webkit.org/b/109320
+        new CDMFactory([](LegacyCDM* cdm) { return makeUnique<CDMPrivateMediaPlayer>(cdm); },
+            CDMPrivateMediaPlayer::supportsKeySystem, CDMPrivateMediaPlayer::supportsKeySystemAndMimeType),
+
+#if (HAVE(AVCONTENTKEYSESSION) || HAVE(AVSTREAMSESSION)) && ENABLE(MEDIA_SOURCE)
+        new CDMFactory([](LegacyCDM* cdm) { return makeUnique<CDMPrivateMediaSourceAVFObjC>(cdm); },
+            CDMPrivateMediaSourceAVFObjC::supportsKeySystem, CDMPrivateMediaSourceAVFObjC::supportsKeySystemAndMimeType),
+#endif
     });
     return cdms;
 }
 
-void LegacyCDM::resetFactories()
+void LegacyCDM::registerCDMFactory(CreateCDM&& constructor, CDMSupportsKeySystem supportsKeySystem, CDMSupportsKeySystemAndMimeType supportsKeySystemAndMimeType)
 {
-    clearFactories();
-    platformRegisterFactories(installedCDMFactories());
+    installedCDMFactories().append(new CDMFactory(WTFMove(constructor), supportsKeySystem, supportsKeySystemAndMimeType));
 }
 
-void LegacyCDM::clearFactories()
-{
-    installedCDMFactories().clear();
-}
-
-void LegacyCDM::registerCDMFactory(CreateCDM&& constructor, CDMSupportsKeySystem&& supportsKeySystem, CDMSupportsKeySystemAndMimeType&& supportsKeySystemAndMimeType)
-{
-    installedCDMFactories().append({ WTFMove(constructor), WTFMove(supportsKeySystem), WTFMove(supportsKeySystemAndMimeType) });
-}
-
-static LegacyCDMFactory* CDMFactoryForKeySystem(const String& keySystem)
+static CDMFactory* CDMFactoryForKeySystem(const String& keySystem)
 {
     for (auto& factory : installedCDMFactories()) {
-        if (factory.supportsKeySystem(keySystem))
-            return &factory;
+        if (factory->supportsKeySystem(keySystem))
+            return factory;
     }
     return nullptr;
 }
@@ -101,7 +97,7 @@ bool LegacyCDM::supportsKeySystem(const String& keySystem)
 
 bool LegacyCDM::keySystemSupportsMimeType(const String& keySystem, const String& mimeType)
 {
-    if (LegacyCDMFactory* factory = CDMFactoryForKeySystem(keySystem))
+    if (CDMFactory* factory = CDMFactoryForKeySystem(keySystem))
         return factory->supportsKeySystemAndMimeType(keySystem, mimeType);
     return false;
 }

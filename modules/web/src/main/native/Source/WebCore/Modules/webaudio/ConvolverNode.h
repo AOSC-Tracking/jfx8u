@@ -1,6 +1,5 @@
 /*
  * Copyright (C) 2010, Google Inc. All rights reserved.
- * Copyright (C) 2020, Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -26,7 +25,6 @@
 #pragma once
 
 #include "AudioNode.h"
-#include "ConvolverOptions.h"
 #include <wtf/Lock.h>
 
 namespace WebCore {
@@ -37,21 +35,21 @@ class Reverb;
 class ConvolverNode final : public AudioNode {
     WTF_MAKE_ISO_ALLOCATED(ConvolverNode);
 public:
-    static ExceptionOr<Ref<ConvolverNode>> create(BaseAudioContext&, ConvolverOptions&& = { });
+    static Ref<ConvolverNode> create(AudioContext& context, float sampleRate)
+    {
+        return adoptRef(*new ConvolverNode(context, sampleRate));
+    }
 
     virtual ~ConvolverNode();
 
-    ExceptionOr<void> setBuffer(RefPtr<AudioBuffer>&&);
+    ExceptionOr<void> setBuffer(AudioBuffer*);
     AudioBuffer* buffer();
 
     bool normalize() const { return m_normalize; }
     void setNormalize(bool normalize) { m_normalize = normalize; }
 
-    ExceptionOr<void> setChannelCount(unsigned) final;
-    ExceptionOr<void> setChannelCountMode(ChannelCountMode) final;
-
 private:
-    explicit ConvolverNode(BaseAudioContext&);
+    ConvolverNode(AudioContext&, float sampleRate);
 
     double tailTime() const final;
     double latencyTime() const final;

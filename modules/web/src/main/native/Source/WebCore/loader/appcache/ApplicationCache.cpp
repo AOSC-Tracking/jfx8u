@@ -86,8 +86,8 @@ void ApplicationCache::addResource(Ref<ApplicationCacheResource>&& resource)
 {
     auto& url = resource->url();
 
-    ASSERT(!url.hasFragmentIdentifier());
-    ASSERT(!m_resources.contains(url.string()));
+    ASSERT(!URL({ }, url).hasFragmentIdentifier());
+    ASSERT(!m_resources.contains(url));
 
     if (m_storageID) {
         ASSERT(!resource->storageID());
@@ -99,7 +99,7 @@ void ApplicationCache::addResource(Ref<ApplicationCacheResource>&& resource)
 
     m_estimatedSizeInStorage += resource->estimatedSizeInStorage();
 
-    m_resources.set(url.string(), WTFMove(resource));
+    m_resources.set(url, WTFMove(resource));
 }
 
 ApplicationCacheResource* ApplicationCache::resourceForURL(const String& url)
@@ -121,19 +121,19 @@ ApplicationCacheResource* ApplicationCache::resourceForRequest(const ResourceReq
 
     URL url(request.url());
     url.removeFragmentIdentifier();
-    return resourceForURL(url.string());
+    return resourceForURL(url);
 }
 
-void ApplicationCache::setOnlineAllowlist(const Vector<URL>& onlineAllowlist)
+void ApplicationCache::setOnlineWhitelist(const Vector<URL>& onlineWhitelist)
 {
-    ASSERT(m_onlineAllowlist.isEmpty());
-    m_onlineAllowlist = onlineAllowlist;
+    ASSERT(m_onlineWhitelist.isEmpty());
+    m_onlineWhitelist = onlineWhitelist;
 }
 
-bool ApplicationCache::isURLInOnlineAllowlist(const URL& url)
+bool ApplicationCache::isURLInOnlineWhitelist(const URL& url)
 {
-    for (auto& allowlistURL : m_onlineAllowlist) {
-        if (protocolHostAndPortAreEqual(url, allowlistURL) && url.string().startsWith(allowlistURL.string()))
+    for (auto& whitelistURL : m_onlineWhitelist) {
+        if (protocolHostAndPortAreEqual(url, whitelistURL) && url.string().startsWith(whitelistURL.string()))
             return true;
     }
     return false;

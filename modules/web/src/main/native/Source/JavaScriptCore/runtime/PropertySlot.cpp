@@ -21,7 +21,9 @@
 #include "config.h"
 #include "PropertySlot.h"
 
+#include "DOMJITGetterSetter.h"
 #include "GetterSetter.h"
+#include "HeapCellInlines.h"
 #include "JSCJSValueInlines.h"
 #include "JSObject.h"
 

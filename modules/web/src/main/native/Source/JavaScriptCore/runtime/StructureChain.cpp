@@ -26,7 +26,9 @@
 #include "config.h"
 #include "StructureChain.h"
 
+#include "JSObject.h"
 #include "JSCInlines.h"
+#include "Structure.h"
 
 namespace JSC {
 

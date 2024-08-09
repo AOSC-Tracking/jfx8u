@@ -29,6 +29,7 @@
 #if ENABLE(B3_JIT)
 
 #include "B3BackwardsDominators.h"
+#include "B3BasicBlockInlines.h"
 #include "B3Dominators.h"
 #include "B3EnsureLoopPreHeaders.h"
 #include "B3NaturalLoops.h"

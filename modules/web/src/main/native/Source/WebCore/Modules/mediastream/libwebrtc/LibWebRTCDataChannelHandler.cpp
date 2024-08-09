@@ -89,14 +89,15 @@ void LibWebRTCDataChannelHandler::setClient(RTCDataChannelHandlerClient& client)
     checkState();
 }
 
-bool LibWebRTCDataChannelHandler::sendStringData(const CString& utf8Text)
+bool LibWebRTCDataChannelHandler::sendStringData(const String& text)
 {
+    auto utf8Text = text.utf8();
     return m_channel->Send({ rtc::CopyOnWriteBuffer(utf8Text.data(), utf8Text.length()), false });
 }
 
 bool LibWebRTCDataChannelHandler::sendRawData(const char* data, size_t length)
 {
-    return m_channel->Send({ rtc::CopyOnWriteBuffer(data, length), true });
+    return m_channel->Send({rtc::CopyOnWriteBuffer(data, length), true});
 }
 
 void LibWebRTCDataChannelHandler::close()
@@ -152,12 +153,15 @@ void LibWebRTCDataChannelHandler::OnMessage(const webrtc::DataBuffer& buffer)
     });
 }
 
-void LibWebRTCDataChannelHandler::OnBufferedAmountChange(uint64_t amount)
+void LibWebRTCDataChannelHandler::OnBufferedAmountChange(uint64_t previousAmount)
 {
     if (!m_client)
         return;
 
-    callOnMainThread([protectedClient = makeRef(*m_client), amount] {
+    if (previousAmount <= m_channel->buffered_amount())
+        return;
+
+    callOnMainThread([protectedClient = makeRef(*m_client), amount = m_channel->buffered_amount()] {
         protectedClient->bufferedAmountIsDecreasing(static_cast<size_t>(amount));
     });
 }

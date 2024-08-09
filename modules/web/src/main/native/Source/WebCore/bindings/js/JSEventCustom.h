@@ -34,11 +34,10 @@ namespace JSCastingHelpers {
 
 template<>
 struct InheritsTraits<WebCore::JSEvent> {
-    static constexpr Optional<JSTypeRange> typeRange { { static_cast<JSType>(WebCore::JSEventType), static_cast<JSType>(WebCore::JSEventType) } };
     template<typename From>
-    static inline bool inherits(VM& vm, From* from)
+    static inline bool inherits(VM&, From* from)
     {
-        return inheritsJSTypeImpl<WebCore::JSEvent>(vm, from, *typeRange);
+        return from->type() == WebCore::JSEventType;
     }
 };
 

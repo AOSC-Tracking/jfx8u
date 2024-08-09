@@ -25,7 +25,6 @@
 
 .controls-bar {
     position: absolute;
-    cursor: default;
     direction: ltr;
     will-change: z-index;
 }

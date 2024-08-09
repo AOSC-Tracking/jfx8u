@@ -71,7 +71,6 @@ ScrollableArea::ScrollableArea()
     , m_scrollOriginChanged(false)
     , m_currentScrollType(static_cast<unsigned>(ScrollType::User))
     , m_scrollShouldClearLatchedState(false)
-    , m_currentScrollBehaviorStatus(static_cast<unsigned>(ScrollBehaviorStatus::NotInAnimation))
 {
 }
 
@@ -141,12 +140,6 @@ bool ScrollableArea::scroll(ScrollDirection direction, ScrollGranularity granula
 
     step = adjustScrollStepForFixedContent(step, orientation, granularity);
     return scrollAnimator().scroll(orientation, granularity, step, multiplier);
-}
-
-void ScrollableArea::scrollToOffsetWithAnimation(const FloatPoint& offset, ScrollClamping)
-{
-    LOG_WITH_STREAM(Scrolling, stream << "ScrollableArea " << this << " scrollToOffsetWithAnimation " << offset);
-    scrollAnimator().scrollToOffset(offset);
 }
 
 void ScrollableArea::scrollToOffsetWithoutAnimation(const FloatPoint& offset, ScrollClamping clamping)
@@ -438,16 +431,6 @@ bool ScrollableArea::hasLayerForScrollCorner() const
     return layerForScrollCorner();
 }
 
-String ScrollableArea::horizontalScrollbarStateForTesting() const
-{
-    return scrollAnimator().horizontalScrollbarStateForTesting();
-}
-
-String ScrollableArea::verticalScrollbarStateForTesting() const
-{
-    return scrollAnimator().verticalScrollbarStateForTesting();
-}
-
 #if ENABLE(CSS_SCROLL_SNAP)
 ScrollSnapOffsetsInfo<LayoutUnit>& ScrollableArea::ensureSnapOffsetsInfo()
 {
@@ -536,11 +519,6 @@ void ScrollableArea::clearVerticalSnapOffsets()
     m_currentVerticalSnapPointIndex = 0;
 }
 
-bool ScrollableArea::usesScrollSnap() const
-{
-    return !!m_snapOffsetsInfo;
-}
-
 IntPoint ScrollableArea::nearestActiveSnapPoint(const IntPoint& currentPosition)
 {
     if (!horizontalSnapOffsets() && !verticalSnapOffsets())
@@ -575,21 +553,14 @@ void ScrollableArea::updateScrollSnapState()
     if (ScrollAnimator* scrollAnimator = existingScrollAnimator())
         scrollAnimator->updateScrollSnapState();
 
-    if (!usesScrollSnap())
-        return;
-
-    LOG_WITH_STREAM(ScrollSnap, stream << *this << " updateScrollSnapState: isScrollSnapInProgress " << isScrollSnapInProgress() << " isUserScrollInProgress " << isUserScrollInProgress());
-
-    if (isScrollSnapInProgress() || isUserScrollInProgress())
+    if (isScrollSnapInProgress())
         return;
 
     IntPoint currentPosition = scrollPosition();
     IntPoint correctedPosition = nearestActiveSnapPoint(currentPosition);
 
-    if (correctedPosition != currentPosition) {
-        LOG_WITH_STREAM(ScrollSnap, stream << " adjusting position from " << currentPosition << " to " << correctedPosition);
+    if (correctedPosition != currentPosition)
         scrollToOffsetWithoutAnimation(correctedPosition);
-    }
 }
 #else
 void ScrollableArea::updateScrollSnapState()
@@ -789,12 +760,6 @@ void ScrollableArea::computeScrollbarValueAndOverhang(float currentPosition, flo
         else
             doubleValue = 0;
     }
-}
-
-TextStream& operator<<(TextStream& ts, const ScrollableArea& scrollableArea)
-{
-    ts << scrollableArea.debugDescription();
-    return ts;
 }
 
 } // namespace WebCore

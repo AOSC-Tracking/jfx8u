@@ -190,8 +190,8 @@ ReplacementFragment::ReplacementFragment(DocumentFragment* fragment, const Visib
         return;
     }
 
-    auto range = VisibleSelection::selectionFromContentsOfNode(holder.get()).toNormalizedRange();
-    String text = range ? plainText(*range, static_cast<TextIteratorBehavior>(TextIteratorEmitsOriginalText | TextIteratorIgnoresStyleVisibility)) : emptyString();
+    RefPtr<Range> range = VisibleSelection::selectionFromContentsOfNode(holder.get()).toNormalizedRange();
+    String text = plainText(range.get(), static_cast<TextIteratorBehavior>(TextIteratorEmitsOriginalText | TextIteratorIgnoresStyleVisibility));
 
     removeInterchangeNodes(holder.get());
     removeUnrenderedNodes(holder.get());
@@ -203,7 +203,7 @@ ReplacementFragment::ReplacementFragment(DocumentFragment* fragment, const Visib
     if (text != event->text() || !editableRoot->hasRichlyEditableStyle()) {
         restoreAndRemoveTestRenderingNodesToFragment(holder.get());
 
-        auto range = selection.toNormalizedRange();
+        RefPtr<Range> range = selection.toNormalizedRange();
         if (!range)
             return;
 
@@ -547,7 +547,9 @@ static bool fragmentNeedsColorTransformed(ReplacementFragment& fragment, const P
         if (!color || !color.value().isVisible() || color.value().isSemantic())
             return { };
 
-        return color.value().lightness();
+        double hue, saturation, lightness;
+        color.value().getHSL(hue, saturation, lightness);
+        return lightness;
     };
 
     const double lightnessDarkEnoughForText = 0.4;
@@ -1179,7 +1181,7 @@ void ReplaceSelectionCommand::doApply()
 
     // FIXME: Can this wait until after the operation has been performed?  There doesn't seem to be
     // any work performed after this that queries or uses the typing style.
-    document().selection().clearTypingStyle();
+    frame().selection().clearTypingStyle();
 
     // We don't want the destination to end up inside nodes that weren't selected.  To avoid that, we move the
     // position forward without changing the visible position so we're still at the same visible location, but
@@ -1769,9 +1771,12 @@ bool ReplaceSelectionCommand::performTrivialReplace(const ReplacementFragment& f
     return true;
 }
 
-Optional<SimpleRange> ReplaceSelectionCommand::insertedContentRange() const
+RefPtr<Range> ReplaceSelectionCommand::insertedContentRange() const
 {
-    return makeSimpleRange(m_startOfInsertedContent, m_endOfInsertedContent);
+    if (auto document = makeRefPtr(m_startOfInsertedContent.document()))
+        return Range::create(*document, m_startOfInsertedContent, m_endOfInsertedContent);
+
+    return nullptr;
 }
 
 } // namespace WebCore

@@ -31,7 +31,6 @@
 #include "BreakLines.h"
 #include "FontCascade.h"
 #include "InlineTextItem.h"
-#include "LayoutInlineTextBox.h"
 #include "RenderBox.h"
 #include "RenderStyle.h"
 
@@ -45,24 +44,25 @@ InlineLayoutUnit TextUtil::width(const InlineTextItem& inlineTextItem, unsigned 
         auto font = inlineTextItem.style().fontCascade();
         return font.spaceWidth() + font.wordSpacing();
     }
-    return TextUtil::width(inlineTextItem.inlineTextBox(), from, to, contentLogicalLeft);
+    return TextUtil::width(inlineTextItem.layoutBox(), from, to, contentLogicalLeft);
 }
 
-InlineLayoutUnit TextUtil::width(const InlineTextBox& inlineTextBox, unsigned from, unsigned to, InlineLayoutUnit contentLogicalLeft)
+InlineLayoutUnit TextUtil::width(const Box& inlineBox, unsigned from, unsigned to, InlineLayoutUnit contentLogicalLeft)
 {
-    auto& style = inlineTextBox.style();
+    auto& style = inlineBox.style();
     auto& font = style.fontCascade();
     if (!font.size() || from == to)
         return 0;
 
-    auto text = inlineTextBox.content();
+    auto& textContext = *inlineBox.textContext();
+    auto& text = textContext.content;
     ASSERT(to <= text.length());
     auto hasKerningOrLigatures = font.enableKerning() || font.requiresShaping();
     auto measureWithEndSpace = hasKerningOrLigatures && to < text.length() && text[to] == ' ';
     if (measureWithEndSpace)
         ++to;
     float width = 0;
-    if (inlineTextBox.canUseSimplifiedContentMeasuring()) {
+    if (textContext.canUseSimplifiedContentMeasuring) {
         if (font.isFixedPitch())
             width = fixedPitchWidth(text, style, from, to, contentLogicalLeft);
         else
@@ -100,7 +100,7 @@ InlineLayoutUnit TextUtil::fixedPitchWidth(const StringView& text, const RenderS
     return std::max<InlineLayoutUnit>(0, InlineLayoutUnit(width));
 }
 
-TextUtil::SplitData TextUtil::split(const InlineTextBox& inlineTextBox, unsigned startPosition, unsigned length, InlineLayoutUnit textWidth, InlineLayoutUnit availableWidth, InlineLayoutUnit contentLogicalLeft)
+TextUtil::SplitData TextUtil::split(const Box& inlineBox, unsigned startPosition, unsigned length, InlineLayoutUnit textWidth, InlineLayoutUnit availableWidth, InlineLayoutUnit contentLogicalLeft)
 {
     ASSERT(availableWidth >= 0);
     auto left = startPosition;
@@ -113,7 +113,7 @@ TextUtil::SplitData TextUtil::split(const InlineTextBox& inlineTextBox, unsigned
     InlineLayoutUnit leftSideWidth = 0;
     while (left < right) {
         auto middle = (left + right) / 2;
-        auto width = TextUtil::width(inlineTextBox, startPosition, middle + 1, contentLogicalLeft);
+        auto width = TextUtil::width(inlineBox, startPosition, middle + 1, contentLogicalLeft);
         if (width < availableWidth) {
             left = middle + 1;
             leftSideWidth = width;

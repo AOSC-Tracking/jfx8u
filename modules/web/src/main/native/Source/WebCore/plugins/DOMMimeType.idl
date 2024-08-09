@@ -19,9 +19,7 @@
 */
 
 [
-    InterfaceName=MimeType,
-    GenerateIsReachable=ReachableFromNavigator,
-    ImplementationLacksVTable
+    InterfaceName=MimeType
 ] interface DOMMimeType {
     readonly attribute DOMString type;
     readonly attribute DOMString suffixes;

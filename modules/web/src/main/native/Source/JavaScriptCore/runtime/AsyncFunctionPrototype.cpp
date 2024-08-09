@@ -27,7 +27,14 @@
 #include "config.h"
 #include "AsyncFunctionPrototype.h"
 
+#include "BuiltinExecutables.h"
+#include "BuiltinNames.h"
+#include "Error.h"
+#include "JSArray.h"
 #include "JSCInlines.h"
+#include "JSFunction.h"
+#include "JSString.h"
+#include "Lexer.h"
 
 namespace JSC {
 
@@ -43,7 +50,7 @@ void AsyncFunctionPrototype::finishCreation(VM& vm)
     Base::finishCreation(vm);
     ASSERT(inherits(vm, info()));
     putDirectWithoutTransition(vm, vm.propertyNames->length, jsNumber(0), PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly | PropertyAttribute::DontEnum);
-    JSC_TO_STRING_TAG_WITHOUT_TRANSITION();
+    putDirectWithoutTransition(vm, vm.propertyNames->toStringTagSymbol, jsNontrivialString(vm, "AsyncFunction"_s), PropertyAttribute::DontEnum | PropertyAttribute::ReadOnly);
 }
 
 } // namespace JSC

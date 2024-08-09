@@ -39,7 +39,7 @@ public:
 
     void install(VM&);
 
-    static void clearLLIntGetByIdCache(GetByIdModeMetadata&);
+    static void clearLLIntGetByIdCache(OpGetById::Metadata&);
 
     const ObjectPropertyCondition& key() const { return m_key; }
 

@@ -28,7 +28,6 @@
 
 #include "DelayNode.h"
 
-#include "DelayOptions.h"
 #include "DelayProcessor.h"
 #include <wtf/IsoMallocInlines.h>
 
@@ -38,35 +37,21 @@ WTF_MAKE_ISO_ALLOCATED_IMPL(DelayNode);
 
 const double maximumAllowedDelayTime = 180;
 
-inline DelayNode::DelayNode(BaseAudioContext& context, double maxDelayTime)
-    : AudioBasicProcessorNode(context)
+inline DelayNode::DelayNode(AudioContext& context, float sampleRate, double maxDelayTime)
+    : AudioBasicProcessorNode(context, sampleRate)
 {
     setNodeType(NodeTypeDelay);
-    m_processor = makeUnique<DelayProcessor>(context, context.sampleRate(), 1, maxDelayTime);
+    m_processor = makeUnique<DelayProcessor>(context, sampleRate, 1, maxDelayTime);
 }
 
-ExceptionOr<Ref<DelayNode>> DelayNode::create(BaseAudioContext& context, const DelayOptions& options)
+ExceptionOr<Ref<DelayNode>> DelayNode::create(AudioContext& context, float sampleRate, double maxDelayTime)
 {
-    if (context.isStopped())
-        return Exception { InvalidStateError };
-
-    context.lazyInitialize();
-
-    if (options.maxDelayTime <= 0 || options.maxDelayTime >= maximumAllowedDelayTime)
+    if (maxDelayTime <= 0 || maxDelayTime >= maximumAllowedDelayTime)
         return Exception { NotSupportedError };
-
-    auto delayNode = adoptRef(*new DelayNode(context, options.maxDelayTime));
-
-    auto result = delayNode->handleAudioNodeOptions(options, { 2, ChannelCountMode::Max, ChannelInterpretation::Speakers });
-    if (result.hasException())
-        return result.releaseException();
-
-    delayNode->delayTime().setValue(options.delayTime);
-
-    return delayNode;
+    return adoptRef(*new DelayNode(context, sampleRate, maxDelayTime));
 }
 
-AudioParam& DelayNode::delayTime()
+AudioParam* DelayNode::delayTime()
 {
     return static_cast<DelayProcessor&>(*m_processor).delayTime();
 }

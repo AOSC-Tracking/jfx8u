@@ -33,10 +33,11 @@ class NullSetterFunction final : public InternalFunction {
 public:
     typedef InternalFunction Base;
 
-    static NullSetterFunction* create(VM& vm, Structure* structure, ECMAMode ecmaMode)
+    static NullSetterFunction* create(VM& vm, Structure* structure)
     {
-        NullSetterFunction* function = new (NotNull, allocateCell< NullSetterFunction>(vm.heap))  NullSetterFunction(vm, structure, ecmaMode);
-        function->finishCreation(vm, String());
+        // Since NullSetterFunction is per JSGlobalObject, we use put-without-transition in InternalFunction::finishCreation.
+        NullSetterFunction* function = new (NotNull, allocateCell< NullSetterFunction>(vm.heap))  NullSetterFunction(vm, structure);
+        function->finishCreation(vm, String(), NameAdditionMode::WithoutStructureTransition);
         return function;
     }
 
@@ -44,11 +45,11 @@ public:
 
     static Structure* createStructure(VM& vm, JSGlobalObject* globalObject, JSValue prototype)
     {
-        return Structure::create(vm, globalObject, prototype, TypeInfo(NullSetterFunctionType, StructureFlags), info());
+        return Structure::create(vm, globalObject, prototype, TypeInfo(InternalFunctionType, StructureFlags), info());
     }
 
 private:
-    NullSetterFunction(VM&, Structure*, ECMAMode);
+    NullSetterFunction(VM&, Structure*);
 };
 STATIC_ASSERT_ISO_SUBSPACE_SHARABLE(NullSetterFunction, InternalFunction);
 

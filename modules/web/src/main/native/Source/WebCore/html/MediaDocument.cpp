@@ -30,6 +30,7 @@
 
 #include "Chrome.h"
 #include "ChromeClient.h"
+#include "CustomHeaderFields.h"
 #include "DocumentLoader.h"
 #include "EventNames.h"
 #include "Frame.h"
@@ -92,7 +93,7 @@ void MediaDocumentParser::createDocumentStructure()
     rootElement->insertedByParser();
 
     if (document.frame())
-        document.frame()->injectUserScripts(UserScriptInjectionTime::DocumentStart);
+        document.frame()->injectUserScripts(InjectAtDocumentStart);
 
 #if PLATFORM(IOS_FAMILY)
     auto headElement = HTMLHeadElement::create(document);
@@ -125,7 +126,6 @@ void MediaDocumentParser::createDocumentStructure()
     }
 
     body->appendChild(videoElement);
-    document.setHasVisuallyNonEmptyCustomContent();
 
     RefPtr<Frame> frame = document.frame();
     if (!frame)

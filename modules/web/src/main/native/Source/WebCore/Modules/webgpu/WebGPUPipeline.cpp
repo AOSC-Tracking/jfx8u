@@ -47,8 +47,12 @@ HashMap<WebGPUPipeline*, WebGPUDevice*>& WebGPUPipeline::instances(const LockHol
 
 Lock& WebGPUPipeline::instancesMutex()
 {
-    static Lock mutex;
-    return mutex;
+    static LazyNeverDestroyed<Lock> mutex;
+    static std::once_flag initializeMutex;
+    std::call_once(initializeMutex, [] {
+        mutex.construct();
+    });
+    return mutex.get();
 }
 
 WebGPUPipeline::WebGPUPipeline(WebGPUDevice& device, GPUErrorScopes& errorScopes)

@@ -37,11 +37,7 @@ namespace Inspector {
 
 RemoteInspectorSocketEndpoint& RemoteInspectorSocketEndpoint::singleton()
 {
-    static LazyNeverDestroyed<RemoteInspectorSocketEndpoint> shared;
-    static std::once_flag onceKey;
-    std::call_once(onceKey, [&] {
-        shared.construct();
-    });
+    static NeverDestroyed<RemoteInspectorSocketEndpoint> shared;
     return shared;
 }
 
@@ -106,12 +102,6 @@ void RemoteInspectorSocketEndpoint::workerThread()
 {
     PollingDescriptor wakeup = Socket::preparePolling(m_wakeupReceiveSocket);
 
-#if USE(GENERIC_EVENT_LOOP) || USE(WINDOWS_EVENT_LOOP)
-    RunLoop::setWakeUpCallback([this] {
-        wakeupWorkerThread();
-    });
-#endif
-
     while (!m_shouldAbortWorkerThread) {
 #if USE(GENERIC_EVENT_LOOP) || USE(WINDOWS_EVENT_LOOP)
         RunLoop::iterate();
@@ -153,10 +143,6 @@ void RemoteInspectorSocketEndpoint::workerThread()
                 sendIfEnabled(id);
         }
     }
-
-#if USE(GENERIC_EVENT_LOOP) || USE(WINDOWS_EVENT_LOOP)
-    RunLoop::setWakeUpCallback(WTF::Function<void()>());
-#endif
 }
 
 ConnectionID RemoteInspectorSocketEndpoint::generateConnectionID()

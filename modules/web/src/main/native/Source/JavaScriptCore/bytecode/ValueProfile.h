@@ -60,10 +60,10 @@ struct ValueProfileBase {
         JSValue value = JSValue::decode(m_buckets[bucket]);
         if (!!value) {
             if (!value.isCell())
-                return nullptr;
+                return 0;
             return value.asCell()->structure()->classInfo();
         }
-        return nullptr;
+        return 0;
     }
 
     unsigned numberOfSamples() const

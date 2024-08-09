@@ -101,9 +101,9 @@ Decimal StepRange::parseStep(AnyStepHandling anyStepHandling, const StepDescript
 
     if (equalLettersIgnoringASCIICase(stepString, "any")) {
         switch (anyStepHandling) {
-        case AnyStepHandling::Reject:
+        case RejectAny:
             return Decimal::nan();
-        case AnyStepHandling::Default:
+        case AnyIsDefaultStep:
             return stepDescription.defaultValue();
         default:
             ASSERT_NOT_REACHED();

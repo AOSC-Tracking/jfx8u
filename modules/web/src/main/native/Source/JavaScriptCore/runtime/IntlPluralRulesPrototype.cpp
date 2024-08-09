@@ -27,8 +27,12 @@
 #include "config.h"
 #include "IntlPluralRulesPrototype.h"
 
+#if ENABLE(INTL)
+
+#include "Error.h"
 #include "IntlPluralRules.h"
 #include "JSCInlines.h"
+#include "JSObjectInlines.h"
 
 namespace JSC {
 
@@ -41,7 +45,7 @@ static EncodedJSValue JSC_HOST_CALL IntlPluralRulesPrototypeFuncResolvedOptions(
 
 namespace JSC {
 
-const ClassInfo IntlPluralRulesPrototype::s_info = { "Intl.PluralRules", &Base::s_info, &pluralRulesPrototypeTable, nullptr, CREATE_METHOD_TABLE(IntlPluralRulesPrototype) };
+const ClassInfo IntlPluralRulesPrototype::s_info = { "Object", &Base::s_info, &pluralRulesPrototypeTable, nullptr, CREATE_METHOD_TABLE(IntlPluralRulesPrototype) };
 
 /* Source for IntlPluralRulesPrototype.lut.h
 @begin pluralRulesPrototypeTable
@@ -53,7 +57,7 @@ const ClassInfo IntlPluralRulesPrototype::s_info = { "Intl.PluralRules", &Base::
 IntlPluralRulesPrototype* IntlPluralRulesPrototype::create(VM& vm, JSGlobalObject*, Structure* structure)
 {
     IntlPluralRulesPrototype* object = new (NotNull, allocateCell<IntlPluralRulesPrototype>(vm.heap)) IntlPluralRulesPrototype(vm, structure);
-    object->finishCreation(vm);
+    object->finishCreation(vm, structure);
     return object;
 }
 
@@ -67,11 +71,11 @@ IntlPluralRulesPrototype::IntlPluralRulesPrototype(VM& vm, Structure* structure)
 {
 }
 
-void IntlPluralRulesPrototype::finishCreation(VM& vm)
+void IntlPluralRulesPrototype::finishCreation(VM& vm, Structure*)
 {
     Base::finishCreation(vm);
-    ASSERT(inherits(vm, info()));
-    JSC_TO_STRING_TAG_WITHOUT_TRANSITION();
+
+    putDirectWithoutTransition(vm, vm.propertyNames->toStringTagSymbol, jsNontrivialString(vm, "Object"_s), PropertyAttribute::DontEnum | PropertyAttribute::ReadOnly);
 }
 
 EncodedJSValue JSC_HOST_CALL IntlPluralRulesPrototypeFuncSelect(JSGlobalObject* globalObject, CallFrame* callFrame)
@@ -108,3 +112,5 @@ EncodedJSValue JSC_HOST_CALL IntlPluralRulesPrototypeFuncResolvedOptions(JSGloba
 }
 
 } // namespace JSC
+
+#endif // ENABLE(INTL)

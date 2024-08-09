@@ -1,7 +1,7 @@
 /*
  *  Copyright (C) 1999-2001 Harri Porten (porten@kde.org)
  *  Copyright (C) 2001 Peter Kelly (pmk@post.com)
- *  Copyright (C) 2006-2020 Apple Inc. All rights reserved.
+ *  Copyright (C) 2006-2019 Apple Inc. All rights reserved.
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -25,6 +25,7 @@
 #include "CachedScriptFetcher.h"
 #include "CommonVM.h"
 #include "ContentSecurityPolicy.h"
+#include "CustomHeaderFields.h"
 #include "DOMWrapperWorld.h"
 #include "DocumentLoader.h"
 #include "Event.h"
@@ -39,7 +40,6 @@
 #include "JSDocument.h"
 #include "JSExecState.h"
 #include "LoadableModuleScript.h"
-#include "Logging.h"
 #include "ModuleFetchFailureKind.h"
 #include "ModuleFetchParameters.h"
 #include "NP_jsobject.h"
@@ -50,7 +50,6 @@
 #include "PluginViewBase.h"
 #include "RunJavaScriptParameters.h"
 #include "RuntimeApplicationChecks.h"
-#include "RuntimeEnabledFeatures.h"
 #include "ScriptDisallowedScope.h"
 #include "ScriptSourceCode.h"
 #include "ScriptableDocumentParser.h"
@@ -77,15 +76,13 @@
 #include <wtf/Threading.h>
 #include <wtf/text/TextPosition.h>
 
-#define RELEASE_LOG_ERROR_IF_ALLOWED(channel, fmt, ...) RELEASE_LOG_ERROR_IF(m_frame.isAlwaysOnLoggingAllowed(), channel, "%p - ScriptController::" fmt, this, ##__VA_ARGS__)
-
 namespace WebCore {
 using namespace JSC;
 
-void ScriptController::initializeMainThread()
+void ScriptController::initializeThreading()
 {
 #if !PLATFORM(IOS_FAMILY)
-    JSC::initialize();
+    JSC::initializeThreading();
     WTF::initializeMainThread();
 #endif
 }
@@ -125,7 +122,7 @@ ValueOrException ScriptController::evaluateInWorld(const ScriptSourceCode& sourc
     JSLockHolder lock(world.vm());
 
     const SourceCode& jsSourceCode = sourceCode.jsSourceCode();
-    const URL& sourceURL = jsSourceCode.provider()->sourceOrigin().url();
+    String sourceURL = jsSourceCode.provider()->url();
 
     // evaluate code. Returns the JS return value or 0
     // if there was none, an error occurred or the type couldn't be converted.
@@ -136,11 +133,12 @@ ValueOrException ScriptController::evaluateInWorld(const ScriptSourceCode& sourc
     // See smart window.open policy for where this is used.
     auto& proxy = jsWindowProxy(world);
     auto& globalObject = *proxy.window();
+    const String* savedSourceURL = m_sourceURL;
+    m_sourceURL = &sourceURL;
 
     Ref<Frame> protector(m_frame);
-    SetForScope<const URL*> sourceURLScope(m_sourceURL, &sourceURL);
 
-    InspectorInstrumentation::willEvaluateScript(m_frame, sourceURL.string(), sourceCode.startLine(), sourceCode.startColumn());
+    InspectorInstrumentation::willEvaluateScript(m_frame, sourceURL, sourceCode.startLine(), sourceCode.startColumn());
 
     NakedPtr<JSC::Exception> evaluationException;
     JSValue returnValue = JSExecState::profiledEvaluate(&globalObject, JSC::ProfilingReason::Other, jsSourceCode, &proxy, evaluationException);
@@ -154,6 +152,7 @@ ValueOrException ScriptController::evaluateInWorld(const ScriptSourceCode& sourc
         optionalDetails = WTFMove(details);
     }
 
+    m_sourceURL = savedSourceURL;
     if (optionalDetails)
         return makeUnexpected(*optionalDetails);
 
@@ -233,11 +232,11 @@ JSC::JSValue ScriptController::evaluateModule(const URL& sourceURL, JSModuleReco
 
     auto& proxy = jsWindowProxy(world);
     auto& lexicalGlobalObject = *proxy.window();
+    SetForScope<const String*> sourceURLScope(m_sourceURL, &sourceURL.string());
 
     Ref<Frame> protector(m_frame);
-    SetForScope<const URL*> sourceURLScope(m_sourceURL, &sourceURL);
 
-    InspectorInstrumentation::willEvaluateScript(m_frame, sourceURL.string(), jsSourceCode.firstLine().oneBasedInt(), jsSourceCode.startColumn().oneBasedInt());
+    InspectorInstrumentation::willEvaluateScript(m_frame, sourceURL, jsSourceCode.firstLine().oneBasedInt(), jsSourceCode.startColumn().oneBasedInt());
     auto returnValue = moduleRecord.evaluate(&lexicalGlobalObject);
     InspectorInstrumentation::didEvaluateScript(m_frame);
 
@@ -262,11 +261,8 @@ void ScriptController::getAllWorlds(Vector<Ref<DOMWrapperWorld>>& worlds)
 void ScriptController::initScriptForWindowProxy(JSWindowProxy& windowProxy)
 {
     auto& world = windowProxy.world();
-    JSC::VM& vm = world.vm();
-    auto scope = DECLARE_CATCH_SCOPE(vm);
 
     jsCast<JSDOMWindow*>(windowProxy.window())->updateDocument();
-    EXCEPTION_ASSERT_UNUSED(scope, !scope.exception());
 
     if (Document* document = m_frame.document())
         document->contentSecurityPolicy()->didCreateWindowProxy(windowProxy);
@@ -573,34 +569,22 @@ JSC::JSValue ScriptController::executeScriptIgnoringException(const String& scri
 
 JSC::JSValue ScriptController::executeScriptInWorldIgnoringException(DOMWrapperWorld& world, const String& script, bool forceUserGesture)
 {
-    auto result = executeScriptInWorld(world, { script, URL { }, false, WTF::nullopt, forceUserGesture });
+    auto result = executeScriptInWorld(world, RunJavaScriptParameters { script, false, WTF::nullopt, forceUserGesture });
     return result ? result.value() : JSC::JSValue { };
 }
 
 ValueOrException ScriptController::executeScriptInWorld(DOMWrapperWorld& world, RunJavaScriptParameters&& parameters)
 {
-    if (m_frame.loader().client().shouldEnableInAppBrowserPrivacyProtections()) {
-        if (auto* document = m_frame.document())
-            document->addConsoleMessage(MessageSource::Security, MessageLevel::Warning, "Ignoring user script injection for non-app bound domain.");
-        RELEASE_LOG_ERROR_IF_ALLOWED(Loading, "executeScriptInWorld: Ignoring user script injection for non app-bound domain");
-        return makeUnexpected(ExceptionDetails { "Ignoring user script injection for non-app bound domain"_s });
-    }
-    m_frame.loader().client().notifyPageOfAppBoundBehavior();
-
     UserGestureIndicator gestureIndicator(parameters.forceUserGesture == ForceUserGesture::Yes ? Optional<ProcessingUserGestureState>(ProcessingUserGesture) : WTF::nullopt);
 
     if (!canExecuteScripts(AboutToExecuteScript) || isPaused())
         return makeUnexpected(ExceptionDetails { "Cannot execute JavaScript in this document"_s });
 
-    auto sourceURL = parameters.sourceURL;
-    if (!sourceURL.isValid()) {
-        // FIXME: This is gross, but when setTimeout() and setInterval() are passed JS strings, the thrown errors should use the frame document URL (according to WPT).
-        sourceURL = m_frame.document()->url();
-    }
-
     switch (parameters.runAsAsyncFunction) {
-    case RunAsAsyncFunction::No:
-        return evaluateInWorld({ parameters.source, WTFMove(sourceURL), TextPosition(), JSC::SourceProviderSourceType::Program, CachedScriptFetcher::create(m_frame.document()->charset()) }, world);
+    case RunAsAsyncFunction::No: {
+        ScriptSourceCode sourceCode(parameters.source, URL(m_frame.document()->url()), TextPosition(), JSC::SourceProviderSourceType::Program, CachedScriptFetcher::create(m_frame.document()->charset()));
+        return evaluateInWorld(sourceCode, world);
+    }
     case RunAsAsyncFunction::Yes:
         return callInWorld(WTFMove(parameters), world);
     default:
@@ -644,15 +628,16 @@ ValueOrException ScriptController::callInWorld(RunJavaScriptParameters&& paramet
 
     functionStringBuilder.append("){", parameters.source, "})");
 
-    auto sourceCode = ScriptSourceCode { functionStringBuilder.toString(), WTFMove(parameters.sourceURL), TextPosition(), JSC::SourceProviderSourceType::Program, CachedScriptFetcher::create(m_frame.document()->charset()) };
+    auto sourceCode = ScriptSourceCode { functionStringBuilder.toString(), URL(m_frame.document()->url()), TextPosition(), JSC::SourceProviderSourceType::Program, CachedScriptFetcher::create(m_frame.document()->charset()) };
     const auto& jsSourceCode = sourceCode.jsSourceCode();
 
-    const URL& sourceURL = jsSourceCode.provider()->sourceOrigin().url();
+    String sourceURL = jsSourceCode.provider()->url();
+    const String* savedSourceURL = m_sourceURL;
+    m_sourceURL = &sourceURL;
 
     Ref<Frame> protector(m_frame);
-    SetForScope<const URL*> sourceURLScope(m_sourceURL, &sourceURL);
 
-    InspectorInstrumentation::willEvaluateScript(m_frame, sourceURL.string(), sourceCode.startLine(), sourceCode.startColumn());
+    InspectorInstrumentation::willEvaluateScript(m_frame, sourceURL, sourceCode.startLine(), sourceCode.startColumn());
 
     NakedPtr<JSC::Exception> evaluationException;
     Optional<ExceptionDetails> optionalDetails;
@@ -663,20 +648,21 @@ ValueOrException ScriptController::callInWorld(RunJavaScriptParameters&& paramet
         if (evaluationException)
             break;
 
-        if (!functionObject || !functionObject.isCallable(world.vm())) {
+        if (!functionObject || !functionObject.isFunction(world.vm())) {
             optionalDetails = { { "Unable to create JavaScript async function to call"_s } };
             break;
         }
 
         // FIXME: https://bugs.webkit.org/show_bug.cgi?id=205562
-        // Getting CallData shouldn't be required to call into JS.
-        auto callData = getCallData(world.vm(), functionObject);
-        if (callData.type == CallData::Type::None) {
+        // Getting CallData/CallType shouldn't be required to call into JS.
+        CallData callData;
+        CallType callType = getCallData(world.vm(), functionObject, callData);
+        if (callType == CallType::None) {
             optionalDetails = { { "Unable to prepare JavaScript async function to be called"_s } };
             break;
         }
 
-        returnValue = JSExecState::profiledCall(&globalObject, JSC::ProfilingReason::Other, functionObject, callData, &proxy, markedArguments, evaluationException);
+        returnValue = JSExecState::profiledCall(&globalObject, JSC::ProfilingReason::Other, functionObject, callType, callData, &proxy, markedArguments, evaluationException);
     } while (false);
 
     InspectorInstrumentation::didEvaluateScript(m_frame);
@@ -686,6 +672,8 @@ ValueOrException ScriptController::callInWorld(RunJavaScriptParameters&& paramet
         reportException(&globalObject, evaluationException, sourceCode.cachedScript(), &details);
         optionalDetails = WTFMove(details);
     }
+
+    m_sourceURL = savedSourceURL;
 
     if (optionalDetails)
         return makeUnexpected(*optionalDetails);
@@ -699,7 +687,7 @@ JSC::JSValue ScriptController::executeUserAgentScriptInWorldIgnoringException(DO
 }
 ValueOrException ScriptController::executeUserAgentScriptInWorld(DOMWrapperWorld& world, const String& script, bool forceUserGesture)
 {
-    return executeUserAgentScriptInWorldInternal(world, { script, URL { }, false, WTF::nullopt, forceUserGesture });
+    return executeUserAgentScriptInWorldInternal(world, { script, false, WTF::nullopt, forceUserGesture });
 }
 
 ValueOrException ScriptController::executeUserAgentScriptInWorldInternal(DOMWrapperWorld& world, RunJavaScriptParameters&& parameters)
@@ -733,8 +721,9 @@ void ScriptController::executeAsynchronousUserAgentScriptInWorld(DOMWrapperWorld
         return;
     }
 
-    auto callData = getCallData(world.vm(), thenFunction);
-    if (callData.type == CallData::Type::None) {
+    CallData callData;
+    CallType callType = asObject(thenFunction)->methodTable(world.vm())->getCallData(asObject(thenFunction), callData);
+    if (callType == CallType::None) {
         resolveCompletionHandler(result);
         return;
     }
@@ -745,12 +734,12 @@ void ScriptController::executeAsynchronousUserAgentScriptInWorld(DOMWrapperWorld
         resolveCompletionHandler = nullptr;
     });
 
-    auto* fulfillHandler = JSC::JSNativeStdFunction::create(world.vm(), &globalObject, 1, String { }, [sharedResolveFunction] (JSGlobalObject*, CallFrame* callFrame) mutable {
+    auto* fulfillHandler = JSC::JSNativeStdFunction::create(world.vm(), &globalObject, 1, String { }, [sharedResolveFunction = sharedResolveFunction.copyRef()] (JSGlobalObject*, CallFrame* callFrame) mutable {
         sharedResolveFunction->run(callFrame->argument(0));
         return JSValue::encode(jsUndefined());
     });
 
-    auto* rejectHandler = JSC::JSNativeStdFunction::create(world.vm(), &globalObject, 1, String { }, [sharedResolveFunction] (JSGlobalObject* globalObject, CallFrame* callFrame) mutable {
+    auto* rejectHandler = JSC::JSNativeStdFunction::create(world.vm(), &globalObject, 1, String { }, [sharedResolveFunction = sharedResolveFunction.copyRef()] (JSGlobalObject* globalObject, CallFrame* callFrame) mutable {
         sharedResolveFunction->run(makeUnexpected(ExceptionDetails { callFrame->argument(0).toWTFString(globalObject) }));
         return JSValue::encode(jsUndefined());
     });
@@ -761,10 +750,10 @@ void ScriptController::executeAsynchronousUserAgentScriptInWorld(DOMWrapperWorld
             sharedResolveFunction->run(makeUnexpected(ExceptionDetails { "Completion handler for function call is no longer reachable"_s }));
     });
 
-    world.vm().heap.addFinalizer(fulfillHandler, [finalizeGuard](JSCell*) {
+    world.vm().heap.addFinalizer(fulfillHandler, [finalizeGuard = finalizeGuard.copyRef()](JSCell*) {
         finalizeGuard->run();
     });
-    world.vm().heap.addFinalizer(rejectHandler, [finalizeGuard](JSCell*) {
+    world.vm().heap.addFinalizer(rejectHandler, [finalizeGuard = finalizeGuard.copyRef()](JSCell*) {
         finalizeGuard->run();
     });
 
@@ -772,7 +761,7 @@ void ScriptController::executeAsynchronousUserAgentScriptInWorld(DOMWrapperWorld
     arguments.append(fulfillHandler);
     arguments.append(rejectHandler);
 
-    call(&globalObject, thenFunction, callData, result.value(), arguments);
+    call(&globalObject, thenFunction, callType, callData, result.value(), arguments);
 }
 
 Expected<void, ExceptionDetails> ScriptController::shouldAllowUserAgentScripts(Document& document) const
@@ -804,15 +793,16 @@ bool ScriptController::canExecuteScripts(ReasonForCallingCanExecuteScripts reaso
     return m_frame.loader().client().allowScript(m_frame.settings().isScriptEnabled());
 }
 
-void ScriptController::executeJavaScriptURL(const URL& url, RefPtr<SecurityOrigin> requesterSecurityOrigin, ShouldReplaceDocumentIfJavaScriptURL shouldReplaceDocumentIfJavaScriptURL)
+bool ScriptController::executeIfJavaScriptURL(const URL& url, RefPtr<SecurityOrigin> requesterSecurityOrigin, ShouldReplaceDocumentIfJavaScriptURL shouldReplaceDocumentIfJavaScriptURL)
 {
-    ASSERT(url.protocolIsJavaScript());
+    if (!WTF::protocolIsJavaScript(url))
+        return false;
 
     if (requesterSecurityOrigin && !requesterSecurityOrigin->canAccess(m_frame.document()->securityOrigin()))
-        return;
+        return true;
 
-    if (!m_frame.page() || !m_frame.document()->contentSecurityPolicy()->allowJavaScriptURLs(m_frame.document()->url().string(), eventHandlerPosition().m_line))
-        return;
+    if (!m_frame.page() || !m_frame.document()->contentSecurityPolicy()->allowJavaScriptURLs(m_frame.document()->url(), eventHandlerPosition().m_line))
+        return true;
 
     // We need to hold onto the Frame here because executing script can
     // destroy the frame.
@@ -832,17 +822,17 @@ void ScriptController::executeJavaScriptURL(const URL& url, RefPtr<SecurityOrigi
     // If executing script caused this frame to be removed from the page, we
     // don't want to try to replace its document!
     if (!m_frame.page())
-        return;
+        return true;
 
     if (!result)
-        return;
+        return true;
 
     String scriptResult;
     bool isString = result.getString(globalObject, scriptResult);
-    RETURN_IF_EXCEPTION(throwScope, void());
+    RETURN_IF_EXCEPTION(throwScope, true);
 
     if (!isString)
-        return;
+        return true;
 
     // FIXME: We should always replace the document, but doing so
     //        synchronously can cause crashes:
@@ -862,8 +852,7 @@ void ScriptController::executeJavaScriptURL(const URL& url, RefPtr<SecurityOrigi
         if (RefPtr<DocumentLoader> loader = m_frame.document()->loader())
             loader->writer().replaceDocumentWithResultOfExecutingJavascriptURL(scriptResult, ownerDocument.get());
     }
+    return true;
 }
 
 } // namespace WebCore
-
-#undef RELEASE_LOG_ERROR_IF_ALLOWED

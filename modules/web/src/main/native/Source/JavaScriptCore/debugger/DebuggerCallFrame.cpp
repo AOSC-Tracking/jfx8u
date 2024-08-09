@@ -34,8 +34,11 @@
 #include "DebuggerEvalEnabler.h"
 #include "DebuggerScope.h"
 #include "Interpreter.h"
+#include "JSCInlines.h"
 #include "JSFunction.h"
+#include "JSLexicalEnvironment.h"
 #include "JSWithScope.h"
+#include "Parser.h"
 #include "ShadowChickenInlines.h"
 #include "StackVisitor.h"
 #include "StrongInlines.h"
@@ -209,9 +212,9 @@ JSValue DebuggerCallFrame::thisValue(VM& vm) const
     if (!thisValue)
         return jsUndefined();
 
-    ECMAMode ecmaMode = ECMAMode::sloppy();
-    if (codeBlock && codeBlock->ownerExecutable()->isInStrictContext())
-        ecmaMode = ECMAMode::strict();
+    ECMAMode ecmaMode = NotStrictMode;
+    if (codeBlock && codeBlock->isStrictMode())
+        ecmaMode = StrictMode;
     return thisValue.toThis(m_validMachineFrame->lexicalGlobalObject(vm), ecmaMode);
 }
 
@@ -250,8 +253,7 @@ JSValue DebuggerCallFrame::evaluateWithScopeExtension(const String& script, JSOb
     VariableEnvironment variablesUnderTDZ;
     JSScope::collectClosureVariablesUnderTDZ(scope()->jsScope(), variablesUnderTDZ);
 
-    ECMAMode ecmaMode = codeBlock->ownerExecutable()->isInStrictContext() ? ECMAMode::strict() : ECMAMode::sloppy();
-    auto* eval = DirectEvalExecutable::create(globalObject, makeSource(script, callFrame->callerSourceOrigin(vm)), codeBlock->unlinkedCodeBlock()->derivedContextType(), codeBlock->unlinkedCodeBlock()->needsClassFieldInitializer(), codeBlock->unlinkedCodeBlock()->isArrowFunction(), codeBlock->ownerExecutable()->isInsideOrdinaryFunction(), evalContextType, &variablesUnderTDZ, ecmaMode);
+    auto* eval = DirectEvalExecutable::create(globalObject, makeSource(script, callFrame->callerSourceOrigin(vm)), codeBlock->isStrictMode(), codeBlock->unlinkedCodeBlock()->derivedContextType(), codeBlock->unlinkedCodeBlock()->needsClassFieldInitializer(), codeBlock->unlinkedCodeBlock()->isArrowFunction(), evalContextType, &variablesUnderTDZ);
     if (UNLIKELY(catchScope.exception())) {
         exception = catchScope.exception();
         catchScope.clearException();

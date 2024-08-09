@@ -24,7 +24,6 @@
  */
 
 [
-    Conditional=WEBGL2,
-    EnabledAtRuntime=WebGL2
+    Conditional=WEBGL
 ] interface WebGLTransformFeedback {
 };

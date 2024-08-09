@@ -38,12 +38,12 @@ using namespace JSC;
 
 namespace WebCore {
 
-auto DOMPromise::whenSettled(std::function<void()>&& callback) -> IsCallbackRegistered
+void DOMPromise::whenSettled(std::function<void()>&& callback)
 {
-    return whenPromiseIsSettled(globalObject(), promise(), WTFMove(callback));
+    whenPromiseIsSettled(globalObject(), promise(), WTFMove(callback));
 }
 
-auto DOMPromise::whenPromiseIsSettled(JSDOMGlobalObject* globalObject, JSC::JSObject* promise, Function<void()>&& callback) -> IsCallbackRegistered
+void DOMPromise::whenPromiseIsSettled(JSDOMGlobalObject* globalObject, JSC::JSObject* promise, Function<void()>&& callback)
 {
     auto& lexicalGlobalObject = *globalObject;
     auto& vm = lexicalGlobalObject.vm();
@@ -59,20 +59,20 @@ auto DOMPromise::whenPromiseIsSettled(JSDOMGlobalObject* globalObject, JSC::JSOb
 
     EXCEPTION_ASSERT(!scope.exception() || isTerminatedExecutionException(lexicalGlobalObject.vm(), scope.exception()));
     if (scope.exception())
-        return IsCallbackRegistered::No;
+        return;
 
-    ASSERT(thenFunction.isCallable(vm));
+    ASSERT(thenFunction.isFunction(vm));
 
     JSC::MarkedArgumentBuffer arguments;
     arguments.append(handler);
     arguments.append(handler);
 
-    auto callData = JSC::getCallData(vm, thenFunction);
-    ASSERT(callData.type != JSC::CallData::Type::None);
-    call(&lexicalGlobalObject, thenFunction, callData, promise, arguments);
+    JSC::CallData callData;
+    auto callType = JSC::getCallData(vm, thenFunction, callData);
+    ASSERT(callType != JSC::CallType::None);
+    call(&lexicalGlobalObject, thenFunction, callType, callData, promise, arguments);
 
     EXCEPTION_ASSERT(!scope.exception() || isTerminatedExecutionException(lexicalGlobalObject.vm(), scope.exception()));
-    return scope.exception() ? IsCallbackRegistered::No : IsCallbackRegistered::Yes;
 }
 
 JSC::JSValue DOMPromise::result() const

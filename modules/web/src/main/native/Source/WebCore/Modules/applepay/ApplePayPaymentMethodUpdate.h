@@ -29,12 +29,20 @@
 
 #include "ApplePayLineItem.h"
 
+#if USE(APPLE_INTERNAL_SDK)
+#include <WebKitAdditions/ApplePayPaymentMethodUpdateAdditions.h>
+#endif
+
 namespace WebCore {
 
 struct ApplePayPaymentMethodUpdate {
     ApplePayLineItem newTotal;
     Vector<ApplePayLineItem> newLineItems;
-    String installmentGroupIdentifier;
+
+#if defined(APPLEPAYPAYMENTMETHODUPDATE_ADDITIONS)
+APPLEPAYPAYMENTMETHODUPDATE_ADDITIONS
+#undef APPLEPAYPAYMENTMETHODUPDATE_ADDITIONS
+#endif
 };
 
 }

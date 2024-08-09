@@ -24,6 +24,8 @@
 #include <wtf/text/AtomStringTable.h>
 
 #include <wtf/HashSet.h>
+#include <wtf/MainThread.h>
+#include <wtf/Threading.h>
 
 namespace WTF {
 

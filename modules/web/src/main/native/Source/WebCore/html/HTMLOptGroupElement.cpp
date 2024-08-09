@@ -2,7 +2,7 @@
  * Copyright (C) 1999 Lars Knoll (knoll@kde.org)
  *           (C) 1999 Antti Koivisto (koivisto@kde.org)
  *           (C) 2001 Dirk Mueller (mueller@kde.org)
- * Copyright (C) 2004-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2004-2016 Apple Inc. All rights reserved.
  *           (C) 2006 Alexey Proskuryakov (ap@nypop.com)
  *
  * This library is free software; you can redistribute it and/or
@@ -68,7 +68,7 @@ bool HTMLOptGroupElement::isFocusable() const
 
 const AtomString& HTMLOptGroupElement::formControlType() const
 {
-    static MainThreadNeverDestroyed<const AtomString> optgroup("optgroup", AtomString::ConstructFromLiteral);
+    static NeverDestroyed<const AtomString> optgroup("optgroup", AtomString::ConstructFromLiteral);
     return optgroup;
 }
 
@@ -109,16 +109,22 @@ String HTMLOptGroupElement::groupLabelText() const
 
 HTMLSelectElement* HTMLOptGroupElement::ownerSelectElement() const
 {
-    return const_cast<HTMLSelectElement*>(ancestorsOfType<HTMLSelectElement>(*this).first());
+    RefPtr<ContainerNode> select = parentNode();
+    while (select && !is<HTMLSelectElement>(*select))
+        select = select->parentNode();
+
+    if (!select)
+        return nullptr;
+
+    return downcast<HTMLSelectElement>(select.get());
 }
 
-bool HTMLOptGroupElement::accessKeyAction(bool)
+void HTMLOptGroupElement::accessKeyAction(bool)
 {
     RefPtr<HTMLSelectElement> select = ownerSelectElement();
     // send to the parent to bring focus to the list box
     if (select && !select->focused())
-        return select->accessKeyAction(false);
-    return false;
+        select->accessKeyAction(false);
 }
 
 } // namespace

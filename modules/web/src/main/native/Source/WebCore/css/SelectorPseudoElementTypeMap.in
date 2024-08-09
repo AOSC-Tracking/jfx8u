@@ -1,6 +1,6 @@
 after
 before
-#if ENABLE(VIDEO)
+#if ENABLE(VIDEO_TRACK)
 cue
 #endif
 first-letter

@@ -32,7 +32,7 @@
 #include "DFGBlockInsertionSet.h"
 #include "DFGGraph.h"
 #include "DFGPhase.h"
-#include "JSCJSValueInlines.h"
+#include "JSCInlines.h"
 
 namespace JSC { namespace DFG {
 

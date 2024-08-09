@@ -24,37 +24,43 @@
 
 [
     Conditional=WEB_AUDIO,
-    JSGenerateToJSObject,
-    EnabledBySetting=ModernUnprefixedWebAudio,
-] interface PannerNode : AudioNode {
-    [MayThrowException] constructor (BaseAudioContext context, optional PannerOptions options);
+    ImplementedAs=PanningModelType
+] enum PanningModelType {
+    "equalpower",
+    "HRTF"
+};
 
-    // Default model for stereo is equalpower
+[
+    Conditional=WEB_AUDIO,
+    ImplementedAs=DistanceModelType
+] enum DistanceModelType {
+    "linear",
+    "inverse",
+    "exponential"
+};
+
+[
+    Conditional=WEB_AUDIO,
+    JSGenerateToJSObject,
+    InterfaceName=webkitAudioPannerNode,
+] interface PannerNode : AudioNode {
+    // Default model for stereo is HRTF 
     attribute PanningModelType panningModel;
 
     // Uses a 3D cartesian coordinate system 
     void setPosition(unrestricted float x, unrestricted float y, unrestricted float z);
     void setOrientation(unrestricted float x, unrestricted float y, unrestricted float z);
+    void setVelocity(unrestricted float x, unrestricted float y, unrestricted float z);
 
-    // Default distance model is inverse
+    // Distance model
     attribute DistanceModelType distanceModel;
 
-    attribute double refDistance;
-    attribute double maxDistance;
-    attribute double rolloffFactor;
+    attribute unrestricted double refDistance;
+    attribute unrestricted double maxDistance;
+    attribute unrestricted double rolloffFactor;
 
     // Directional sound cone
-    attribute double coneInnerAngle;
-    attribute double coneOuterAngle;
-    attribute double coneOuterGain;
-
-    // Position of audio source in 3D Cartesian system
-    readonly attribute AudioParam positionX;
-    readonly attribute AudioParam positionY;
-    readonly attribute AudioParam positionZ;
-
-    // Vector of direction of audio source in 3D cartesian system
-    readonly attribute AudioParam orientationX;
-    readonly attribute AudioParam orientationY;
-    readonly attribute AudioParam orientationZ;
+    attribute unrestricted double coneInnerAngle;
+    attribute unrestricted double coneOuterAngle;
+    attribute unrestricted double coneOuterGain;
 };

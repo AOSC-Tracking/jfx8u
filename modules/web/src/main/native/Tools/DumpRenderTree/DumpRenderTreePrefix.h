@@ -35,3 +35,10 @@
 #ifdef __OBJC__
 #import <Foundation/Foundation.h>
 #endif
+
+#if PLATFORM(WIN)
+#undef WEBCORE_EXPORT
+#define WEBCORE_EXPORT WTF_IMPORT_DECLARATION
+#undef WEBCORE_TESTSUPPORT_EXPORT
+#define WEBCORE_TESTSUPPORT_EXPORT
+#endif

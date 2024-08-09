@@ -26,6 +26,7 @@
 
 [
     NoInterfaceObject,
+    Conditional=STREAMS_API,
     SkipVTableValidation
 ] interface ReadableStreamSink {
     void enqueue(BufferSource chunk);

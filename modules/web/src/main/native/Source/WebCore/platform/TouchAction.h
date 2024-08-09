@@ -25,6 +25,8 @@
 
 #pragma once
 
+#if ENABLE(POINTER_EVENTS)
+
 #include <wtf/text/TextStream.h>
 
 namespace WebCore {
@@ -41,3 +43,5 @@ enum class TouchAction : uint8_t {
 WEBCORE_EXPORT TextStream& operator<<(TextStream&, TouchAction);
 
 }
+
+#endif // ENABLE(POINTER_EVENTS)

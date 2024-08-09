@@ -90,7 +90,6 @@ inline ResultType JSArrayBufferView::byteOffsetImpl()
         WTF::loadLoadFence();
 
     ArrayBuffer* buffer = possiblySharedBufferImpl<requester>();
-    ASSERT(buffer);
     if (requester == Mutator) {
         ASSERT(!isCompilationThread());
         ASSERT(!vector() == !buffer->data());

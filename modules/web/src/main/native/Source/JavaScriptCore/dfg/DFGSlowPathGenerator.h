@@ -156,7 +156,8 @@ protected:
 };
 
 template<typename JumpType, typename FunctionType, typename ResultType, typename... Arguments>
-class CallResultAndArgumentsSlowPathGenerator final : public CallSlowPathGenerator<JumpType, ResultType> {
+class CallResultAndArgumentsSlowPathGenerator
+    : public CallSlowPathGenerator<JumpType, ResultType> {
 public:
     CallResultAndArgumentsSlowPathGenerator(
         JumpType from, SpeculativeJIT* jit, FunctionType function,
@@ -167,7 +168,7 @@ public:
     {
     }
 
-private:
+protected:
     template<size_t... ArgumentsIndex>
     void unpackAndGenerate(SpeculativeJIT* jit, std::index_sequence<ArgumentsIndex...>)
     {
@@ -179,7 +180,7 @@ private:
         this->tearDown(jit);
     }
 
-    void generateInternal(SpeculativeJIT* jit) final
+    void generateInternal(SpeculativeJIT* jit) override
     {
         unpackAndGenerate(jit, std::make_index_sequence<std::tuple_size<std::tuple<Arguments...>>::value>());
     }
@@ -208,7 +209,7 @@ inline std::unique_ptr<SlowPathGenerator> slowPathCall(
 }
 
 template<typename JumpType, typename DestinationType, typename SourceType, unsigned numberOfAssignments>
-class AssigningSlowPathGenerator final : public JumpingSlowPathGenerator<JumpType> {
+class AssigningSlowPathGenerator : public JumpingSlowPathGenerator<JumpType> {
 public:
     AssigningSlowPathGenerator(
         JumpType from, SpeculativeJIT* jit,
@@ -222,8 +223,8 @@ public:
         }
     }
 
-private:
-    void generateInternal(SpeculativeJIT* jit) final
+protected:
+    void generateInternal(SpeculativeJIT* jit) override
     {
         this->linkFrom(jit);
         for (unsigned i = numberOfAssignments; i--;)
@@ -231,6 +232,7 @@ private:
         this->jumpTo(jit);
     }
 
+private:
     DestinationType m_destination[numberOfAssignments];
     SourceType m_source[numberOfAssignments];
 };

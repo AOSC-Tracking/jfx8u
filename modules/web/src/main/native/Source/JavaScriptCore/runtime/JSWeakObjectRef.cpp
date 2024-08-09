@@ -57,5 +57,10 @@ void JSWeakObjectRef::finalizeUnconditionally(VM& vm)
         m_value.clear();
 }
 
+String JSWeakObjectRef::toStringName(const JSC::JSObject*, JSGlobalObject*)
+{
+    return "Object"_s;
+}
+
 }
 

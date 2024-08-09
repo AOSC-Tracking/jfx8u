@@ -63,7 +63,7 @@ template<> struct JSConverter<IDLDOMString> {
 
     static JSC::JSValue convert(JSC::JSGlobalObject& lexicalGlobalObject, const String& value)
     {
-        return JSC::jsStringWithCache(JSC::getVM(&lexicalGlobalObject), value);
+        return JSC::jsStringWithCache(&lexicalGlobalObject, value);
     }
 
     static JSC::JSValue convert(JSC::JSGlobalObject& lexicalGlobalObject, const UncachedString& value)
@@ -74,11 +74,6 @@ template<> struct JSConverter<IDLDOMString> {
     static JSC::JSValue convert(JSC::JSGlobalObject& lexicalGlobalObject, const OwnedString& value)
     {
         return JSC::jsOwnedString(JSC::getVM(&lexicalGlobalObject), value.string);
-    }
-
-    static JSC::JSValue convert(JSC::JSGlobalObject& lexicalGlobalObject, const URL& value)
-    {
-        return JSC::jsOwnedString(JSC::getVM(&lexicalGlobalObject), value.string());
     }
 };
 
@@ -95,7 +90,7 @@ template<> struct JSConverter<IDLByteString> {
 
     static JSC::JSValue convert(JSC::JSGlobalObject& lexicalGlobalObject, const String& value)
     {
-        return JSC::jsStringWithCache(JSC::getVM(&lexicalGlobalObject), value);
+        return JSC::jsStringWithCache(&lexicalGlobalObject, value);
     }
 
     static JSC::JSValue convert(JSC::JSGlobalObject& lexicalGlobalObject, const UncachedString& value)
@@ -114,10 +109,6 @@ template<> struct Converter<IDLUSVString> : DefaultConverter<IDLUSVString> {
     {
         return valueToUSVString(lexicalGlobalObject, value);
     }
-    static JSC::JSValue convert(JSC::JSGlobalObject& lexicalGlobalObject, const URL& value)
-    {
-        return JSC::jsOwnedString(JSC::getVM(&lexicalGlobalObject), value.string());
-    }
 };
 
 template<> struct JSConverter<IDLUSVString> {
@@ -126,7 +117,7 @@ template<> struct JSConverter<IDLUSVString> {
 
     static JSC::JSValue convert(JSC::JSGlobalObject& lexicalGlobalObject, const String& value)
     {
-        return JSC::jsStringWithCache(JSC::getVM(&lexicalGlobalObject), value);
+        return JSC::jsStringWithCache(&lexicalGlobalObject, value);
     }
 
     static JSC::JSValue convert(JSC::JSGlobalObject& lexicalGlobalObject, const UncachedString& value)
@@ -137,11 +128,6 @@ template<> struct JSConverter<IDLUSVString> {
     static JSC::JSValue convert(JSC::JSGlobalObject& lexicalGlobalObject, const OwnedString& value)
     {
         return JSC::jsOwnedString(JSC::getVM(&lexicalGlobalObject), value.string);
-    }
-
-    static JSC::JSValue convert(JSC::JSGlobalObject& lexicalGlobalObject, const URL& value)
-    {
-        return JSC::jsOwnedString(JSC::getVM(&lexicalGlobalObject), value.string());
     }
 };
 

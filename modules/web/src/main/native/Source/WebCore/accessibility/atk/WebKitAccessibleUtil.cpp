@@ -158,7 +158,7 @@ bool selectionBelongsToObject(AccessibilityObject* coreObject, VisibleSelection&
     if (selection.isNone())
         return false;
 
-    auto range = selection.toNormalizedRange();
+    RefPtr<Range> range = selection.toNormalizedRange();
     if (!range)
         return false;
 
@@ -168,12 +168,12 @@ bool selectionBelongsToObject(AccessibilityObject* coreObject, VisibleSelection&
     // node is actually inside the region, at least partially.
     auto& node = *coreObject->node();
     auto* lastDescendant = node.lastDescendant();
-    unsigned lastOffset = lastDescendant->length();
-    auto intersectsResult = createLiveRange(*range)->intersectsNode(node);
+    unsigned lastOffset = lastOffsetInNode(lastDescendant);
+    auto intersectsResult = range->intersectsNode(node);
     return !intersectsResult.hasException()
         && intersectsResult.releaseReturnValue()
-        && (range->end.container.ptr() != &node || range->end.offset)
-        && (range->start.container.ptr() != lastDescendant || range->start.offset != lastOffset);
+        && (&range->endContainer() != &node || range->endOffset())
+        && (&range->startContainer() != lastDescendant || range->startOffset() != lastOffset);
 }
 
 AXCoreObject* objectFocusedAndCaretOffsetUnignored(AXCoreObject* referenceObject, int& offset)
@@ -246,11 +246,11 @@ AXCoreObject* objectFocusedAndCaretOffsetUnignored(AXCoreObject* referenceObject
     if (startPosition == endPosition)
         offset = 0;
     else if (!isStartOfLine(endPosition)) {
-        auto range = makeSimpleRange(startPosition, endPosition.previous());
-        offset = (range ? characterCount(*range, TextIteratorEmitsCharactersBetweenAllVisiblePositions) : 0) + 1;
+        RefPtr<Range> range = makeRange(startPosition, endPosition.previous());
+        offset = TextIterator::rangeLength(range.get(), true) + 1;
     } else {
-        auto range = makeSimpleRange(startPosition, endPosition);
-        offset = range ? characterCount(*range, TextIteratorEmitsCharactersBetweenAllVisiblePositions) : 0;
+        RefPtr<Range> range = makeRange(startPosition, endPosition);
+        offset = TextIterator::rangeLength(range.get(), true);
     }
 
     return firstUnignoredParent;

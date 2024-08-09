@@ -32,7 +32,6 @@
 #include "ServiceWorkerIdentifier.h"
 #include "Timer.h"
 #include "WorkerThread.h"
-#include <wtf/WeakPtr.h>
 
 namespace WebCore {
 
@@ -45,7 +44,7 @@ class WorkerObjectProxy;
 struct MessageWithMessagePorts;
 struct ServiceWorkerClientIdentifier;
 
-class ServiceWorkerThread : public WorkerThread, public CanMakeWeakPtr<ServiceWorkerThread, WeakPtrFactoryInitialization::Eager> {
+class ServiceWorkerThread : public WorkerThread {
 public:
     template<typename... Args> static Ref<ServiceWorkerThread> create(Args&&... args)
     {

@@ -24,10 +24,9 @@
  */
 
 [
-    Conditional=VIDEO,
+    Conditional=VIDEO_TRACK,
+    Constructor(DOMString type, optional TrackEventInit eventInitDict)
 ] interface TrackEvent : Event {
-    constructor(DOMString type, optional TrackEventInit eventInitDict);
-
     readonly attribute (VideoTrack or AudioTrack or TextTrack)? track;
 };
 

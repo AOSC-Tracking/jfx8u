@@ -72,8 +72,10 @@ static inline bool matchURLs(const ResourceRequest& request, const URL& cachedUR
     URL cachedRequestURL = cachedURL;
 
     if (options.ignoreSearch) {
-        requestURL.setQuery({ });
-        cachedRequestURL.setQuery({ });
+        if (requestURL.hasQuery())
+            requestURL.setQuery({ });
+        if (cachedRequestURL.hasQuery())
+            cachedRequestURL.setQuery({ });
     }
     return equalIgnoringFragmentIdentifier(requestURL, cachedRequestURL);
 }

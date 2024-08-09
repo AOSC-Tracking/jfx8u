@@ -174,19 +174,19 @@ private:
 
 const AtomString& ChildListRecord::type()
 {
-    static MainThreadNeverDestroyed<const AtomString> childList("childList", AtomString::ConstructFromLiteral);
+    static NeverDestroyed<AtomString> childList("childList", AtomString::ConstructFromLiteral);
     return childList;
 }
 
 const AtomString& AttributesRecord::type()
 {
-    static MainThreadNeverDestroyed<const AtomString> attributes("attributes", AtomString::ConstructFromLiteral);
+    static NeverDestroyed<AtomString> attributes("attributes", AtomString::ConstructFromLiteral);
     return attributes;
 }
 
 const AtomString& CharacterDataRecord::type()
 {
-    static MainThreadNeverDestroyed<const AtomString> characterData("characterData", AtomString::ConstructFromLiteral);
+    static NeverDestroyed<AtomString> characterData("characterData", AtomString::ConstructFromLiteral);
     return characterData;
 }
 

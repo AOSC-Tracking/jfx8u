@@ -419,26 +419,20 @@ public:
   constexpr Optional() __NOEXCEPT : OptionalBase<T>()  {};
   constexpr Optional(nullopt_t) __NOEXCEPT : OptionalBase<T>() {};
 
-  constexpr Optional(const Optional& rhs)
+  Optional(const Optional& rhs)
   : OptionalBase<T>()
   {
     if (rhs.initialized()) {
-        if constexpr (std::is_trivially_copy_assignable_v<T>)
-            OptionalBase<T>::storage_ = *rhs;
-        else
-            ::new (static_cast<void*>(dataptr())) T(*rhs);
+        ::new (static_cast<void*>(dataptr())) T(*rhs);
         OptionalBase<T>::init_ = true;
     }
   }
 
-  constexpr Optional(Optional&& rhs) __NOEXCEPT_(detail_::is_nothrow_move_constructible<T>::value)
+  Optional(Optional&& rhs) __NOEXCEPT_(detail_::is_nothrow_move_constructible<T>::value)
   : OptionalBase<T>()
   {
     if (rhs.initialized()) {
-        if constexpr (std::is_trivially_copy_assignable_v<T>)
-            OptionalBase<T>::storage_ = *rhs;
-        else
-            ::new (static_cast<void*>(dataptr())) T(std::move(*rhs));
+        ::new (static_cast<void*>(dataptr())) T(std::move(*rhs));
         OptionalBase<T>::init_ = true;
         rhs.clear();
     }

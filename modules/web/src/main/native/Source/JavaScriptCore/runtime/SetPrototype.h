@@ -31,14 +31,7 @@ namespace JSC {
 
 class SetPrototype final : public JSNonFinalObject {
 public:
-    using Base = JSNonFinalObject;
-
-    template<typename CellType, SubspaceAccess>
-    static IsoSubspace* subspaceFor(VM& vm)
-    {
-        STATIC_ASSERT_ISO_SUBSPACE_SHARABLE(SetPrototype, Base);
-        return &vm.plainObjectSpace;
-    }
+    typedef JSNonFinalObject Base;
 
     static constexpr unsigned StructureFlags = Base::StructureFlags | HasStaticPropertyTable;
 

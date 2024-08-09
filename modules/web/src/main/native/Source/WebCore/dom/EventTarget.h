@@ -54,8 +54,6 @@ public:
 class EventTarget : public ScriptWrappable {
     WTF_MAKE_ISO_ALLOCATED(EventTarget);
 public:
-    static Ref<EventTarget> create(ScriptExecutionContext&);
-
     void ref() { refEventTarget(); }
     void deref() { derefEventTarget(); }
 
@@ -91,7 +89,7 @@ public:
     WEBCORE_EXPORT ExceptionOr<bool> dispatchEventForBindings(Event&);
 
     WEBCORE_EXPORT virtual bool addEventListener(const AtomString& eventType, Ref<EventListener>&&, const AddEventListenerOptions& = { });
-    virtual bool removeEventListener(const AtomString& eventType, EventListener&, const ListenerOptions& = { });
+    virtual bool removeEventListener(const AtomString& eventType, EventListener&, const ListenerOptions&);
 
     virtual void removeAllEventListeners();
     virtual void dispatchEvent(Event&);
@@ -116,23 +114,19 @@ public:
     void visitJSEventListeners(JSC::SlotVisitor&);
     void invalidateJSEventListeners(JSC::JSObject*);
 
-    const EventTargetData* eventTargetData() const;
-
 protected:
     virtual ~EventTarget() = default;
 
     virtual EventTargetData* eventTargetData() = 0;
     virtual EventTargetData* eventTargetDataConcurrently() = 0;
     virtual EventTargetData& ensureEventTargetData() = 0;
-
-    virtual void eventListenersDidChange() { }
+    const EventTargetData* eventTargetData() const;
 
 private:
     virtual void refEventTarget() = 0;
     virtual void derefEventTarget() = 0;
 
     void innerInvokeEventListeners(Event&, EventListenerVector, EventInvokePhase);
-    void invalidateEventListenerRegions();
 
     friend class EventListenerIterator;
 };

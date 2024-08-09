@@ -65,8 +65,8 @@ private:
 };
 
 inline WeakImpl::WeakImpl()
-    : m_weakHandleOwner(nullptr)
-    , m_context(nullptr)
+    : m_weakHandleOwner(0)
+    , m_context(0)
 {
     setState(Deallocated);
 }

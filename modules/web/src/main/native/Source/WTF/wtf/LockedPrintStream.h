@@ -32,18 +32,19 @@
 namespace WTF {
 
 // Makes every call to print() atomic.
-class LockedPrintStream final : public PrintStream {
+class LockedPrintStream : public PrintStream {
 public:
     LockedPrintStream(std::unique_ptr<PrintStream> target);
-    ~LockedPrintStream() final;
+    virtual ~LockedPrintStream();
 
-    void vprintf(const char* format, va_list) final WTF_ATTRIBUTE_PRINTF(2, 0);
-    void flush() final;
+    void vprintf(const char* format, va_list) override WTF_ATTRIBUTE_PRINTF(2, 0);
+    void flush() override;
+
+protected:
+    PrintStream& begin() override;
+    void end() override;
 
 private:
-    PrintStream& begin() final;
-    void end() final;
-
     // This needs to be a recursive lock because a printInternal or dump method could assert,
     // and that assert might want to log. Better to let it. This needs to be a WordLock so that
     // LockedPrintStream (i.e. cataLog) can be used to debug ParkingLot and Lock.

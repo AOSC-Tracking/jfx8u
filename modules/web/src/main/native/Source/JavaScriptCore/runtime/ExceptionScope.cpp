@@ -26,6 +26,8 @@
 #include "config.h"
 #include "ExceptionScope.h"
 
+#include "Exception.h"
+#include "ExceptionHelpers.h"
 #include <wtf/StackTrace.h>
 #include <wtf/StringPrintStream.h>
 #include <wtf/Threading.h>

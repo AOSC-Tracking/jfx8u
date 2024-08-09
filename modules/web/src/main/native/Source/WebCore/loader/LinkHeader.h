@@ -1,7 +1,6 @@
 /*
  * Copyright 2015 The Chromium Authors. All rights reserved.
  * Copyright (C) 2016 Akamai Technologies Inc. All rights reserved.
- * Copyright (C) 2020 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -27,14 +26,14 @@
 
 #pragma once
 
-#include <wtf/Forward.h>
 #include <wtf/text/WTFString.h>
 
 namespace WebCore {
 
 class LinkHeader {
 public:
-    template<typename CharacterType> LinkHeader(StringParsingBuffer<CharacterType>&);
+    template <typename CharacterType>
+    LinkHeader(CharacterType*& position, CharacterType* const end);
 
     const String& url() const { return m_url; }
     const String& rel() const { return m_rel; }
@@ -85,6 +84,9 @@ public:
     Vector<LinkHeader>::const_iterator end() const { return m_headerSet.end(); }
 
 private:
+    template <typename CharacterType>
+    void init(CharacterType* headerValue, size_t length);
+
     Vector<LinkHeader> m_headerSet;
 };
 

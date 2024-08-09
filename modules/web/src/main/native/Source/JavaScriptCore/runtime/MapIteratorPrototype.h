@@ -31,14 +31,7 @@ namespace JSC {
 
 class MapIteratorPrototype final : public JSNonFinalObject {
 public:
-    using Base = JSNonFinalObject;
-
-    template<typename CellType, SubspaceAccess>
-    static IsoSubspace* subspaceFor(VM& vm)
-    {
-        STATIC_ASSERT_ISO_SUBSPACE_SHARABLE(MapIteratorPrototype, Base);
-        return &vm.plainObjectSpace;
-    }
+    typedef JSNonFinalObject Base;
 
     static MapIteratorPrototype* create(VM& vm, JSGlobalObject* globalObject, Structure* structure)
     {

@@ -39,6 +39,7 @@ EmptyNodeList::~EmptyNodeList()
 
 ChildNodeList::ChildNodeList(ContainerNode& parent)
     : m_parent(parent)
+    , m_indexCache(*this)
 {
 }
 
@@ -86,7 +87,7 @@ void ChildNodeList::collectionTraverseBackward(Node*& current, unsigned count) c
 
 void ChildNodeList::invalidateCache()
 {
-    m_indexCache.invalidate();
+    m_indexCache.invalidate(*this);
 }
 
 } // namespace WebCore

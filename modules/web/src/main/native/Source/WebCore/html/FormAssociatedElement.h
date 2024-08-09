@@ -97,7 +97,6 @@ protected:
     void removedFromAncestor(Node::RemovalType, ContainerNode&);
     void didMoveToNewDocument(Document& oldDocument);
 
-    void clearForm() { setForm(nullptr); }
     void setForm(HTMLFormElement*);
     void formAttributeChanged();
 

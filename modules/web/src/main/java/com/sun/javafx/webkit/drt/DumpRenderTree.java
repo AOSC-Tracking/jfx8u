@@ -614,7 +614,12 @@ public final class DumpRenderTree {
                     message = s1 + s2;
                 }
             }
-            out.printf("CONSOLE MESSAGE: %s\n", message);
+            if (lineNumber == 0) {
+                out.printf("CONSOLE MESSAGE: %s\n", message);
+            } else {
+                out.printf("CONSOLE MESSAGE: line %d: %s\n",
+                           lineNumber, message);
+            }
         }
 
         @Override

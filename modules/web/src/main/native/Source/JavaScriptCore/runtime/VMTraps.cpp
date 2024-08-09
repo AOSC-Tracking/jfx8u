@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2017-2019 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -26,17 +26,21 @@
 #include "config.h"
 #include "VMTraps.h"
 
+#include "CallFrame.h"
 #include "CallFrameInlines.h"
 #include "CodeBlock.h"
 #include "CodeBlockSet.h"
 #include "DFGCommonData.h"
 #include "ExceptionHelpers.h"
 #include "HeapInlines.h"
-#include "JSCJSValueInlines.h"
+#include "JSCPtrTag.h"
 #include "LLIntPCRanges.h"
 #include "MachineContext.h"
+#include "MachineStackMarker.h"
+#include "MacroAssembler.h"
 #include "MacroAssemblerCodeRef.h"
 #include "VM.h"
+#include "VMInspector.h"
 #include "Watchdog.h"
 #include <wtf/ProcessID.h>
 #include <wtf/ThreadMessage.h>
@@ -195,14 +199,9 @@ public:
         : Base(locker, vm.traps().m_lock, vm.traps().m_condition.copyRef())
         , m_vm(vm)
     {
-        activateSignalHandlersFor(Signal::AccessFault);
-    }
-
-    static void initializeSignals()
-    {
         static std::once_flag once;
         std::call_once(once, [] {
-            addSignalHandler(Signal::AccessFault, [] (Signal, SigInfo&, PlatformRegisters& registers) -> SignalAction {
+            installSignalHandler(Signal::BadAccess, [] (Signal, SigInfo&, PlatformRegisters& registers) -> SignalAction {
                 auto signalContext = SignalContext::tryCreate(registers);
                 if (!signalContext)
                     return SignalAction::NotHandled;
@@ -238,15 +237,15 @@ public:
         });
     }
 
-    const char* name() const final
+    const char* name() const override
     {
         return "JSC VMTraps Signal Sender Thread";
     }
 
     VMTraps& traps() { return m_vm.traps(); }
 
-private:
-    PollResult poll(const AbstractLocker&) final
+protected:
+    PollResult poll(const AbstractLocker&) override
     {
         if (traps().m_isShuttingDown)
             return PollResult::Stop;
@@ -260,7 +259,7 @@ private:
         return PollResult::Work;
     }
 
-    WorkResult work() final
+    WorkResult work() override
     {
         VM& vm = m_vm;
 
@@ -290,20 +289,12 @@ private:
         return WorkResult::Continue;
     }
 
+private:
+
     VM& m_vm;
 };
 
 #endif // ENABLE(SIGNAL_BASED_VM_TRAPS)
-
-void VMTraps::initializeSignals()
-{
-#if ENABLE(SIGNAL_BASED_VM_TRAPS)
-    if (!Options::usePollingTraps()) {
-        ASSERT(Options::useJIT());
-        SignalSender::initializeSignals();
-    }
-#endif
-}
 
 void VMTraps::willDestroyVM()
 {

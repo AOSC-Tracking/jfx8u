@@ -28,6 +28,8 @@
 
 #pragma once
 
+#if ENABLE(STREAMS_API)
+
 #include "ReadableStreamDefaultController.h"
 #include <wtf/Optional.h>
 
@@ -67,3 +69,5 @@ private:
 };
 
 } // namespace WebCore
+
+#endif // ENABLE(STREAMS_API)

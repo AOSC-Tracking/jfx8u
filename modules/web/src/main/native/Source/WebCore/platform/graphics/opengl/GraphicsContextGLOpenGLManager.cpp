@@ -236,8 +236,7 @@ void GraphicsContextGLOpenGLManager::updateHighPerformanceState()
             LOG(WebGL, "Request the high-performance GPU.");
             m_requestingHighPerformance = true;
 #if PLATFORM(MAC)
-            if (auto* singleton = SwitchingGPUClient::singletonIfExists())
-                singleton->requestHighPerformanceGPU();
+            SwitchingGPUClient::singleton().requestHighPerformanceGPU();
 #endif
         }
 
@@ -263,8 +262,7 @@ void GraphicsContextGLOpenGLManager::disableHighPerformanceGPUTimerFired()
 
     m_requestingHighPerformance = false;
 #if PLATFORM(MAC) && (USE(OPENGL) || USE(ANGLE))
-    if (auto* singleton = SwitchingGPUClient::singletonIfExists())
-        singleton->releaseHighPerformanceGPU();
+    SwitchingGPUClient::singleton().releaseHighPerformanceGPU();
 #endif
 }
 

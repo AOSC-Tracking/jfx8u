@@ -27,7 +27,7 @@
 #include "ArrayProfile.h"
 
 #include "CodeBlock.h"
-#include "JSCellInlines.h"
+#include "JSCInlines.h"
 #include <wtf/CommaPrinter.h>
 #include <wtf/StringPrintStream.h>
 

@@ -270,7 +270,7 @@ void HTMLConstructionSite::dispatchDocumentElementAvailableIfNeeded()
         return;
 
     if (auto frame = makeRefPtr(m_document.frame()))
-        frame->injectUserScripts(UserScriptInjectionTime::DocumentStart);
+        frame->injectUserScripts(InjectAtDocumentStart);
 }
 
 void HTMLConstructionSite::insertHTMLHtmlStartTagBeforeHTML(AtomicHTMLToken&& token)

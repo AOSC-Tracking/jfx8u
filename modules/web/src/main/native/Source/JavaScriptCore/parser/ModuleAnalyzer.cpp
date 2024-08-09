@@ -26,13 +26,14 @@
 #include "config.h"
 #include "ModuleAnalyzer.h"
 
-#include "IdentifierInlines.h"
+#include "JSCInlines.h"
 #include "JSGlobalObject.h"
 #include "JSModuleRecord.h"
 #include "ModuleScopeData.h"
 #include "StrongInlines.h"
 
 namespace JSC {
+
 
 ModuleAnalyzer::ModuleAnalyzer(JSGlobalObject* globalObject, const Identifier& moduleKey, const SourceCode& sourceCode, const VariableEnvironment& declaredVariables, const VariableEnvironment& lexicalVariables)
     : m_vm(globalObject->vm())

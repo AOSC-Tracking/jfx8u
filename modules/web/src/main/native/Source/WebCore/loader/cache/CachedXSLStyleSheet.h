@@ -41,13 +41,13 @@ public:
     const String& sheet() const { return m_sheet; }
 
 private:
-    void checkNotify(const NetworkLoadMetrics&) final;
+    void checkNotify() final;
     bool mayTryReplaceEncodedData() const final { return true; }
     void didAddClient(CachedResourceClient&) final;
     void setEncoding(const String&) final;
     String encoding() const final;
     const TextResourceDecoder* textResourceDecoder() const final { return m_decoder.get(); }
-    void finishLoading(SharedBuffer*, const NetworkLoadMetrics&) final;
+    void finishLoading(SharedBuffer*) final;
 
     String m_sheet;
     RefPtr<TextResourceDecoder> m_decoder;

@@ -47,7 +47,7 @@ public:
         InlineLayoutUnit m_descent { 0 };
     };
 
-    LineBox(const InlineRect&, const InlineRect& scrollableOverflow, const InlineRect& inkOverflow, const Baseline&, InlineLayoutUnit baselineOffset);
+    LineBox(const InlineRect&, const InlineRect& scrollableOverflow, const InlineRect& inkOverflow, const Baseline&, InlineLayoutUnit baselineOffset, bool isConsideredEmpty);
 
     const InlineRect& rect() const { return m_rect; }
     const InlineRect& scrollableOverflow() const { return m_scrollableOverflow; }
@@ -60,8 +60,6 @@ public:
 
     InlineLayoutUnit width() const { return m_rect.width(); }
     InlineLayoutUnit height() const { return m_rect.height(); }
-
-    void moveVertically(InlineLayoutUnit);
 
     const Baseline& baseline() const { return m_baseline; }
     // Baseline offset from line top. Note that offset does not necessarily equal to ascent.
@@ -80,6 +78,7 @@ public:
     //   v
     // -------------------       line bottom       -------------------
     InlineLayoutUnit baselineOffset() const { return m_baselineOffset; }
+    bool isConsideredEmpty() const { return m_isConsideredEmpty; }
 
 private:
     InlineRect m_rect;
@@ -87,14 +86,16 @@ private:
     InlineRect m_inkOverflow;
     Baseline m_baseline;
     InlineLayoutUnit m_baselineOffset { 0 };
+    bool m_isConsideredEmpty { true };
 };
 
-inline LineBox::LineBox(const InlineRect& rect, const InlineRect& scrollableOverflow, const InlineRect& inkOverflow, const Baseline& baseline, InlineLayoutUnit baselineOffset)
+inline LineBox::LineBox(const InlineRect& rect, const InlineRect& scrollableOverflow, const InlineRect& inkOverflow, const Baseline& baseline, InlineLayoutUnit baselineOffset, bool isConsideredEmpty)
     : m_rect(rect)
     , m_scrollableOverflow(scrollableOverflow)
     , m_inkOverflow(inkOverflow)
     , m_baseline(baseline)
     , m_baselineOffset(baselineOffset)
+    , m_isConsideredEmpty(isConsideredEmpty)
 {
 }
 
@@ -102,12 +103,6 @@ inline LineBox::Baseline::Baseline(InlineLayoutUnit ascent, InlineLayoutUnit des
     : m_ascent(ascent)
     , m_descent(descent)
 {
-}
-
-inline void LineBox::moveVertically(InlineLayoutUnit offset)
-{
-    m_rect.moveVertically(offset);
-    m_inkOverflow.moveVertically(offset);
 }
 
 }

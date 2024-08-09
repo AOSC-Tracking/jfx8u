@@ -22,6 +22,7 @@
 #include "BooleanConstructor.h"
 
 #include "BooleanPrototype.h"
+#include "JSGlobalObject.h"
 #include "JSCInlines.h"
 
 namespace JSC {
@@ -42,13 +43,8 @@ static EncodedJSValue JSC_HOST_CALL constructWithBooleanConstructor(JSGlobalObje
     VM& vm = globalObject->vm();
     auto scope = DECLARE_THROW_SCOPE(vm);
     JSValue boolean = jsBoolean(callFrame->argument(0).toBoolean(globalObject));
-
-    JSObject* newTarget = asObject(callFrame->newTarget());
-    Structure* booleanStructure = newTarget == callFrame->jsCallee()
-        ? globalObject->booleanObjectStructure()
-        : InternalFunction::createSubclassStructure(globalObject, newTarget, getFunctionRealm(vm, newTarget)->booleanObjectStructure());
-    RETURN_IF_EXCEPTION(scope, { });
-
+    Structure* booleanStructure = InternalFunction::createSubclassStructure(globalObject, callFrame->jsCallee(), callFrame->newTarget(), globalObject->booleanObjectStructure());
+    RETURN_IF_EXCEPTION(scope, encodedJSValue());
     BooleanObject* obj = BooleanObject::create(vm, booleanStructure);
     obj->setInternalValue(vm, boolean);
     return JSValue::encode(obj);

@@ -64,7 +64,7 @@ class AdaptiveValueStructureStubClearingWatchpoint final : public AdaptiveInferr
     WTF_MAKE_NONCOPYABLE(AdaptiveValueStructureStubClearingWatchpoint);
     WTF_MAKE_FAST_ALLOCATED;
 
-    void handleFire(VM&, const FireDetail&) final;
+    void handleFire(VM&, const FireDetail&) override;
 
 public:
     AdaptiveValueStructureStubClearingWatchpoint(const ObjectPropertyCondition& key, WatchpointsOnStructureStubInfo& holder)
@@ -79,7 +79,7 @@ private:
     PackedPtr<WatchpointsOnStructureStubInfo> m_holder;
 };
 
-class WatchpointsOnStructureStubInfo final {
+class WatchpointsOnStructureStubInfo {
     WTF_MAKE_NONCOPYABLE(WatchpointsOnStructureStubInfo);
     WTF_MAKE_FAST_ALLOCATED;
 public:

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2006-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2006-2019 Apple Inc. All rights reserved.
  * Copyright (C) 2007 Eric Seidel <eric@webkit.org>
  *
  * Redistribution and use in source and binary forms, with or without
@@ -123,9 +123,16 @@ public:
 
 template <class Parent>
 class JSCallbackObject final : public Parent {
+protected:
+    JSCallbackObject(JSGlobalObject*, Structure*, JSClassRef, void* data);
+    JSCallbackObject(VM&, JSClassRef, Structure*);
+
+    void finishCreation(JSGlobalObject*);
+    void finishCreation(VM&);
+
 public:
     using Base = Parent;
-    static constexpr unsigned StructureFlags = Base::StructureFlags | ProhibitsPropertyCaching | OverridesGetOwnPropertySlot | InterceptsGetOwnPropertySlotByIndexEvenWhenLengthIsNotZero | ImplementsHasInstance | OverridesAnyFormOfGetPropertyNames | OverridesGetCallData;
+    static constexpr unsigned StructureFlags = Base::StructureFlags | ProhibitsPropertyCaching | OverridesGetOwnPropertySlot | InterceptsGetOwnPropertySlotByIndexEvenWhenLengthIsNotZero | ImplementsHasInstance | OverridesGetPropertyNames | OverridesGetCallData;
     static_assert(!(StructureFlags & ImplementsDefaultHasInstance), "using customHasInstance");
 
     ~JSCallbackObject();
@@ -183,12 +190,6 @@ public:
     using Parent::methodTable;
 
 private:
-    JSCallbackObject(JSGlobalObject*, Structure*, JSClassRef, void* data);
-    JSCallbackObject(VM&, JSClassRef, Structure*);
-
-    void finishCreation(JSGlobalObject*);
-    void finishCreation(VM&);
-
     static IsoSubspace* subspaceForImpl(VM&, SubspaceAccess);
     static String className(const JSObject*, VM&);
     static String toStringName(const JSObject*, JSGlobalObject*);
@@ -201,15 +202,15 @@ private:
     static bool put(JSCell*, JSGlobalObject*, PropertyName, JSValue, PutPropertySlot&);
     static bool putByIndex(JSCell*, JSGlobalObject*, unsigned, JSValue, bool shouldThrow);
 
-    static bool deleteProperty(JSCell*, JSGlobalObject*, PropertyName, DeletePropertySlot&);
+    static bool deleteProperty(JSCell*, JSGlobalObject*, PropertyName);
     static bool deletePropertyByIndex(JSCell*, JSGlobalObject*, unsigned);
 
     static bool customHasInstance(JSObject*, JSGlobalObject*, JSValue);
 
     static void getOwnNonIndexPropertyNames(JSObject*, JSGlobalObject*, PropertyNameArray&, EnumerationMode);
 
-    static CallData getConstructData(JSCell*);
-    static CallData getCallData(JSCell*);
+    static ConstructType getConstructData(JSCell*, ConstructData&);
+    static CallType getCallData(JSCell*, CallData&);
 
     static void visitChildren(JSCell* cell, SlotVisitor& visitor)
     {

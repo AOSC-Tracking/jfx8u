@@ -23,10 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-typedef USVString CSSOMString;
-
 dictionary KeyframeEffectOptions : EffectTiming {
     IterationCompositeOperation iterationComposite = "replace";
     CompositeOperation composite = "replace";
-    CSSOMString? pseudoElement = null;
 };

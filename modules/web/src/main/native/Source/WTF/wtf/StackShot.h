@@ -121,7 +121,9 @@ struct StackShotHash {
 };
 
 template<typename T> struct DefaultHash;
-template<> struct DefaultHash<StackShot> : StackShotHash { };
+template<> struct DefaultHash<StackShot> {
+    typedef StackShotHash Hash;
+};
 
 template<> struct HashTraits<StackShot> : SimpleClassHashTraits<StackShot> { };
 

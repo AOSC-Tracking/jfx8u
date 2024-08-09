@@ -29,7 +29,6 @@
 #include "CanvasGradient.h"
 #include "CanvasPattern.h"
 #include "Color.h"
-#include "ColorSerialization.h"
 #include <wtf/Variant.h>
 
 namespace WebCore {
@@ -42,8 +41,9 @@ class CanvasStyle {
 public:
     CanvasStyle();
     CanvasStyle(Color);
-    CanvasStyle(const SRGBA<float>&);
-    CanvasStyle(const CMYKA<float>&);
+    CanvasStyle(float grayLevel, float alpha);
+    CanvasStyle(float r, float g, float b, float alpha);
+    CanvasStyle(float c, float m, float y, float k, float alpha);
     CanvasStyle(CanvasGradient&);
     CanvasStyle(CanvasPattern&);
 
@@ -52,7 +52,8 @@ public:
 
     bool isValid() const { return !WTF::holds_alternative<Invalid>(m_style); }
     bool isCurrentColor() const { return WTF::holds_alternative<CurrentColor>(m_style); }
-    Optional<float> overrideAlpha() const { return WTF::get<CurrentColor>(m_style).overrideAlpha; }
+    bool hasOverrideAlpha() const { return isCurrentColor() && WTF::get<CurrentColor>(m_style).overrideAlpha; }
+    float overrideAlpha() const { return WTF::get<CurrentColor>(m_style).overrideAlpha.value(); }
 
     String color() const;
     RefPtr<CanvasGradient> canvasGradient() const;
@@ -62,15 +63,21 @@ public:
     void applyStrokeColor(GraphicsContext&) const;
 
     bool isEquivalentColor(const CanvasStyle&) const;
-    bool isEquivalent(const SRGBA<float>&) const;
-    bool isEquivalent(const CMYKA<float>&) const;
+    bool isEquivalentRGBA(float red, float green, float blue, float alpha) const;
+    bool isEquivalentCMYKA(float cyan, float magenta, float yellow, float black, float alpha) const;
 
 private:
     struct Invalid { };
 
     struct CMYKAColor {
-        Color colorConvertedToSRGBA;
-        CMYKA<float> components;
+        Color color;
+        float c { 0 };
+        float m { 0 };
+        float y { 0 };
+        float k { 0 };
+        float a { 0 };
+
+        CMYKAColor(const CMYKAColor&) = default;
     };
 
     struct CurrentColor {
@@ -109,7 +116,8 @@ inline RefPtr<CanvasPattern> CanvasStyle::canvasPattern() const
 
 inline String CanvasStyle::color() const
 {
-    return serializationForHTML(WTF::holds_alternative<Color>(m_style) ? WTF::get<Color>(m_style) : WTF::get<CMYKAColor>(m_style).colorConvertedToSRGBA);
+    auto& color = WTF::holds_alternative<Color>(m_style) ? WTF::get<Color>(m_style) : WTF::get<CMYKAColor>(m_style).color;
+    return color.serialized();
 }
 
 } // namespace WebCore

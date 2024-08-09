@@ -34,7 +34,7 @@
 
 namespace JSC { namespace DFG {
 
-class SaneStringGetByValSlowPathGenerator final : public JumpingSlowPathGenerator<MacroAssembler::Jump> {
+class SaneStringGetByValSlowPathGenerator : public JumpingSlowPathGenerator<MacroAssembler::Jump> {
 public:
     SaneStringGetByValSlowPathGenerator(
         const MacroAssembler::Jump& from, SpeculativeJIT* jit, JSValueRegs resultRegs, CCallHelpers::TrustedImmPtr globalObject, GPRReg baseReg, GPRReg propertyReg)
@@ -47,8 +47,8 @@ public:
         jit->silentSpillAllRegistersImpl(false, m_plans, extractResult(resultRegs));
     }
 
-private:
-    void generateInternal(SpeculativeJIT* jit) final
+protected:
+    void generateInternal(SpeculativeJIT* jit) override
     {
         linkFrom(jit);
 
@@ -78,6 +78,7 @@ private:
         jumpTo(jit);
     }
 
+private:
     JSValueRegs m_resultRegs;
     CCallHelpers::TrustedImmPtr m_globalObject;
     GPRReg m_baseReg;

@@ -36,7 +36,6 @@
 #include "CSSFontSelector.h"
 #include "CSSParser.h"
 #include "CSSPropertyNames.h"
-#include "Gradient.h"
 #include "ImageBuffer.h"
 #include "ImageData.h"
 #include "InspectorInstrumentation.h"
@@ -385,7 +384,7 @@ Ref<TextMetrics> CanvasRenderingContext2D::measureText(const String& text)
     auto direction = toTextDirection(state().direction, &computedStyle);
     bool override = computedStyle ? isOverride(computedStyle->unicodeBidi()) : false;
 
-    TextRun textRun(normalizedText, 0, 0, AllowRightExpansion, direction, override, true);
+    TextRun textRun(normalizedText, 0, 0, AllowTrailingExpansion, direction, override, true);
     auto& font = fontProxy();
     auto& fontMetrics = font.fontMetrics();
 
@@ -498,7 +497,7 @@ void CanvasRenderingContext2D::drawTextInternal(const String& text, float x, flo
     auto direction = toTextDirection(state().direction, &computedStyle);
     bool override = computedStyle ? isOverride(computedStyle->unicodeBidi()) : false;
 
-    TextRun textRun(normalizedText, 0, 0, AllowRightExpansion, direction, override, true);
+    TextRun textRun(normalizedText, 0, 0, AllowTrailingExpansion, direction, override, true);
     float fontWidth = fontProxy.width(textRun);
     bool useMaxWidth = maxWidth && maxWidth.value() < fontWidth;
     float width = useMaxWidth ? maxWidth.value() : fontWidth;
@@ -559,7 +558,7 @@ void CanvasRenderingContext2D::drawTextInternal(const String& text, float x, flo
             maskImageContext.setStrokeThickness(c->strokeThickness());
         }
 
-        maskImageContext.setTextDrawingMode(fill ? TextDrawingMode::Fill : TextDrawingMode::Stroke);
+        maskImageContext.setTextDrawingMode(fill ? TextModeFill : TextModeStroke);
 
         if (useMaxWidth) {
             maskImageContext.translate(location - maskRect.location());
@@ -579,7 +578,7 @@ void CanvasRenderingContext2D::drawTextInternal(const String& text, float x, flo
     }
 #endif
 
-    c->setTextDrawingMode(fill ? TextDrawingMode::Fill : TextDrawingMode::Stroke);
+    c->setTextDrawingMode(fill ? TextModeFill : TextModeStroke);
 
     GraphicsContextStateSaver stateSaver(*c);
     if (useMaxWidth) {

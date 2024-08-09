@@ -20,8 +20,6 @@
 
 [
     InterfaceName=Plugin,
-    GenerateIsReachable=ReachableFromNavigator,
-    ImplementationLacksVTable,
     LegacyUnenumerableNamedProperties
 ] interface DOMPlugin {
     readonly attribute DOMString name;

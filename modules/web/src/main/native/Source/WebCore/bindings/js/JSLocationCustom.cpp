@@ -163,13 +163,13 @@ bool JSLocation::putByIndex(JSCell* cell, JSGlobalObject* lexicalGlobalObject, u
     return JSObject::putByIndex(cell, lexicalGlobalObject, index, value, shouldThrow);
 }
 
-bool JSLocation::deleteProperty(JSCell* cell, JSGlobalObject* lexicalGlobalObject, PropertyName propertyName, DeletePropertySlot& slot)
+bool JSLocation::deleteProperty(JSCell* cell, JSGlobalObject* lexicalGlobalObject, PropertyName propertyName)
 {
     JSLocation* thisObject = jsCast<JSLocation*>(cell);
     // Only allow deleting by frames in the same origin.
     if (!BindingSecurity::shouldAllowAccessToDOMWindow(lexicalGlobalObject, thisObject->wrapped().window(), ThrowSecurityError))
         return false;
-    return Base::deleteProperty(thisObject, lexicalGlobalObject, propertyName, slot);
+    return Base::deleteProperty(thisObject, lexicalGlobalObject, propertyName);
 }
 
 bool JSLocation::deletePropertyByIndex(JSCell* cell, JSGlobalObject* lexicalGlobalObject, unsigned propertyName)

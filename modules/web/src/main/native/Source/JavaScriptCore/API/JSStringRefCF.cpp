@@ -35,7 +35,7 @@
 
 JSStringRef JSStringCreateWithCFString(CFStringRef string)
 {
-    JSC::initialize();
+    JSC::initializeThreading();
 
     // We cannot use CFIndex here since CFStringGetLength can return values larger than
     // it can hold.  (<rdar://problem/6806478>)

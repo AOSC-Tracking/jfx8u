@@ -28,9 +28,17 @@
 
 #if ENABLE(FTL_JIT)
 
+#include "AirGenerationContext.h"
 #include "B3StackmapGenerationParams.h"
+#include "B3StackmapValue.h"
+#include "CodeBlock.h"
+#include "DFGBasicBlock.h"
+#include "DFGNode.h"
+#include "FTLExitArgument.h"
 #include "FTLJITCode.h"
+#include "FTLLocation.h"
 #include "FTLState.h"
+#include "JSCInlines.h"
 
 namespace JSC { namespace FTL {
 
@@ -57,20 +65,20 @@ void OSRExitDescriptor::validateReferences(const TrackedReferences& trackedRefer
 
 Ref<OSRExitHandle> OSRExitDescriptor::emitOSRExit(
     State& state, ExitKind exitKind, const NodeOrigin& nodeOrigin, CCallHelpers& jit,
-    const StackmapGenerationParams& params, uint32_t dfgNodeIndex, unsigned offset)
+    const StackmapGenerationParams& params, unsigned offset)
 {
     Ref<OSRExitHandle> handle =
-        prepareOSRExitHandle(state, exitKind, nodeOrigin, params, dfgNodeIndex, offset);
+        prepareOSRExitHandle(state, exitKind, nodeOrigin, params, offset);
     handle->emitExitThunk(state, jit);
     return handle;
 }
 
 Ref<OSRExitHandle> OSRExitDescriptor::emitOSRExitLater(
     State& state, ExitKind exitKind, const NodeOrigin& nodeOrigin,
-    const StackmapGenerationParams& params, uint32_t dfgNodeIndex, unsigned offset)
+    const StackmapGenerationParams& params, unsigned offset)
 {
     RefPtr<OSRExitHandle> handle =
-        prepareOSRExitHandle(state, exitKind, nodeOrigin, params, dfgNodeIndex, offset);
+        prepareOSRExitHandle(state, exitKind, nodeOrigin, params, offset);
     params.addLatePath(
         [handle, &state] (CCallHelpers& jit) {
             handle->emitExitThunk(state, jit);
@@ -80,11 +88,11 @@ Ref<OSRExitHandle> OSRExitDescriptor::emitOSRExitLater(
 
 Ref<OSRExitHandle> OSRExitDescriptor::prepareOSRExitHandle(
     State& state, ExitKind exitKind, const NodeOrigin& nodeOrigin,
-    const StackmapGenerationParams& params, uint32_t dfgNodeIndex, unsigned offset)
+    const StackmapGenerationParams& params, unsigned offset)
 {
     unsigned index = state.jitCode->osrExit.size();
     OSRExit& exit = state.jitCode->osrExit.alloc(
-        this, exitKind, nodeOrigin.forExit, nodeOrigin.semantic, nodeOrigin.wasHoisted, dfgNodeIndex);
+        this, exitKind, nodeOrigin.forExit, nodeOrigin.semantic, nodeOrigin.wasHoisted);
     Ref<OSRExitHandle> handle = adoptRef(*new OSRExitHandle(index, exit));
     for (unsigned i = offset; i < params.size(); ++i)
         exit.m_valueReps.append(params[i]);
@@ -94,8 +102,8 @@ Ref<OSRExitHandle> OSRExitDescriptor::prepareOSRExitHandle(
 
 OSRExit::OSRExit(
     OSRExitDescriptor* descriptor, ExitKind exitKind, CodeOrigin codeOrigin,
-    CodeOrigin codeOriginForExitProfile, bool wasHoisted, uint32_t dfgNodeIndex)
-    : OSRExitBase(exitKind, codeOrigin, codeOriginForExitProfile, wasHoisted, dfgNodeIndex)
+    CodeOrigin codeOriginForExitProfile, bool wasHoisted)
+    : OSRExitBase(exitKind, codeOrigin, codeOriginForExitProfile, wasHoisted)
     , m_descriptor(descriptor)
 {
 }

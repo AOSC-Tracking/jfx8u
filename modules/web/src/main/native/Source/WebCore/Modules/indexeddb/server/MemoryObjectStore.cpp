@@ -252,12 +252,6 @@ void MemoryObjectStore::deleteRange(const IDBKeyRangeData& inputRange)
 
 IDBError MemoryObjectStore::addRecord(MemoryBackingStoreTransaction& transaction, const IDBKeyData& keyData, const IDBValue& value)
 {
-    auto indexKeys = generateIndexKeyMapForValue(m_serializationContext->execState(), m_info, keyData, value);
-    return addRecord(transaction, keyData, indexKeys, value);
-}
-
-IDBError MemoryObjectStore::addRecord(MemoryBackingStoreTransaction& transaction, const IDBKeyData& keyData, const IndexIDToIndexKeyMap& indexKeys, const IDBValue& value)
-{
     LOG(IndexedDB, "MemoryObjectStore::addRecord");
 
     ASSERT(m_writeTransaction);
@@ -277,7 +271,7 @@ IDBError MemoryObjectStore::addRecord(MemoryBackingStoreTransaction& transaction
     ASSERT(listResult.second);
 
     // If there was an error indexing this addition, then revert it.
-    auto error = updateIndexesForPutRecord(keyData, indexKeys);
+    auto error = updateIndexesForPutRecord(keyData, value.data());
     if (!error.isNull()) {
         m_keyValueStore->remove(mapResult.iterator);
         m_orderedKeys->erase(listResult.first);
@@ -305,24 +299,29 @@ void MemoryObjectStore::updateIndexesForDeleteRecord(const IDBKeyData& value)
         index->removeEntriesWithValueKey(value);
 }
 
-IDBError MemoryObjectStore::updateIndexesForPutRecord(const IDBKeyData& key, const IndexIDToIndexKeyMap& indexKeys)
+IDBError MemoryObjectStore::updateIndexesForPutRecord(const IDBKeyData& key, const ThreadSafeDataBuffer& value)
 {
+    JSLockHolder locker(m_serializationContext->vm());
+
+    auto jsValue = deserializeIDBValueToJSValue(m_serializationContext->execState(), value);
+    if (jsValue.isUndefinedOrNull())
+        return IDBError { };
+
     IDBError error;
     Vector<std::pair<MemoryIndex*, IndexKey>> changedIndexRecords;
 
-    for (const auto& entry : indexKeys) {
-        auto* index = m_indexesByIdentifier.get(entry.key);
-        ASSERT(index);
-        if (!index) {
-            error = IDBError { InvalidStateError, "Missing index metadata" };
-            break;
-        }
+    for (auto& index : m_indexesByName.values()) {
+        IndexKey indexKey;
+        generateIndexKeyForValue(m_serializationContext->execState(), index->info(), jsValue, indexKey, m_info.keyPath(), key);
 
-        error = index->putIndexKey(key, entry.value);
+        if (indexKey.isNull())
+            continue;
+
+        error = index->putIndexKey(key, indexKey);
         if (!error.isNull())
             break;
 
-        changedIndexRecords.append(std::make_pair(index, entry.value));
+        changedIndexRecords.append(std::make_pair(index.get(), indexKey));
     }
 
     // If any of the index puts failed, revert all of the ones that went through.

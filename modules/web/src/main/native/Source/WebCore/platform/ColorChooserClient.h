@@ -27,16 +27,17 @@
  *
  */
 
-#pragma once
+#ifndef ColorChooserClient_h
+#define ColorChooserClient_h
 
 #if ENABLE(INPUT_TYPE_COLOR)
 
-#include <wtf/Forward.h>
+#include "IntRect.h"
+#include <wtf/Vector.h>
 
 namespace WebCore {
 
 class Color;
-class IntRect;
 
 class ColorChooserClient {
 public:
@@ -45,9 +46,13 @@ public:
     virtual void didChooseColor(const Color&) = 0;
     virtual void didEndChooser() = 0;
     virtual IntRect elementRectRelativeToRootView() const = 0;
+    virtual Color currentColor() = 0;
+    virtual bool shouldShowSuggestions() const = 0;
     virtual Vector<Color> suggestedColors() const = 0;
 };
 
 } // namespace WebCore
 
 #endif // ENABLE(INPUT_TYPE_COLOR)
+
+#endif // ColorChooserClient_h

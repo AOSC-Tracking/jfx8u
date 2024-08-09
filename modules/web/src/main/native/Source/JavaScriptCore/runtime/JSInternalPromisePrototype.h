@@ -42,6 +42,5 @@ public:
 private:
     JSInternalPromisePrototype(VM&, Structure*);
 };
-STATIC_ASSERT_ISO_SUBSPACE_SHARABLE(JSInternalPromisePrototype, JSInternalPromisePrototype::Base);
 
 } // namespace JSC

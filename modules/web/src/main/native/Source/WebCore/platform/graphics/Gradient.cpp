@@ -36,17 +36,58 @@ using WTF::pairIntHash;
 
 namespace WebCore {
 
-Ref<Gradient> Gradient::create(Data&& data)
+Ref<Gradient> Gradient::create(LinearData&& data)
 {
     return adoptRef(*new Gradient(WTFMove(data)));
 }
 
-Gradient::Gradient(Data&& data)
-    : m_data(WTFMove(data))
+Ref<Gradient> Gradient::create(RadialData&& data)
 {
+    return adoptRef(*new Gradient(WTFMove(data)));
 }
 
-Gradient::~Gradient() = default;
+Ref<Gradient> Gradient::create(ConicData&& data)
+{
+    return adoptRef(*new Gradient(WTFMove(data)));
+}
+
+Gradient::Gradient(LinearData&& data)
+    : m_data(WTFMove(data))
+{
+    platformInit();
+}
+
+Gradient::Gradient(RadialData&& data)
+    : m_data(WTFMove(data))
+{
+    platformInit();
+}
+
+Gradient::Gradient(ConicData&& data)
+    : m_data(WTFMove(data))
+{
+    platformInit();
+}
+
+Gradient::~Gradient()
+{
+    platformDestroy();
+}
+
+auto Gradient::type() const -> Type
+{
+    return WTF::switchOn(m_data,
+        [] (const LinearData&) {
+            return Type::Linear;
+        },
+        [] (const RadialData&) {
+            return Type::Radial;
+        },
+        [] (const ConicData&) {
+            return Type::Conic;
+        }
+    );
+}
 
 void Gradient::adjustParametersForTiledDrawing(FloatSize& size, FloatRect& srcRect, const FloatSize& spacing)
 {
@@ -93,92 +134,146 @@ bool Gradient::isZeroSize() const
     );
 }
 
-void Gradient::addColorStop(Gradient::ColorStop&& stop)
+void Gradient::addColorStop(float offset, const Color& color)
 {
-    m_stops.append(WTFMove(stop));
+    addColorStop({ offset, color });
+}
+
+void Gradient::addColorStop(const Gradient::ColorStop& stop)
+{
+    m_stops.append(stop);
+
     m_stopsSorted = false;
-    m_cachedHash = 0;
-    stopsChanged();
+
+    platformDestroy();
+    invalidateHash();
 }
 
 void Gradient::setSortedColorStops(ColorStopVector&& stops)
 {
     m_stops = WTFMove(stops);
+
     m_stopsSorted = true;
-    m_cachedHash = 0;
-    stopsChanged();
+
+    platformDestroy();
+    invalidateHash();
 }
 
-void Gradient::sortStops() const
+static inline bool compareStops(const Gradient::ColorStop& a, const Gradient::ColorStop& b)
+{
+    return a.offset < b.offset;
+}
+
+void Gradient::sortStopsIfNecessary()
 {
     if (m_stopsSorted)
         return;
+
     m_stopsSorted = true;
-    std::stable_sort(m_stops.begin(), m_stops.end(), [] (auto& a, auto& b) {
-        return a.offset < b.offset;
-    });
+
+    if (!m_stops.size())
+        return;
+
+    std::stable_sort(m_stops.begin(), m_stops.end(), compareStops);
+    invalidateHash();
+}
+
+bool Gradient::hasAlpha() const
+{
+    for (const auto& stop : m_stops) {
+        if (!stop.color.isOpaque())
+            return true;
+    }
+
+    return false;
 }
 
 void Gradient::setSpreadMethod(GradientSpreadMethod spreadMethod)
 {
+    // FIXME: Should it become necessary, allow calls to this method after m_gradient has been set.
+    ASSERT(m_gradient == 0);
+
     if (m_spreadMethod == spreadMethod)
         return;
+
     m_spreadMethod = spreadMethod;
-    m_cachedHash = 0;
+
+    invalidateHash();
 }
 
 void Gradient::setGradientSpaceTransform(const AffineTransform& gradientSpaceTransformation)
 {
     if (m_gradientSpaceTransformation == gradientSpaceTransformation)
         return;
+
     m_gradientSpaceTransformation = gradientSpaceTransformation;
-    m_cachedHash = 0;
-}
 
-// FIXME: Instead of these add(Hasher) functions, consider using encode functions to compute the hash.
-
-static void add(Hasher& hasher, const Color& color)
-{
-    // FIXME: We don't want to hash a hash; do better.
-    add(hasher, color.hash());
-}
-
-static void add(Hasher& hasher, const FloatPoint& point)
-{
-    add(hasher, point.x(), point.y());
-}
-
-static void add(Hasher& hasher, const AffineTransform& transform)
-{
-    add(hasher, transform.a(), transform.b(), transform.c(), transform.d(), transform.e(), transform.f());
-}
-
-static void add(Hasher& hasher, const Gradient::ColorStop& stop)
-{
-    add(hasher, stop.offset, stop.color);
-}
-
-static void add(Hasher& hasher, const Gradient::LinearData& data)
-{
-    add(hasher, data.point0, data.point1);
-}
-
-static void add(Hasher& hasher, const Gradient::RadialData& data)
-{
-    add(hasher, data.point0, data.point1, data.startRadius, data.endRadius, data.aspectRatio);
-}
-
-static void add(Hasher& hasher, const Gradient::ConicData& data)
-{
-    add(hasher, data.point0, data.angleRadians);
+    invalidateHash();
 }
 
 unsigned Gradient::hash() const
 {
-    if (!m_cachedHash) {
-        sortStops();
-        m_cachedHash = computeHash(m_data, m_spreadMethod, m_gradientSpaceTransformation, m_stops);
-    }
+    if (m_cachedHash)
+        return m_cachedHash;
+
+    struct {
+        Type type;
+        FloatPoint point0;
+        FloatPoint point1;
+        float startRadius;
+        float endRadius;
+        float aspectRatio;
+        float angleRadians;
+        GradientSpreadMethod spreadMethod;
+        AffineTransform gradientSpaceTransformation;
+    } parameters;
+
+    // StringHasher requires that the memory it hashes be a multiple of two in size.
+    COMPILE_ASSERT(!(sizeof(parameters) % 2), Gradient_parameters_size_should_be_multiple_of_two);
+    COMPILE_ASSERT(!(sizeof(ColorStop) % 2), Color_stop_size_should_be_multiple_of_two);
+
+    // Ensure that any padding in the struct is zero-filled, so it will not affect the hash value.
+    // FIXME: This is asking for trouble, because it is a nontrivial type.
+    memset(static_cast<void*>(&parameters), 0, sizeof(parameters));
+
+    WTF::switchOn(m_data,
+        [&parameters] (const LinearData& data) {
+            parameters.point0 = data.point0;
+            parameters.point1 = data.point1;
+            parameters.startRadius = 0;
+            parameters.endRadius = 0;
+            parameters.aspectRatio = 0;
+            parameters.angleRadians = 0;
+            parameters.type = Type::Linear;
+        },
+        [&parameters] (const RadialData& data) {
+            parameters.point0 = data.point0;
+            parameters.point1 = data.point1;
+            parameters.startRadius = data.startRadius;
+            parameters.endRadius = data.endRadius;
+            parameters.aspectRatio = data.aspectRatio;
+            parameters.angleRadians = 0;
+            parameters.type = Type::Radial;
+        },
+        [&parameters] (const ConicData& data) {
+            parameters.point0 = data.point0;
+            parameters.point1 = {0, 0};
+            parameters.startRadius = 0;
+            parameters.endRadius = 0;
+            parameters.aspectRatio = 0;
+            parameters.angleRadians = data.angleRadians;
+            parameters.type = Type::Conic;
+        }
+    );
+
+    parameters.spreadMethod = m_spreadMethod;
+    parameters.gradientSpaceTransformation = m_gradientSpaceTransformation;
+
+    unsigned parametersHash = StringHasher::hashMemory(&parameters, sizeof(parameters));
+    unsigned stopHash = StringHasher::hashMemory(m_stops.data(), m_stops.size() * sizeof(ColorStop));
+
+    m_cachedHash = pairIntHash(parametersHash, stopHash);
+
     return m_cachedHash;
 }
 

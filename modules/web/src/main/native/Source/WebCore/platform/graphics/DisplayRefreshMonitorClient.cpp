@@ -26,6 +26,8 @@
 #include "config.h"
 #include "DisplayRefreshMonitorClient.h"
 
+#if USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)
+
 #include "DisplayRefreshMonitor.h"
 #include "DisplayRefreshMonitorManager.h"
 
@@ -50,3 +52,5 @@ void DisplayRefreshMonitorClient::fireDisplayRefreshIfNeeded()
 }
 
 }
+
+#endif // USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)

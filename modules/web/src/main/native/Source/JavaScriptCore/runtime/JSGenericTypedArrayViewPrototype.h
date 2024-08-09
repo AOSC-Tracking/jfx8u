@@ -32,15 +32,13 @@ namespace JSC {
 template<typename ViewClass>
 class JSGenericTypedArrayViewPrototype final : public JSNonFinalObject {
 public:
-    using Base = JSNonFinalObject;
+    typedef JSNonFinalObject Base;
 
-    template<typename CellType, SubspaceAccess>
-    static IsoSubspace* subspaceFor(VM& vm)
-    {
-        STATIC_ASSERT_ISO_SUBSPACE_SHARABLE(JSGenericTypedArrayViewPrototype, Base);
-        return &vm.plainObjectSpace;
-    }
+protected:
+    JSGenericTypedArrayViewPrototype(VM&, Structure*);
+    void finishCreation(VM&, JSGlobalObject*);
 
+public:
     static JSGenericTypedArrayViewPrototype* create(
         VM&, JSGlobalObject*, Structure*);
 
@@ -50,10 +48,6 @@ public:
     IGNORE_CLANG_WARNINGS_END
 
     static Structure* createStructure(VM&, JSGlobalObject*, JSValue prototype);
-
-private:
-    JSGenericTypedArrayViewPrototype(VM&, Structure*);
-    void finishCreation(VM&, JSGlobalObject*);
 };
 
 } // namespace JSC

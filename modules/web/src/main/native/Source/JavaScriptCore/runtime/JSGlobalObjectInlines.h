@@ -101,9 +101,7 @@ ALWAYS_INLINE bool JSGlobalObject::isSetPrototypeAddFastAndNonObservable()
 
 ALWAYS_INLINE Structure* JSGlobalObject::arrayStructureForIndexingTypeDuringAllocation(JSGlobalObject* globalObject, IndexingType indexingType, JSValue newTarget) const
 {
-    return !newTarget || newTarget == globalObject->arrayConstructor()
-        ? globalObject->arrayStructureForIndexingTypeDuringAllocation(indexingType)
-        : InternalFunction::createSubclassStructure(globalObject, asObject(newTarget), getFunctionRealm(globalObject->vm(), asObject(newTarget))->arrayStructureForIndexingTypeDuringAllocation(indexingType));
+    return InternalFunction::createSubclassStructure(globalObject, globalObject->arrayConstructor(), newTarget, arrayStructureForIndexingTypeDuringAllocation(indexingType));
 }
 
 inline JSFunction* JSGlobalObject::throwTypeErrorFunction() const { return jsCast<JSFunction*>(linkTimeConstant(LinkTimeConstant::throwTypeErrorFunction)); }

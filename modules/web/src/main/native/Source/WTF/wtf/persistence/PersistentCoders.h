@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2010, 2014-2015 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -26,7 +26,6 @@
 #pragma once
 
 #include <utility>
-#include <wtf/CheckedArithmetic.h>
 #include <wtf/Forward.h>
 #include <wtf/HashMap.h>
 #include <wtf/HashSet.h>
@@ -46,19 +45,19 @@ template<typename T, typename U> struct Coder<std::pair<T, U>> {
         encoder << pair.first << pair.second;
     }
 
-    static Optional<std::pair<T, U>> decode(Decoder& decoder)
+    static bool decode(Decoder& decoder, std::pair<T, U>& pair)
     {
-        Optional<T> first;
-        decoder >> first;
-        if (!first)
-            return WTF::nullopt;
+        T first;
+        if (!decoder.decode(first))
+            return false;
 
-        Optional<U> second;
-        decoder >> second;
-        if (!second)
-            return WTF::nullopt;
+        U second;
+        if (!decoder.decode(second))
+            return false;
 
-        return {{ WTFMove(*first), WTFMove(*second) }};
+        pair.first = first;
+        pair.second = second;
+        return true;
     }
 };
 
@@ -74,21 +73,23 @@ template<typename T> struct Coder<Optional<T>> {
         encoder << optional.value();
     }
 
-    static Optional<Optional<T>> decode(Decoder& decoder)
+    static bool decode(Decoder& decoder, Optional<T>& optional)
     {
-        Optional<bool> isEngaged;
-        decoder >> isEngaged;
-        if (!isEngaged)
-            return WTF::nullopt;
-        if (!*isEngaged)
-            return Optional<Optional<T>> { Optional<T> { WTF::nullopt } };
+        bool isEngaged;
+        if (!decoder.decode(isEngaged))
+            return false;
 
-        Optional<T> value;
-        decoder >> value;
-        if (!value)
-            return WTF::nullopt;
+        if (!isEngaged) {
+            optional = WTF::nullopt;
+            return true;
+        }
 
-        return Optional<Optional<T>> { Optional<T> { WTFMove(*value) } };
+        T value;
+        if (!decoder.decode(value))
+            return false;
+
+        optional = WTFMove(value);
+        return true;
     }
 };
 
@@ -98,19 +99,19 @@ template<typename KeyType, typename ValueType> struct Coder<WTF::KeyValuePair<Ke
         encoder << pair.key << pair.value;
     }
 
-    static Optional<WTF::KeyValuePair<KeyType, ValueType>> decode(Decoder& decoder)
+    static bool decode(Decoder& decoder, WTF::KeyValuePair<KeyType, ValueType>& pair)
     {
-        Optional<KeyType> key;
-        decoder >> key;
-        if (!key)
-            return WTF::nullopt;
+        KeyType key;
+        if (!decoder.decode(key))
+            return false;
 
-        Optional<ValueType> value;
-        decoder >>value;
-        if (!value)
-            return WTF::nullopt;
+        ValueType value;
+        if (!decoder.decode(value))
+            return false;
 
-        return {{ WTFMove(*key), WTFMove(*value) }};
+        pair.key = key;
+        pair.value = value;
+        return true;
     }
 };
 
@@ -124,24 +125,24 @@ template<typename T, size_t inlineCapacity> struct VectorCoder<false, T, inlineC
             encoder << vector[i];
     }
 
-    static Optional<Vector<T, inlineCapacity>> decode(Decoder& decoder)
+    static bool decode(Decoder& decoder, Vector<T, inlineCapacity>& vector)
     {
-        Optional<uint64_t> size;
-        decoder >> size;
-        if (!size)
-            return WTF::nullopt;
+        uint64_t size;
+        if (!decoder.decode(size))
+            return false;
 
         Vector<T, inlineCapacity> tmp;
-        for (size_t i = 0; i < *size; ++i) {
-            Optional<T> element;
-            decoder >> element;
-            if (!element)
-                return WTF::nullopt;
-            tmp.append(WTFMove(*element));
+        for (size_t i = 0; i < size; ++i) {
+            T element;
+            if (!decoder.decode(element))
+                return false;
+
+            tmp.append(WTFMove(element));
         }
 
         tmp.shrinkToFit();
-        return tmp;
+        vector.swap(tmp);
+        return true;
     }
 };
 
@@ -152,31 +153,27 @@ template<typename T, size_t inlineCapacity> struct VectorCoder<true, T, inlineCa
         encoder.encodeFixedLengthData(reinterpret_cast<const uint8_t*>(vector.data()), vector.size() * sizeof(T));
     }
 
-    static Optional<Vector<T, inlineCapacity>> decode(Decoder& decoder)
+    static bool decode(Decoder& decoder, Vector<T, inlineCapacity>& vector)
     {
-        Optional<uint64_t> decodedSize;
-        decoder >> decodedSize;
-        if (!decodedSize)
-            return WTF::nullopt;
+        uint64_t decodedSize;
+        if (!decoder.decode(decodedSize))
+            return false;
 
-        if (!isInBounds<size_t>(*decodedSize))
-            return WTF::nullopt;
-
-        auto size = static_cast<size_t>(*decodedSize);
+        auto size = safeCast<size_t>(decodedSize);
 
         // Since we know the total size of the elements, we can allocate the vector in
         // one fell swoop. Before allocating we must however make sure that the decoder buffer
         // is big enough.
         if (!decoder.bufferIsLargeEnoughToContain<T>(size))
-            return WTF::nullopt;
+            return false;
 
         Vector<T, inlineCapacity> temp;
         temp.grow(size);
 
-        if (!decoder.decodeFixedLengthData(reinterpret_cast<uint8_t*>(temp.data()), size * sizeof(T)))
-            return WTF::nullopt;
+        decoder.decodeFixedLengthData(reinterpret_cast<uint8_t*>(temp.data()), size * sizeof(T));
 
-        return temp;
+        vector.swap(temp);
+        return true;
     }
 };
 
@@ -192,32 +189,30 @@ template<typename KeyArg, typename MappedArg, typename HashArg, typename KeyTrai
             encoder << *it;
     }
 
-    static Optional<HashMapType> decode(Decoder& decoder)
+    static bool decode(Decoder& decoder, HashMapType& hashMap)
     {
-        Optional<uint64_t> hashMapSize;
-        decoder >> hashMapSize;
-        if (!hashMapSize)
-            return WTF::nullopt;
+        uint64_t hashMapSize;
+        if (!decoder.decode(hashMapSize))
+            return false;
 
         HashMapType tempHashMap;
-        tempHashMap.reserveInitialCapacity(static_cast<unsigned>(*hashMapSize));
-        for (uint64_t i = 0; i < *hashMapSize; ++i) {
-            Optional<KeyArg> key;
-            decoder >> key;
-            if (!key)
-                return WTF::nullopt;
-            Optional<MappedArg> value;
-            decoder >> value;
-            if (!value)
-                return WTF::nullopt;
+        tempHashMap.reserveInitialCapacity(static_cast<unsigned>(hashMapSize));
+        for (uint64_t i = 0; i < hashMapSize; ++i) {
+            KeyArg key;
+            MappedArg value;
+            if (!decoder.decode(key))
+                return false;
+            if (!decoder.decode(value))
+                return false;
 
-            if (!tempHashMap.add(WTFMove(*key), WTFMove(*value)).isNewEntry) {
+            if (!tempHashMap.add(key, value).isNewEntry) {
                 // The hash map already has the specified key, bail.
-                return WTF::nullopt;
+                return false;
             }
         }
 
-        return tempHashMap;
+        hashMap.swap(tempHashMap);
+        return true;
     }
 };
 
@@ -231,27 +226,26 @@ template<typename KeyArg, typename HashArg, typename KeyTraitsArg> struct Coder<
             encoder << *it;
     }
 
-    static Optional<HashSetType> decode(Decoder& decoder)
+    static bool decode(Decoder& decoder, HashSetType& hashSet)
     {
-        Optional<uint64_t> hashSetSize;
-        decoder >> hashSetSize;
-        if (!hashSetSize)
-            return WTF::nullopt;
+        uint64_t hashSetSize;
+        if (!decoder.decode(hashSetSize))
+            return false;
 
         HashSetType tempHashSet;
-        for (uint64_t i = 0; i < *hashSetSize; ++i) {
-            Optional<KeyArg> key;
-            decoder >> key;
-            if (!key)
-                return WTF::nullopt;
+        for (uint64_t i = 0; i < hashSetSize; ++i) {
+            KeyArg key;
+            if (!decoder.decode(key))
+                return false;
 
-            if (!tempHashSet.add(WTFMove(*key)).isNewEntry) {
+            if (!tempHashSet.add(key).isNewEntry) {
                 // The hash map already has the specified key, bail.
-                return WTF::nullopt;
+                return false;
             }
         }
 
-        return tempHashSet;
+        hashSet.swap(tempHashSet);
+        return true;
     }
 };
 
@@ -261,13 +255,14 @@ template<> struct Coder<Seconds> {
         encoder << seconds.value();
     }
 
-    static Optional<Seconds> decode(Decoder& decoder)
+    static bool decode(Decoder& decoder, Seconds& result)
     {
-        Optional<double> value;
-        decoder >> value;
-        if (!value)
-            return WTF::nullopt;
-        return Seconds(*value);
+        double value;
+        if (!decoder.decode(value))
+            return false;
+
+        result = Seconds(value);
+        return true;
     }
 };
 
@@ -277,35 +272,35 @@ template<> struct Coder<WallTime> {
         encoder << time.secondsSinceEpoch().value();
     }
 
-    static Optional<WallTime> decode(Decoder& decoder)
+    static bool decode(Decoder& decoder, WallTime& result)
     {
-        Optional<double> value;
-        decoder >> value;
-        if (!value)
-            return WTF::nullopt;
+        double value;
+        if (!decoder.decode(value))
+            return false;
 
-        return WallTime::fromRawSeconds(*value);
+        result = WallTime::fromRawSeconds(value);
+        return true;
     }
 };
 
 template<> struct Coder<AtomString> {
     WTF_EXPORT_PRIVATE static void encode(Encoder&, const AtomString&);
-    WTF_EXPORT_PRIVATE static Optional<AtomString> decode(Decoder&);
+    WTF_EXPORT_PRIVATE static bool decode(Decoder&, AtomString&);
 };
 
 template<> struct Coder<CString> {
     WTF_EXPORT_PRIVATE static void encode(Encoder&, const CString&);
-    WTF_EXPORT_PRIVATE static Optional<CString> decode(Decoder&);
+    WTF_EXPORT_PRIVATE static bool decode(Decoder&, CString&);
 };
 
 template<> struct Coder<String> {
     WTF_EXPORT_PRIVATE static void encode(Encoder&, const String&);
-    WTF_EXPORT_PRIVATE static Optional<String> decode(Decoder&);
+    WTF_EXPORT_PRIVATE static bool decode(Decoder&, String&);
 };
 
 template<> struct Coder<SHA1::Digest> {
     WTF_EXPORT_PRIVATE static void encode(Encoder&, const SHA1::Digest&);
-    WTF_EXPORT_PRIVATE static Optional<SHA1::Digest> decode(Decoder&);
+    WTF_EXPORT_PRIVATE static bool decode(Decoder&, SHA1::Digest&);
 };
 
 }

@@ -34,7 +34,7 @@ namespace WebCore {
 class AudioBasicInspectorNode : public AudioNode {
     WTF_MAKE_ISO_ALLOCATED(AudioBasicInspectorNode);
 public:
-    explicit AudioBasicInspectorNode(BaseAudioContext&);
+    AudioBasicInspectorNode(AudioContext&, float sampleRate, unsigned outputChannelCount);
 
 private:
     void pullInputs(size_t framesToProcess) override;

@@ -31,17 +31,8 @@ namespace Inspector {
 
 class JSJavaScriptCallFramePrototype final : public JSC::JSNonFinalObject {
 public:
-    using Base = JSC::JSNonFinalObject;
-    // Do we really need OverridesGetOwnPropertySlot?
-    // FIXME: https://bugs.webkit.org/show_bug.cgi?id=212956
+    typedef JSC::JSNonFinalObject Base;
     static constexpr unsigned StructureFlags = Base::StructureFlags | JSC::OverridesGetOwnPropertySlot;
-
-    template<typename CellType, JSC::SubspaceAccess>
-    static JSC::IsoSubspace* subspaceFor(JSC::VM& vm)
-    {
-        STATIC_ASSERT_ISO_SUBSPACE_SHARABLE(JSJavaScriptCallFramePrototype, Base);
-        return &vm.plainObjectSpace;
-    }
 
     DECLARE_INFO;
 

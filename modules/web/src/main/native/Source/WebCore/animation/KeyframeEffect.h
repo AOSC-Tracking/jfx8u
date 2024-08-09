@@ -37,7 +37,7 @@
 #include "KeyframeList.h"
 #include "RenderStyle.h"
 #include "StyleProperties.h"
-#include "WebAnimationTypes.h"
+#include "WebAnimationUtilities.h"
 #include <wtf/Ref.h>
 
 namespace WebCore {
@@ -50,7 +50,7 @@ class KeyframeEffect : public AnimationEffect
 public:
     static ExceptionOr<Ref<KeyframeEffect>> create(JSC::JSGlobalObject&, Element*, JSC::Strong<JSC::JSObject>&&, Optional<Variant<double, KeyframeEffectOptions>>&&);
     static ExceptionOr<Ref<KeyframeEffect>> create(JSC::JSGlobalObject&, Ref<KeyframeEffect>&&);
-    static Ref<KeyframeEffect> create(const Element&, PseudoId);
+    static Ref<KeyframeEffect> create(const Element&);
     ~KeyframeEffect() { }
 
     bool isKeyframeEffect() const final { return true; }
@@ -102,16 +102,9 @@ public:
     const Vector<ParsedKeyframe>& parsedKeyframes() const { return m_parsedKeyframes; }
 
     Element* target() const { return m_target.get(); }
-    Element* targetElementOrPseudoElement() const;
     void setTarget(RefPtr<Element>&&);
 
-    bool targetsPseudoElement() const;
-    const String pseudoElement() const;
-    ExceptionOr<void> setPseudoElement(const String&);
-
-    Vector<JSC::Strong<JSC::JSObject>> getBindingsKeyframes(JSC::JSGlobalObject&);
     Vector<JSC::Strong<JSC::JSObject>> getKeyframes(JSC::JSGlobalObject&);
-    ExceptionOr<void> setBindingsKeyframes(JSC::JSGlobalObject&, JSC::Strong<JSC::JSObject>&&);
     ExceptionOr<void> setKeyframes(JSC::JSGlobalObject&, JSC::Strong<JSC::JSObject>&&);
 
     IterationCompositeOperation iterationComposite() const { return m_iterationCompositeOperation; }
@@ -120,11 +113,11 @@ public:
     void setComposite(CompositeOperation compositeOperation) { m_compositeOperation = compositeOperation; }
 
     void getAnimatedStyle(std::unique_ptr<RenderStyle>& animatedStyle);
-    void apply(RenderStyle&, Optional<Seconds> = WTF::nullopt) override;
+    void apply(RenderStyle&) override;
     void invalidate() override;
     void animationDidTick() final;
     void animationDidPlay() final;
-    void animationDidChangeTimingProperties() final;
+    void animationDidSeek() final;
     void animationWasCanceled() final;
     void animationSuspensionStateDidChange(bool) final;
     void animationTimelineDidChange(AnimationTimeline*) final;
@@ -138,12 +131,9 @@ public:
     RenderElement* renderer() const override;
     const RenderStyle& currentStyle() const override;
     bool triggersStackingContext() const { return m_triggersStackingContext; }
-    bool isRunningAccelerated() const { return m_runningAccelerated == RunningAccelerated::Yes; }
-
-    // FIXME: These ignore the fact that some timing functions can prevent acceleration.
+    bool isRunningAccelerated() const { return m_isRunningAccelerated; }
     bool isAboutToRunAccelerated() const { return m_acceleratedPropertiesState != AcceleratedProperties::None && m_lastRecordedAcceleratedAction != AcceleratedAction::Stop; }
     bool isCompletelyAccelerated() const { return m_acceleratedPropertiesState == AcceleratedProperties::All; }
-
     bool filterFunctionListsMatch() const override { return m_filterFunctionListsMatch; }
     bool transformFunctionListsMatch() const override { return m_transformFunctionListsMatch; }
 #if ENABLE(FILTERS_LEVEL_2)
@@ -165,36 +155,31 @@ public:
     bool isCurrentlyAffectingProperty(CSSPropertyID, Accelerated = Accelerated::No) const;
     bool isRunningAcceleratedAnimationForProperty(CSSPropertyID) const;
 
-    bool requiresPseudoElement() const;
+    const RenderStyle* unanimatedStyle() const { return m_unanimatedStyle.get(); }
 
 private:
-    KeyframeEffect(Element*, PseudoId);
+    KeyframeEffect(Element*);
 
-    enum class AcceleratedAction : uint8_t { Play, Pause, UpdateTiming, Stop };
+    enum class AcceleratedAction : uint8_t { Play, Pause, Seek, Stop };
     enum class BlendingKeyframesSource : uint8_t { CSSAnimation, CSSTransition, WebAnimation };
     enum class AcceleratedProperties : uint8_t { None, Some, All };
-    enum class RunningAccelerated : uint8_t { NotStarted, Yes, No };
 
-    Document* document() const;
     void updateEffectStackMembership();
     void copyPropertiesFromSource(Ref<KeyframeEffect>&&);
-    void didChangeTargetElementOrPseudoElement(Element*);
     ExceptionOr<void> processKeyframes(JSC::JSGlobalObject&, JSC::Strong<JSC::JSObject>&&);
     void addPendingAcceleratedAction(AcceleratedAction);
     void updateAcceleratedActions();
     void setAnimatedPropertiesInStyle(RenderStyle&, double);
-    TimingFunction* timingFunctionForKeyframeAtIndex(size_t) const;
+    TimingFunction* timingFunctionForKeyframeAtIndex(size_t);
     Ref<const Animation> backingAnimationForCompositedRenderer() const;
     void computedNeedsForcedLayout();
     void computeStackingContextImpact();
-    void computeSomeKeyframesUseStepsTimingFunction();
     void clearBlendingKeyframes();
     void updateBlendingKeyframes(RenderStyle&);
     void computeCSSAnimationBlendingKeyframes(const RenderStyle&);
     void computeCSSTransitionBlendingKeyframes(const RenderStyle* oldStyle, const RenderStyle& newStyle);
     void computeAcceleratedPropertiesState();
     void setBlendingKeyframes(KeyframeList&);
-    Optional<double> progressUntilNextStep(double) const final;
     void checkForMatchingTransformFunctionLists();
     void checkForMatchingFilterFunctionLists();
     void checkForMatchingColorFilterFunctionLists();
@@ -206,8 +191,9 @@ private:
     KeyframeList m_blendingKeyframes { emptyString() };
     Vector<ParsedKeyframe> m_parsedKeyframes;
     Vector<AcceleratedAction> m_pendingAcceleratedActions;
-    RefPtr<Element> m_target;
-    PseudoId m_pseudoId { PseudoId::None };
+    WeakPtr<Element> m_target;
+
+    std::unique_ptr<const RenderStyle> m_unanimatedStyle;
 
     AcceleratedAction m_lastRecordedAcceleratedAction { AcceleratedAction::Stop };
     BlendingKeyframesSource m_blendingKeyframesSource { BlendingKeyframesSource::WebAnimation };
@@ -215,7 +201,7 @@ private:
     CompositeOperation m_compositeOperation { CompositeOperation::Replace };
     AcceleratedProperties m_acceleratedPropertiesState { AcceleratedProperties::None };
     AnimationEffectPhase m_phaseAtLastApplication { AnimationEffectPhase::Idle };
-    RunningAccelerated m_runningAccelerated;
+    bool m_isRunningAccelerated { false };
     bool m_needsForcedLayout { false };
     bool m_triggersStackingContext { false };
     bool m_transformFunctionListsMatch { false };
@@ -225,7 +211,6 @@ private:
 #endif
     bool m_colorFilterFunctionListsMatch { false };
     bool m_inTargetEffectStack { false };
-    bool m_someKeyframesUseStepsTimingFunction { false };
 };
 
 } // namespace WebCore

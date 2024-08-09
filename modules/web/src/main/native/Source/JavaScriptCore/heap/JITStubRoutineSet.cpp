@@ -29,6 +29,8 @@
 #if ENABLE(JIT)
 
 #include "GCAwareJITStubRoutine.h"
+#include "JSCInlines.h"
+#include "SlotVisitor.h"
 
 namespace JSC {
 

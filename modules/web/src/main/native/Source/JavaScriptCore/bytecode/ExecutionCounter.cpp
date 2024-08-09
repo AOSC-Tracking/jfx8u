@@ -28,6 +28,7 @@
 
 #include "CodeBlock.h"
 #include "ExecutableAllocator.h"
+#include "JSCInlines.h"
 #include "VMInlines.h"
 
 namespace JSC {

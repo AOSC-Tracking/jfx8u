@@ -26,6 +26,5 @@
 // https://wicg.github.io/ResizeObserver/
 
 [
-    Conditional=RESIZE_OBSERVER,
-    CallbackThisObject=ResizeObserver,
+    Conditional=RESIZE_OBSERVER
 ] callback ResizeObserverCallback = void (sequence<ResizeObserverEntry> entries, ResizeObserver observer);

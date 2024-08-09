@@ -31,7 +31,6 @@
 #include "RemoteAutomationTarget.h"
 #include "RemoteInspectionTarget.h"
 #include "RemoteInspector.h"
-#include <wtf/RunLoop.h>
 
 namespace Inspector {
 
@@ -87,20 +86,18 @@ void RemoteConnectionToTarget::sendMessageToTarget(const String& message)
 
 void RemoteConnectionToTarget::close()
 {
-    RunLoop::current().dispatch([this, protectThis = makeRef(*this)] {
-        LockHolder lock(m_targetMutex);
-        if (!m_target)
-            return;
+    LockHolder lock(m_targetMutex);
+    if (!m_target)
+        return;
 
-        auto targetIdentifier = m_target->targetIdentifier();
+    auto targetIdentifier = m_target->targetIdentifier();
 
-        if (m_connected)
-            m_target->disconnect(*this);
+    if (m_connected)
+        m_target->disconnect(*this);
 
-        m_target = nullptr;
+    m_target = nullptr;
 
-        RemoteInspector::singleton().updateTargetListing(targetIdentifier);
-    });
+    RemoteInspector::singleton().updateTargetListing(targetIdentifier);
 }
 
 void RemoteConnectionToTarget::targetClosed()

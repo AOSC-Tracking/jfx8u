@@ -211,7 +211,7 @@ void HTMLLinkElement::parseAttribute(const QualifiedName& name, const AtomString
 bool HTMLLinkElement::shouldLoadLink()
 {
     Ref<Document> originalDocument = document();
-    if (!dispatchBeforeLoadEvent(getNonEmptyURLAttribute(hrefAttr).string()))
+    if (!dispatchBeforeLoadEvent(getNonEmptyURLAttribute(hrefAttr)))
         return false;
     // A beforeload handler might have removed us from the document or changed the document.
     if (!isConnected() || &document() != originalDocument.ptr())
@@ -244,7 +244,9 @@ String HTMLLinkElement::as() const
         || (RuntimeEnabledFeatures::sharedFeatures().mediaPreloadingEnabled()
             && (equalLettersIgnoringASCIICase(as, "video")
                 || equalLettersIgnoringASCIICase(as, "audio")))
+#if ENABLE(VIDEO_TRACK)
         || equalLettersIgnoringASCIICase(as, "track")
+#endif
         || equalLettersIgnoringASCIICase(as, "font"))
         return as.convertToASCIILowercase();
     return String();
@@ -271,8 +273,7 @@ void HTMLLinkElement::process()
         attributeWithoutSynchronization(typeAttr),
         attributeWithoutSynchronization(crossoriginAttr),
         attributeWithoutSynchronization(imagesrcsetAttr),
-        attributeWithoutSynchronization(imagesizesAttr),
-        referrerPolicy(),
+        attributeWithoutSynchronization(imagesizesAttr)
     };
 
     m_linkLoader.loadLink(params, document());
@@ -301,7 +302,7 @@ void HTMLLinkElement::process()
         {
             bool previous = m_isHandlingBeforeLoad;
             m_isHandlingBeforeLoad = true;
-            auto scopeExit = makeScopeExit([&] { m_isHandlingBeforeLoad = previous; });
+            makeScopeExit([&] { m_isHandlingBeforeLoad = previous; });
             if (!shouldLoadLink())
                 return;
         }
@@ -336,7 +337,6 @@ void HTMLLinkElement::process()
         if (document().contentSecurityPolicy()->allowStyleWithNonce(attributeWithoutSynchronization(HTMLNames::nonceAttr)))
             options.contentSecurityPolicyImposition = ContentSecurityPolicyImposition::SkipPolicyCheck;
         options.integrity = m_integrityMetadataForPendingSheetRequest;
-        options.referrerPolicy = params.referrerPolicy;
 
         auto request = createPotentialAccessControlRequest(WTFMove(url), WTFMove(options), document(), crossOrigin());
         request.setPriority(WTFMove(priority));
@@ -524,9 +524,9 @@ bool HTMLLinkElement::sheetLoaded()
     return false;
 }
 
-void HTMLLinkElement::dispatchPendingLoadEvents(Page* page)
+void HTMLLinkElement::dispatchPendingLoadEvents()
 {
-    linkLoadEventSender().dispatchPendingEvents(page);
+    linkLoadEventSender().dispatchPendingEvents();
 }
 
 void HTMLLinkElement::dispatchPendingEvent(LinkEventSender* eventSender)
@@ -586,7 +586,7 @@ void HTMLLinkElement::handleClick(Event& event)
     RefPtr<Frame> frame = document().frame();
     if (!frame)
         return;
-    frame->loader().changeLocation(url, target(), &event, LockHistory::No, LockBackForwardList::No, ReferrerPolicy::EmptyString, document().shouldOpenExternalURLsPolicyToPropagate());
+    frame->loader().urlSelected(url, target(), &event, LockHistory::No, LockBackForwardList::No, MaybeSendReferrer, document().shouldOpenExternalURLsPolicyToPropagate());
 }
 
 URL HTMLLinkElement::href() const
@@ -664,23 +664,6 @@ void HTMLLinkElement::removePendingSheet()
     }
 
     m_styleScope->removePendingSheet(*this);
-}
-
-void HTMLLinkElement::setReferrerPolicyForBindings(const AtomString& value)
-{
-    setAttributeWithoutSynchronization(referrerpolicyAttr, value);
-}
-
-String HTMLLinkElement::referrerPolicyForBindings() const
-{
-    return referrerPolicyToString(referrerPolicy());
-}
-
-ReferrerPolicy HTMLLinkElement::referrerPolicy() const
-{
-    if (RuntimeEnabledFeatures::sharedFeatures().referrerPolicyAttributeEnabled())
-        return parseReferrerPolicy(attributeWithoutSynchronization(referrerpolicyAttr), ReferrerPolicySource::ReferrerPolicyAttribute).valueOr(ReferrerPolicy::EmptyString);
-    return ReferrerPolicy::EmptyString;
 }
 
 } // namespace WebCore

@@ -26,8 +26,6 @@
 
 #pragma once
 
-#include <unicode/utypes.h>
-
 namespace WTF {
 
 inline const UChar* ucharFrom(const wchar_t* characters)

@@ -102,7 +102,7 @@ struct MockDisplayProperties {
     template<class Encoder>
     void encode(Encoder& encoder) const
     {
-        encoder << type;
+        encoder.encodeEnum(type);
         encoder << fillColor;
         encoder << defaultSize;
     }

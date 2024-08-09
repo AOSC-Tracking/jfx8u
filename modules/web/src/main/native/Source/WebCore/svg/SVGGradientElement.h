@@ -79,7 +79,7 @@ public:
         SVG_SPREADMETHOD_REPEAT = SVGSpreadMethodUnknown
     };
 
-    Gradient::ColorStopVector buildStops();
+    Vector<Gradient::ColorStop> buildStops();
 
     using PropertyRegistry = SVGPropertyOwnerRegistry<SVGGradientElement, SVGElement, SVGURIReference>;
 

@@ -29,9 +29,10 @@
 #if ENABLE(DFG_JIT)
 
 #include "CodeBlock.h"
+#include "DFGJITCode.h"
 #include "DFGValueSource.h"
 #include "InlineCallFrame.h"
-#include "JSCJSValueInlines.h"
+#include "JSCInlines.h"
 #include "OperandsInlines.h"
 #include <wtf/DataLog.h>
 #include <wtf/HashMap.h>

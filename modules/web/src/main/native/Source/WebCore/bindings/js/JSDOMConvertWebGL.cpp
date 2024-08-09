@@ -31,8 +31,6 @@
 #include "JSANGLEInstancedArrays.h"
 #include "JSDOMConvertBufferSource.h"
 #include "JSEXTBlendMinMax.h"
-#include "JSEXTColorBufferFloat.h"
-#include "JSEXTColorBufferHalfFloat.h"
 #include "JSEXTFragDepth.h"
 #include "JSEXTShaderTextureLOD.h"
 #include "JSEXTTextureFilterAnisotropic.h"
@@ -45,7 +43,6 @@
 #include "JSOESTextureHalfFloatLinear.h"
 #include "JSOESVertexArrayObject.h"
 #include "JSWebGLBuffer.h"
-#include "JSWebGLColorBufferFloat.h"
 #include "JSWebGLCompressedTextureASTC.h"
 #include "JSWebGLCompressedTextureATC.h"
 #include "JSWebGLCompressedTextureETC.h"
@@ -93,7 +90,7 @@ JSValue convertToJSValue(JSGlobalObject& lexicalGlobalObject, JSDOMGlobalObject&
             return jsNumber(value);
         },
         [&] (const String& value) {
-            return jsStringWithCache(lexicalGlobalObject.vm(), value);
+            return jsStringWithCache(&lexicalGlobalObject, value);
         },
         [&] (const Vector<bool>& values) {
             MarkedArgumentBuffer list;
@@ -103,13 +100,6 @@ JSValue convertToJSValue(JSGlobalObject& lexicalGlobalObject, JSDOMGlobalObject&
             return constructArray(&globalObject, static_cast<JSC::ArrayAllocationProfile*>(nullptr), list);
         },
         [&] (const Vector<int>& values) {
-            MarkedArgumentBuffer list;
-            for (auto& value : values)
-                list.append(jsNumber(value));
-            RELEASE_ASSERT(!list.hasOverflowed());
-            return constructArray(&globalObject, static_cast<JSC::ArrayAllocationProfile*>(nullptr), list);
-        },
-        [&] (const Vector<unsigned>& values) {
             MarkedArgumentBuffer list;
             for (auto& value : values)
                 list.append(jsNumber(value));
@@ -212,12 +202,6 @@ JSValue convertToJSValue(JSGlobalObject& lexicalGlobalObject, JSDOMGlobalObject&
         return toJS(&lexicalGlobalObject, &globalObject, static_cast<WebGLDrawBuffers&>(extension));
     case WebGLExtension::ANGLEInstancedArraysName:
         return toJS(&lexicalGlobalObject, &globalObject, static_cast<ANGLEInstancedArrays&>(extension));
-    case WebGLExtension::EXTColorBufferHalfFloatName:
-        return toJS(&lexicalGlobalObject, &globalObject, static_cast<EXTColorBufferHalfFloat&>(extension));
-    case WebGLExtension::WebGLColorBufferFloatName:
-        return toJS(&lexicalGlobalObject, &globalObject, static_cast<WebGLColorBufferFloat&>(extension));
-    case WebGLExtension::EXTColorBufferFloatName:
-        return toJS(&lexicalGlobalObject, &globalObject, static_cast<EXTColorBufferFloat&>(extension));
     }
     ASSERT_NOT_REACHED();
     return jsNull();

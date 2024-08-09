@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2016 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -24,28 +24,27 @@
  */
 
 #include "config.h"
-#include "MockApplePaySetupFeature.h"
+#include "JSXPathNSResolver.h"
 
-#if ENABLE(APPLE_PAY)
+#include "JSCustomXPathNSResolver.h"
+#include "JSDOMExceptionHandling.h"
+
 
 namespace WebCore {
+using namespace JSC;
 
-Ref<MockApplePaySetupFeature> MockApplePaySetupFeature::create(ApplePaySetupFeatureState state, ApplePaySetupFeatureType type, bool supportsInstallments)
+RefPtr<XPathNSResolver> JSXPathNSResolver::toWrapped(VM& vm, JSGlobalObject& lexicalGlobalObject, JSValue value)
 {
-    return adoptRef(*new MockApplePaySetupFeature(state, type, supportsInstallments));
-}
+    if (value.inherits<JSXPathNSResolver>(vm))
+        return &jsCast<JSXPathNSResolver*>(asObject(value))->wrapped();
 
-MockApplePaySetupFeature::MockApplePaySetupFeature(ApplePaySetupFeatureState state, ApplePaySetupFeatureType type, bool supportsInstallments)
-    : ApplePaySetupFeature()
-    , m_state(state)
-    , m_type(type)
-#if ENABLE(APPLE_PAY_INSTALLMENTS)
-    , m_supportsInstallments(supportsInstallments)
-#endif
-{
-    UNUSED_PARAM(supportsInstallments);
+    auto result = JSCustomXPathNSResolver::create(lexicalGlobalObject, value);
+    if (UNLIKELY(result.hasException())) {
+        auto scope = DECLARE_THROW_SCOPE(vm);
+        propagateException(lexicalGlobalObject, scope, result.releaseException());
+        return nullptr;
+    }
+    return result.releaseReturnValue();
 }
 
 } // namespace WebCore
-
-#endif // ENABLE(APPLE_PAY)

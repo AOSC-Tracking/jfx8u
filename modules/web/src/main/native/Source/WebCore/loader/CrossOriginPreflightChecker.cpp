@@ -63,12 +63,12 @@ void CrossOriginPreflightChecker::validatePreflightResponse(DocumentThreadableLo
     auto* frame = loader.document().frame();
     ASSERT(frame);
 
-    auto result = WebCore::validatePreflightResponse(request, response, loader.options().storedCredentialsPolicy, loader.securityOrigin(), &CrossOriginAccessControlCheckDisabler::singleton());
-    if (!result) {
+    String errorDescription;
+    if (!WebCore::validatePreflightResponse(request, response, loader.options().storedCredentialsPolicy, loader.securityOrigin(), errorDescription)) {
         if (auto* document = frame->document())
-            document->addConsoleMessage(MessageSource::Security, MessageLevel::Error, result.error());
+            document->addConsoleMessage(MessageSource::Security, MessageLevel::Error, errorDescription);
 
-        loader.preflightFailure(identifier, ResourceError(errorDomainWebKitInternal, 0, request.url(), result.error(), ResourceError::Type::AccessControl));
+        loader.preflightFailure(identifier, ResourceError(errorDomainWebKitInternal, 0, request.url(), errorDescription, ResourceError::Type::AccessControl));
         return;
     }
 
@@ -82,7 +82,7 @@ void CrossOriginPreflightChecker::validatePreflightResponse(DocumentThreadableLo
     loader.preflightSuccess(WTFMove(request));
 }
 
-void CrossOriginPreflightChecker::notifyFinished(CachedResource& resource, const NetworkLoadMetrics&)
+void CrossOriginPreflightChecker::notifyFinished(CachedResource& resource)
 {
     ASSERT_UNUSED(resource, &resource == m_resource);
     if (m_resource->loadFailedOrCanceled()) {

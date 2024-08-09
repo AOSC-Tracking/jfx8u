@@ -35,6 +35,9 @@
             "contextsAllowed": ["interface", "attribute", "operation"],
             "values": ["*"]
         },
+        "CallbackNeedsOperatorEqual": {
+            "contextsAllowed": ["callback-function"]
+        },
         "CallbackThisObject": {
             "contextsAllowed": ["callback-function", "operation"]
         },
@@ -89,8 +92,14 @@
         "ContextAllowsMediaDevices": {
             "contextsAllowed": ["attribute"]
         },
+        "ContextHasServiceWorkerScheme": {
+            "contextsAllowed": ["attribute"]
+        },
         "Custom": {
             "contextsAllowed": ["attribute", "operation"]
+        },
+        "CustomConstructor": {
+            "contextsAllowed": ["interface"]
         },
         "CustomDefineOwnProperty": {
             "contextsAllowed": ["interface"]

@@ -1,6 +1,6 @@
 /*
  *  Copyright (C) 1999-2000 Harri Porten (porten@kde.org)
- *  Copyright (C) 2008-2020 Apple Inc. All rights reserved.
+ *  Copyright (C) 2008-2018 Apple Inc. All rights reserved.
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -54,24 +54,23 @@ public:
         return instance;
     }
 
-    static String toStringName(const JSObject*, JSGlobalObject*);
     double internalNumber() const { return m_internalNumber; }
     void setInternalNumber(double value) { m_internalNumber = value; }
 
     DECLARE_EXPORT_INFO;
 
-    const GregorianDateTime* gregorianDateTime(VM::DateCache& cache) const
+    const GregorianDateTime* gregorianDateTime(VM& vm) const
     {
         if (m_data && m_data->m_gregorianDateTimeCachedForMS == internalNumber())
             return &m_data->m_cachedGregorianDateTime;
-        return calculateGregorianDateTime(cache);
+        return calculateGregorianDateTime(vm);
     }
 
-    const GregorianDateTime* gregorianDateTimeUTC(VM::DateCache& cache) const
+    const GregorianDateTime* gregorianDateTimeUTC(VM& vm) const
     {
         if (m_data && m_data->m_gregorianDateTimeUTCCachedForMS == internalNumber())
             return &m_data->m_cachedGregorianDateTimeUTC;
-        return calculateGregorianDateTimeUTC(cache);
+        return calculateGregorianDateTimeUTC(vm);
     }
 
     static Structure* createStructure(VM& vm, JSGlobalObject* globalObject, JSValue prototype)
@@ -86,8 +85,8 @@ private:
     JS_EXPORT_PRIVATE DateInstance(VM&, Structure*);
     void finishCreation(VM&);
     JS_EXPORT_PRIVATE void finishCreation(VM&, double);
-    JS_EXPORT_PRIVATE const GregorianDateTime* calculateGregorianDateTime(VM::DateCache&) const;
-    JS_EXPORT_PRIVATE const GregorianDateTime* calculateGregorianDateTimeUTC(VM::DateCache&) const;
+    JS_EXPORT_PRIVATE const GregorianDateTime* calculateGregorianDateTime(VM&) const;
+    JS_EXPORT_PRIVATE const GregorianDateTime* calculateGregorianDateTimeUTC(VM&) const;
 
     double m_internalNumber { PNaN };
     mutable RefPtr<DateInstanceData> m_data;

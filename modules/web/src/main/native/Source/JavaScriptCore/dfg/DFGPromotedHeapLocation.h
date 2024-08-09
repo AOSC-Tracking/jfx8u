@@ -215,7 +215,9 @@ namespace WTF {
 void printInternal(PrintStream&, JSC::DFG::PromotedLocationKind);
 
 template<typename T> struct DefaultHash;
-template<> struct DefaultHash<JSC::DFG::PromotedHeapLocation> : JSC::DFG::PromotedHeapLocationHash { };
+template<> struct DefaultHash<JSC::DFG::PromotedHeapLocation> {
+    typedef JSC::DFG::PromotedHeapLocationHash Hash;
+};
 
 template<typename T> struct HashTraits;
 template<> struct HashTraits<JSC::DFG::PromotedHeapLocation> : SimpleClassHashTraits<JSC::DFG::PromotedHeapLocation> {
@@ -223,7 +225,9 @@ template<> struct HashTraits<JSC::DFG::PromotedHeapLocation> : SimpleClassHashTr
 };
 
 template<typename T> struct DefaultHash;
-template<> struct DefaultHash<JSC::DFG::PromotedLocationDescriptor> : JSC::DFG::PromotedLocationDescriptorHash { };
+template<> struct DefaultHash<JSC::DFG::PromotedLocationDescriptor> {
+    typedef JSC::DFG::PromotedLocationDescriptorHash Hash;
+};
 
 template<typename T> struct HashTraits;
 template<> struct HashTraits<JSC::DFG::PromotedLocationDescriptor> : SimpleClassHashTraits<JSC::DFG::PromotedLocationDescriptor> {

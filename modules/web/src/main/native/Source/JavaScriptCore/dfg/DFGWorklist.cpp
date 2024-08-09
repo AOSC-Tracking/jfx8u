@@ -26,34 +26,34 @@
 #include "config.h"
 #include "DFGWorklist.h"
 
+#include "CodeBlock.h"
 #include "DFGSafepoint.h"
 #include "DeferGC.h"
-#include "JSCellInlines.h"
+#include "JSCInlines.h"
 #include "ReleaseHeapAccessScope.h"
 #include <mutex>
-#include <wtf/CompilationThread.h>
 
 namespace JSC { namespace DFG {
 
 #if ENABLE(DFG_JIT)
 
-class Worklist::ThreadBody final : public AutomaticThread {
+class Worklist::ThreadBody : public AutomaticThread {
 public:
     ThreadBody(const AbstractLocker& locker, Worklist& worklist, ThreadData& data, Box<Lock> lock, Ref<AutomaticThreadCondition>&& condition, int relativePriority)
-        : AutomaticThread(locker, lock, WTFMove(condition), ThreadType::Compiler)
+        : AutomaticThread(locker, lock, WTFMove(condition))
         , m_worklist(worklist)
         , m_data(data)
         , m_relativePriority(relativePriority)
     {
     }
 
-    const char* name() const final
+    const char* name() const override
     {
         return m_worklist.m_threadName.data();
     }
 
-private:
-    PollResult poll(const AbstractLocker& locker) final
+protected:
+    PollResult poll(const AbstractLocker& locker) override
     {
         if (m_worklist.m_queue.isEmpty())
             return PollResult::Wait;
@@ -73,7 +73,7 @@ private:
 
     class WorkScope;
     friend class WorkScope;
-    class WorkScope final {
+    class WorkScope {
     public:
         WorkScope(ThreadBody& thread)
             : m_thread(thread)
@@ -93,7 +93,7 @@ private:
         ThreadBody& m_thread;
     };
 
-    WorkResult work() final
+    WorkResult work() override
     {
         WorkScope workScope(*this);
 
@@ -140,7 +140,7 @@ private:
         return WorkResult::Continue;
     }
 
-    void threadDidStart() final
+    void threadDidStart() override
     {
         dataLogLnIf(Options::verboseCompilationQueue(), m_worklist, ": Thread started");
 
@@ -150,7 +150,7 @@ private:
         m_compilationScope = makeUnique<CompilationScope>();
     }
 
-    void threadIsStopping(const AbstractLocker&) final
+    void threadIsStopping(const AbstractLocker&) override
     {
         // We're holding the Worklist::m_lock, so we should be careful not to deadlock.
 
@@ -162,6 +162,7 @@ private:
         m_plan = nullptr;
     }
 
+private:
     Worklist& m_worklist;
     ThreadData& m_data;
     int m_relativePriority;
@@ -633,7 +634,7 @@ Worklist* existingWorklistForIndexOrNull(unsigned index)
         return existingGlobalFTLWorklistOrNull();
     default:
         RELEASE_ASSERT_NOT_REACHED();
-        return nullptr;
+        return 0;
     }
 }
 

@@ -32,7 +32,6 @@
 #include "config.h"
 #include "NumberInputType.h"
 
-#include "Decimal.h"
 #include "HTMLInputElement.h"
 #include "HTMLNames.h"
 #include "HTMLParserIdioms.h"
@@ -41,7 +40,6 @@
 #include "LocalizedStrings.h"
 #include "PlatformLocale.h"
 #include "RenderTextControl.h"
-#include "StepRange.h"
 #include <limits>
 #include <wtf/ASCIICType.h>
 #include <wtf/MathExtras.h>

@@ -29,16 +29,18 @@
 #if ENABLE(WEBASSEMBLY)
 
 #include "Error.h"
-#include "JSGlobalObjectInlines.h"
+#include "JSCInlines.h"
+#include "JSLexicalEnvironment.h"
 #include "JSModuleEnvironment.h"
-#include "JSObjectInlines.h"
 #include "JSWebAssemblyGlobal.h"
 #include "JSWebAssemblyHelpers.h"
 #include "JSWebAssemblyInstance.h"
 #include "JSWebAssemblyLinkError.h"
 #include "JSWebAssemblyModule.h"
+#include "ProtoCallFrame.h"
 #include "WasmSignatureInlines.h"
 #include "WebAssemblyFunction.h"
+#include <limits>
 
 namespace JSC {
 
@@ -186,7 +188,7 @@ void WebAssemblyModuleRecord::link(JSGlobalObject* globalObject, JSValue, JSObje
         case Wasm::ExternalKind::Function: {
             // 4. If i is a function import:
             // i. If IsCallable(v) is false, throw a WebAssembly.LinkError.
-            if (!value.isCallable(vm))
+            if (!value.isFunction(vm))
                 return exception(createJSWebAssemblyLinkError(globalObject, vm, importFailMessage(import, "import function", "must be callable")));
 
             Wasm::Instance* calleeInstance = nullptr;
@@ -390,7 +392,7 @@ void WebAssemblyModuleRecord::link(JSGlobalObject* globalObject, JSValue, JSObje
             wrapper = function;
         }
 
-        ASSERT(wrapper.isCallable(vm));
+        ASSERT(wrapper.isFunction(vm));
         m_instance->instance().setFunctionWrapper(index, wrapper);
 
         return wrapper;
@@ -410,7 +412,7 @@ void WebAssemblyModuleRecord::link(JSGlobalObject* globalObject, JSValue, JSObje
                 initialBits = m_instance->instance().loadI64Global(global.initialBitsOrImportNumber);
             } else if (global.initializationType == Wasm::GlobalInformation::FromRefFunc) {
                 ASSERT(global.initialBitsOrImportNumber < moduleInformation.functionIndexSpaceSize());
-                ASSERT(makeFunctionWrapper("Global init expr", global.initialBitsOrImportNumber).isCallable(vm));
+                ASSERT(makeFunctionWrapper("Global init expr", global.initialBitsOrImportNumber).isFunction(vm));
                 initialBits = JSValue::encode(makeFunctionWrapper("Global init expr", global.initialBitsOrImportNumber));
             } else
                 initialBits = global.initialBitsOrImportNumber;
@@ -426,7 +428,7 @@ void WebAssemblyModuleRecord::link(JSGlobalObject* globalObject, JSValue, JSObje
                 JSWebAssemblyGlobal* globalValue = JSWebAssemblyGlobal::tryCreate(globalObject, vm, globalObject->webAssemblyGlobalStructure(), WTFMove(globalRef));
                 scope.assertNoException();
                 m_instance->linkGlobal(vm, globalIndex, globalValue);
-                ensureStillAliveHere(bitwise_cast<void*>(initialBits)); // Ensure this is kept alive while creating JSWebAssemblyGlobal.
+                keepAlive(bitwise_cast<void*>(initialBits)); // Ensure this is kept alive while creating JSWebAssemblyGlobal.
                 break;
             }
             }
@@ -442,7 +444,7 @@ void WebAssemblyModuleRecord::link(JSGlobalObject* globalObject, JSValue, JSObje
         switch (exp.kind) {
         case Wasm::ExternalKind::Function: {
             exportedValue = makeFunctionWrapper(String::fromUTF8(exp.field), exp.kindIndex);
-            ASSERT(exportedValue.isCallable(vm));
+            ASSERT(exportedValue.isFunction(vm));
             ASSERT(makeFunctionWrapper(String::fromUTF8(exp.field), exp.kindIndex) == exportedValue);
             break;
         }
@@ -655,8 +657,9 @@ JSValue WebAssemblyModuleRecord::evaluate(JSGlobalObject* globalObject)
     ASSERT(!exception);
 
     if (JSObject* startFunction = m_startFunction.get()) {
-        auto callData = JSC::getCallData(vm, startFunction);
-        call(globalObject, startFunction, callData, jsUndefined(), *vm.emptyList);
+        CallData callData;
+        CallType callType = JSC::getCallData(vm, startFunction, callData);
+        call(globalObject, startFunction, callType, callData, jsUndefined(), *vm.emptyList);
         RETURN_IF_EXCEPTION(scope, { });
     }
 

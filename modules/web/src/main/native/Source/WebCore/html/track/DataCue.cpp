@@ -26,8 +26,7 @@
 
 #include "config.h"
 
-#if ENABLE(VIDEO)
-
+#if ENABLE(VIDEO_TRACK)
 #include "DataCue.h"
 
 #include "Logging.h"
@@ -42,54 +41,36 @@ using namespace JSC;
 
 WTF_MAKE_ISO_ALLOCATED_IMPL(DataCue);
 
-DataCue::DataCue(Document& document, const MediaTime& start, const MediaTime& end, ArrayBuffer& data, const String& type)
-    : TextTrackCue(document, start, end)
+DataCue::DataCue(ScriptExecutionContext& context, const MediaTime& start, const MediaTime& end, ArrayBuffer& data, const String& type)
+    : TextTrackCue(context, start, end)
     , m_type(type)
 {
     setData(data);
 }
 
-DataCue::DataCue(Document& document, const MediaTime& start, const MediaTime& end, const void* data, unsigned length)
-    : TextTrackCue(document, start, end)
+DataCue::DataCue(ScriptExecutionContext& context, const MediaTime& start, const MediaTime& end, const void* data, unsigned length)
+    : TextTrackCue(context, start, end)
     , m_data(ArrayBuffer::create(data, length))
 {
 }
 
-DataCue::DataCue(Document& document, const MediaTime& start, const MediaTime& end, Ref<SerializedPlatformDataCue>&& platformValue, const String& type)
-    : TextTrackCue(document, start, end)
+DataCue::DataCue(ScriptExecutionContext& context, const MediaTime& start, const MediaTime& end, RefPtr<SerializedPlatformRepresentation>&& platformValue, const String& type)
+    : TextTrackCue(context, start, end)
     , m_type(type)
     , m_platformValue(WTFMove(platformValue))
 {
 }
 
-DataCue::DataCue(Document& document, const MediaTime& start, const MediaTime& end, JSC::JSValue value, const String& type)
-    : TextTrackCue(document, start, end)
+DataCue::DataCue(ScriptExecutionContext& context, const MediaTime& start, const MediaTime& end, JSC::JSValue value, const String& type)
+    : TextTrackCue(context, start, end)
     , m_type(type)
-    , m_value(document.vm(), value)
+    , m_value(context.vm(), value)
 {
 }
 
-Ref<DataCue> DataCue::create(Document& document, const MediaTime& start, const MediaTime& end, const void* data, unsigned length)
+DataCue::~DataCue()
 {
-    return adoptRef(*new DataCue(document, start, end, data, length));
 }
-
-Ref<DataCue> DataCue::create(Document& document, const MediaTime& start, const MediaTime& end, Ref<SerializedPlatformDataCue>&& platformValue, const String& type)
-{
-    return adoptRef(*new DataCue(document, start, end, WTFMove(platformValue), type));
-}
-
-Ref<DataCue> DataCue::create(Document& document, double start, double end, ArrayBuffer& data)
-{
-    return adoptRef(*new DataCue(document, MediaTime::createWithDouble(start), MediaTime::createWithDouble(end), data, emptyString()));
-}
-
-Ref<DataCue> DataCue::create(Document& document, double start, double end, JSC::JSValue value, const String& type)
-{
-    return adoptRef(*new DataCue(document, MediaTime::createWithDouble(start), MediaTime::createWithDouble(end), value, type));
-}
-
-DataCue::~DataCue() = default;
 
 RefPtr<ArrayBuffer> DataCue::data() const
 {
@@ -109,9 +90,24 @@ void DataCue::setData(ArrayBuffer& data)
     m_data = ArrayBuffer::create(data);
 }
 
+DataCue* toDataCue(TextTrackCue* cue)
+{
+    ASSERT_WITH_SECURITY_IMPLICATION(cue->cueType() == TextTrackCue::Data);
+    return static_cast<DataCue*>(cue);
+}
+
+const DataCue* toDataCue(const TextTrackCue* cue)
+{
+    ASSERT_WITH_SECURITY_IMPLICATION(cue->cueType() == TextTrackCue::Data);
+    return static_cast<const DataCue*>(cue);
+}
+
 bool DataCue::cueContentsMatch(const TextTrackCue& cue) const
 {
-    const DataCue* dataCue = downcast<DataCue>(&cue);
+    if (cue.cueType() != TextTrackCue::Data)
+        return false;
+
+    const DataCue* dataCue = toDataCue(&cue);
     RefPtr<ArrayBuffer> otherData = dataCue->data();
     if ((otherData && !m_data) || (!otherData && m_data))
         return false;
@@ -120,7 +116,7 @@ bool DataCue::cueContentsMatch(const TextTrackCue& cue) const
     if (m_data && m_data->data() && memcmp(m_data->data(), otherData->data(), m_data->byteLength()))
         return false;
 
-    auto otherPlatformValue = dataCue->platformValue();
+    const SerializedPlatformRepresentation* otherPlatformValue = dataCue->platformValue();
     if ((otherPlatformValue && !m_platformValue) || (!otherPlatformValue && m_platformValue))
         return false;
     if (m_platformValue && !m_platformValue->isEqual(*otherPlatformValue))
@@ -134,6 +130,25 @@ bool DataCue::cueContentsMatch(const TextTrackCue& cue) const
         return false;
 
     return true;
+}
+
+bool DataCue::isEqual(const TextTrackCue& cue, TextTrackCue::CueMatchRules match) const
+{
+    if (!TextTrackCue::isEqual(cue, match))
+        return false;
+
+    if (cue.cueType() != TextTrackCue::Data)
+        return false;
+
+    return cueContentsMatch(cue);
+}
+
+bool DataCue::doesExtendCue(const TextTrackCue& cue) const
+{
+    if (!cueContentsMatch(cue))
+        return false;
+
+    return TextTrackCue::doesExtendCue(cue);
 }
 
 JSC::JSValue DataCue::value(JSC::JSGlobalObject& state) const
@@ -163,12 +178,16 @@ JSValue DataCue::valueOrNull() const
     return jsNull();
 }
 
-void DataCue::toJSON(JSON::Object& object) const
+String DataCue::toJSONString() const
 {
-    TextTrackCue::toJSON(object);
+    auto object = JSON::Object::create();
+
+    TextTrackCue::toJSON(object.get());
 
     if (!m_type.isEmpty())
-        object.setString("type"_s, m_type);
+        object->setString("type"_s, m_type);
+
+    return object->toJSONString();
 }
 
 } // namespace WebCore

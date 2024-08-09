@@ -36,6 +36,7 @@
 #include "CachedResourceLoader.h"
 #include "Cookie.h"
 #include "CookieJar.h"
+#include "CustomHeaderFields.h"
 #include "DOMWrapperWorld.h"
 #include "Document.h"
 #include "DocumentLoader.h"
@@ -84,6 +85,20 @@
 namespace WebCore {
 
 using namespace Inspector;
+
+// Keep this in sync with Page.Setting
+#define FOR_EACH_INSPECTOR_OVERRIDE_SETTING(macro) \
+    macro(AuthorAndUserStylesEnabled) \
+    macro(ICECandidateFilteringEnabled) \
+    macro(ImagesEnabled) \
+    macro(MediaCaptureRequiresSecureConnection) \
+    macro(MockCaptureDevicesEnabled) \
+    macro(NeedsSiteSpecificQuirks) \
+    macro(ScriptEnabled) \
+    macro(ShowDebugBorders) \
+    macro(ShowRepaintCounter) \
+    macro(WebRTCEncryptionEnabled) \
+    macro(WebSecurityEnabled)
 
 static bool decodeBuffer(const char* buffer, unsigned size, const String& textEncodingName, String* result)
 {
@@ -344,58 +359,46 @@ void InspectorPageAgent::willDestroyFrontendAndBackend(Inspector::DisconnectReas
 
 void InspectorPageAgent::enable(ErrorString& errorString)
 {
-    if (m_instrumentingAgents.enabledPageAgent() == this) {
+    if (m_instrumentingAgents.inspectorPageAgent() == this) {
         errorString = "Page domain already enabled"_s;
         return;
     }
 
-    m_instrumentingAgents.setEnabledPageAgent(this);
+    m_instrumentingAgents.setInspectorPageAgent(this);
 
-    auto& stopwatch = m_environment.executionStopwatch();
-    stopwatch.reset();
-    stopwatch.start();
+    auto stopwatch = m_environment.executionStopwatch();
+    stopwatch->reset();
+    stopwatch->start();
 
-#if ENABLE(DARK_MODE_CSS) || HAVE(OS_DARK_MODE_SUPPORT)
+#if HAVE(OS_DARK_MODE_SUPPORT)
     defaultAppearanceDidChange(m_inspectedPage.defaultUseDarkAppearance());
 #endif
 }
 
 void InspectorPageAgent::disable(ErrorString&)
 {
-    m_instrumentingAgents.setEnabledPageAgent(nullptr);
+    m_instrumentingAgents.setInspectorPageAgent(nullptr);
 
     ErrorString unused;
     setShowPaintRects(unused, false);
-#if !PLATFORM(IOS_FAMILY)
     setShowRulers(unused, false);
-#endif
     overrideUserAgent(unused, nullptr);
     setEmulatedMedia(unused, emptyString());
-#if ENABLE(DARK_MODE_CSS) || HAVE(OS_DARK_MODE_SUPPORT)
     setForcedAppearance(unused, emptyString());
-#endif
 
-    auto& inspectedPageSettings = m_inspectedPage.settings();
-    inspectedPageSettings.setAuthorAndUserStylesEnabledInspectorOverride(WTF::nullopt);
-    inspectedPageSettings.setICECandidateFilteringEnabledInspectorOverride(WTF::nullopt);
-    inspectedPageSettings.setImagesEnabledInspectorOverride(WTF::nullopt);
-    inspectedPageSettings.setMediaCaptureRequiresSecureConnectionInspectorOverride(WTF::nullopt);
-    inspectedPageSettings.setMockCaptureDevicesEnabledInspectorOverride(WTF::nullopt);
-    inspectedPageSettings.setNeedsSiteSpecificQuirksInspectorOverride(WTF::nullopt);
-    inspectedPageSettings.setScriptEnabledInspectorOverride(WTF::nullopt);
-    inspectedPageSettings.setShowDebugBordersInspectorOverride(WTF::nullopt);
-    inspectedPageSettings.setShowRepaintCounterInspectorOverride(WTF::nullopt);
-    inspectedPageSettings.setWebRTCEncryptionEnabledInspectorOverride(WTF::nullopt);
-    inspectedPageSettings.setWebSecurityEnabledInspectorOverride(WTF::nullopt);
+#define DISABLE_INSPECTOR_OVERRIDE_SETTING(name) \
+    m_inspectedPage.settings().set##name##InspectorOverride(WTF::nullopt);
 
-    m_client->setDeveloperPreferenceOverride(InspectorClient::DeveloperPreference::AdClickAttributionDebugModeEnabled, WTF::nullopt);
-    m_client->setDeveloperPreferenceOverride(InspectorClient::DeveloperPreference::ITPDebugModeEnabled, WTF::nullopt);
-    m_client->setDeveloperPreferenceOverride(InspectorClient::DeveloperPreference::MockCaptureDevicesEnabled, WTF::nullopt);
+    FOR_EACH_INSPECTOR_OVERRIDE_SETTING(DISABLE_INSPECTOR_OVERRIDE_SETTING)
+
+#undef DISABLE_INSPECTOR_OVERRIDE_SETTING
+
+    m_client->setMockCaptureDevicesEnabledOverride(WTF::nullopt);
 }
 
 double InspectorPageAgent::timestamp()
 {
-    return m_environment.executionStopwatch().elapsedTime().seconds();
+    return m_environment.executionStopwatch()->elapsedTime().seconds();
 }
 
 void InspectorPageAgent::reload(ErrorString&, const bool* optionalReloadFromOrigin, const bool* optionalRevalidateAllResources)
@@ -418,8 +421,7 @@ void InspectorPageAgent::navigate(ErrorString&, const String& url)
     Frame& frame = m_inspectedPage.mainFrame();
 
     ResourceRequest resourceRequest { frame.document()->completeURL(url) };
-    FrameLoadRequest frameLoadRequest { *frame.document(), frame.document()->securityOrigin(), WTFMove(resourceRequest), "_self"_s, InitiatedByMainFrame::Unknown };
-    frameLoadRequest.disableNavigationToInvalidURL();
+    FrameLoadRequest frameLoadRequest { *frame.document(), frame.document()->securityOrigin(), resourceRequest, "_self"_s, LockHistory::No, LockBackForwardList::No, MaybeSendReferrer, AllowNavigationToInvalidURL::No, NewFrameOpenerPolicy::Allow, ShouldOpenExternalURLsPolicy::ShouldNotAllow, InitiatedByMainFrame::Unknown };
     frame.loader().changeLocation(WTFMove(frameLoadRequest));
 }
 
@@ -448,65 +450,21 @@ void InspectorPageAgent::overrideSetting(ErrorString& errorString, const String&
         return;
     }
 
-    auto& inspectedPageSettings = m_inspectedPage.settings();
-
     auto overrideValue = asOptionalBool(value);
     switch (setting.value()) {
-    case Inspector::Protocol::Page::Setting::AdClickAttributionDebugModeEnabled:
-        m_client->setDeveloperPreferenceOverride(InspectorClient::DeveloperPreference::AdClickAttributionDebugModeEnabled, overrideValue);
-        return;
+#define CASE_INSPECTOR_OVERRIDE_SETTING(name) \
+    case Inspector::Protocol::Page::Setting::name:                              \
+        m_inspectedPage.settings().set##name##InspectorOverride(overrideValue); \
+        break;                                                                  \
 
-    case Inspector::Protocol::Page::Setting::AuthorAndUserStylesEnabled:
-        inspectedPageSettings.setAuthorAndUserStylesEnabledInspectorOverride(overrideValue);
-        return;
+    FOR_EACH_INSPECTOR_OVERRIDE_SETTING(CASE_INSPECTOR_OVERRIDE_SETTING)
 
-    case Inspector::Protocol::Page::Setting::ICECandidateFilteringEnabled:
-        inspectedPageSettings.setICECandidateFilteringEnabledInspectorOverride(overrideValue);
-        return;
-
-    case Inspector::Protocol::Page::Setting::ITPDebugModeEnabled:
-        m_client->setDeveloperPreferenceOverride(InspectorClient::DeveloperPreference::ITPDebugModeEnabled, overrideValue);
-        return;
-
-    case Inspector::Protocol::Page::Setting::ImagesEnabled:
-        inspectedPageSettings.setImagesEnabledInspectorOverride(overrideValue);
-        return;
-
-    case Inspector::Protocol::Page::Setting::MediaCaptureRequiresSecureConnection:
-        inspectedPageSettings.setMediaCaptureRequiresSecureConnectionInspectorOverride(overrideValue);
-        return;
-
-    case Inspector::Protocol::Page::Setting::MockCaptureDevicesEnabled:
-        inspectedPageSettings.setMockCaptureDevicesEnabledInspectorOverride(overrideValue);
-        m_client->setDeveloperPreferenceOverride(InspectorClient::DeveloperPreference::MockCaptureDevicesEnabled, overrideValue);
-        return;
-
-    case Inspector::Protocol::Page::Setting::NeedsSiteSpecificQuirks:
-        inspectedPageSettings.setNeedsSiteSpecificQuirksInspectorOverride(overrideValue);
-        return;
-
-    case Inspector::Protocol::Page::Setting::ScriptEnabled:
-        inspectedPageSettings.setScriptEnabledInspectorOverride(overrideValue);
-        return;
-
-    case Inspector::Protocol::Page::Setting::ShowDebugBorders:
-        inspectedPageSettings.setShowDebugBordersInspectorOverride(overrideValue);
-        return;
-
-    case Inspector::Protocol::Page::Setting::ShowRepaintCounter:
-        inspectedPageSettings.setShowRepaintCounterInspectorOverride(overrideValue);
-        return;
-
-    case Inspector::Protocol::Page::Setting::WebRTCEncryptionEnabled:
-        inspectedPageSettings.setWebRTCEncryptionEnabledInspectorOverride(overrideValue);
-        return;
-
-    case Inspector::Protocol::Page::Setting::WebSecurityEnabled:
-        inspectedPageSettings.setWebSecurityEnabledInspectorOverride(overrideValue);
-        return;
+#undef CASE_INSPECTOR_OVERRIDE_SETTING
     }
 
-    ASSERT_NOT_REACHED();
+    // Update the UIProcess / client for particular overrides.
+    if (setting.value() == Inspector::Protocol::Page::Setting::MockCaptureDevicesEnabled)
+        m_client->setMockCaptureDevicesEnabledOverride(overrideValue);
 }
 
 static Inspector::Protocol::Page::CookieSameSitePolicy cookieSameSitePolicyJSON(Cookie::SameSitePolicy policy)
@@ -530,10 +488,11 @@ static Ref<Inspector::Protocol::Page::Cookie> buildObjectForCookie(const Cookie&
         .setValue(cookie.value)
         .setDomain(cookie.domain)
         .setPath(cookie.path)
-        .setExpires(cookie.expires.valueOr(0))
-        .setSession(cookie.session)
+        .setExpires(cookie.expires)
+        .setSize((cookie.name.length() + cookie.value.length()))
         .setHttpOnly(cookie.httpOnly)
         .setSecure(cookie.secure)
+        .setSession(cookie.session)
         .setSameSite(cookieSameSitePolicyJSON(cookie.sameSite))
         .release();
 }
@@ -562,7 +521,16 @@ static Vector<URL> allResourcesURLsForFrame(Frame* frame)
 
 void InspectorPageAgent::getCookies(ErrorString&, RefPtr<JSON::ArrayOf<Inspector::Protocol::Page::Cookie>>& cookies)
 {
-    ListHashSet<Cookie> allRawCookies;
+    // If we can get raw cookies.
+    ListHashSet<Cookie> rawCookiesList;
+
+    // If we can't get raw cookies - fall back to String representation
+    StringBuilder stringCookiesList;
+
+    // Return value to getRawCookies should be the same for every call because
+    // the return value is platform/network backend specific, and the call will
+    // always return the same true/false value.
+    bool rawCookiesImplemented = false;
 
     for (Frame* frame = &m_inspectedPage.mainFrame(); frame; frame = frame->tree().traverseNext()) {
         Document* document = frame->document();
@@ -570,100 +538,26 @@ void InspectorPageAgent::getCookies(ErrorString&, RefPtr<JSON::ArrayOf<Inspector
             continue;
 
         for (auto& url : allResourcesURLsForFrame(frame)) {
-            Vector<Cookie> rawCookiesForURLInDocument;
-            if (!document->page()->cookieJar().getRawCookies(*document, url, rawCookiesForURLInDocument))
-                continue;
+            Vector<Cookie> docCookiesList;
+            rawCookiesImplemented = document->page()->cookieJar().getRawCookies(*document, URL({ }, url), docCookiesList);
 
-            for (auto& rawCookieForURLInDocument : rawCookiesForURLInDocument)
-                allRawCookies.add(rawCookieForURLInDocument);
+            if (!rawCookiesImplemented) {
+                // FIXME: We need duplication checking for the String representation of cookies.
+                // Exceptions are thrown by cookie() in sandboxed frames. That won't happen here
+                // because "document" is the document of the main frame of the page.
+                stringCookiesList.append(document->cookie().releaseReturnValue());
+            } else {
+                for (auto& cookie : docCookiesList)
+                    rawCookiesList.add(cookie);
+            }
         }
     }
 
-    cookies = buildArrayForCookies(allRawCookies);
-}
-
-static Optional<Cookie> parseCookieObject(ErrorString& errorString, const JSON::Object& cookieObject)
-{
-    Cookie cookie;
-
-    if (!cookieObject.getString("name"_s, cookie.name)) {
-        errorString = "Invalid value for key name in given cookie";
-        return WTF::nullopt;
-    }
-
-    if (!cookieObject.getString("value"_s, cookie.value)) {
-        errorString = "Invalid value for key value in given cookie";
-        return WTF::nullopt;
-    }
-
-    if (!cookieObject.getString("domain"_s, cookie.domain)) {
-        errorString = "Invalid value for key domain in given cookie";
-        return WTF::nullopt;
-    }
-
-    if (!cookieObject.getString("path"_s, cookie.path)) {
-        errorString = "Invalid value for key path in given cookie";
-        return WTF::nullopt;
-    }
-
-    if (!cookieObject.getBoolean("httpOnly"_s, cookie.httpOnly)) {
-        errorString = "Invalid value for key httpOnly in given cookie";
-        return WTF::nullopt;
-    }
-
-    if (!cookieObject.getBoolean("secure"_s, cookie.secure)) {
-        errorString = "Invalid value for key secure in given cookie";
-        return WTF::nullopt;
-    }
-
-    bool validSession = cookieObject.getBoolean("session"_s, cookie.session);
-    cookie.expires = cookieObject.getNumber<double>("expires"_s);
-    if (!validSession && !cookie.expires) {
-        errorString = "Invalid value for key expires in given cookie";
-        return WTF::nullopt;
-    }
-
-    String sameSiteString;
-    if (!cookieObject.getString("sameSite"_s, sameSiteString)) {
-        errorString = "Invalid value for key sameSite in given cookie";
-        return WTF::nullopt;
-    }
-
-    auto sameSite = Inspector::Protocol::InspectorHelpers::parseEnumValueFromString<Inspector::Protocol::Page::CookieSameSitePolicy>(sameSiteString);
-    if (!sameSite) {
-        errorString = "Invalid value for key sameSite in given cookie";
-        return WTF::nullopt;
-    }
-
-    switch (sameSite.value()) {
-    case Inspector::Protocol::Page::CookieSameSitePolicy::None:
-        cookie.sameSite = Cookie::SameSitePolicy::None;
-
-        break;
-    case Inspector::Protocol::Page::CookieSameSitePolicy::Lax:
-        cookie.sameSite = Cookie::SameSitePolicy::Lax;
-
-        break;
-    case Inspector::Protocol::Page::CookieSameSitePolicy::Strict:
-        cookie.sameSite = Cookie::SameSitePolicy::Strict;
-        break;
-    }
-
-    return cookie;
-}
-
-void InspectorPageAgent::setCookie(ErrorString& errorString, const JSON::Object& cookieObject)
-{
-    auto cookie = parseCookieObject(errorString, cookieObject);
-    if (!cookie)
-        return;
-
-    for (auto* frame = &m_inspectedPage.mainFrame(); frame; frame = frame->tree().traverseNext()) {
-        if (auto* document = frame->document()) {
-            if (auto* page = document->page())
-                page->cookieJar().setRawCookie(*document, cookie.value());
-        }
-    }
+    // FIXME: Do not return empty string/empty array. Make returns optional instead. https://bugs.webkit.org/show_bug.cgi?id=80855
+    if (rawCookiesImplemented)
+        cookies = buildArrayForCookies(rawCookiesList);
+    else
+        cookies = JSON::ArrayOf<Inspector::Protocol::Page::Cookie>::create();
 }
 
 void InspectorPageAgent::deleteCookie(ErrorString&, const String& cookieName, const String& url)
@@ -704,7 +598,7 @@ void InspectorPageAgent::searchInResource(ErrorString& errorString, const String
     bool caseSensitive = optionalCaseSensitive ? *optionalCaseSensitive : false;
 
     if (optionalRequestId) {
-        if (auto* networkAgent = m_instrumentingAgents.enabledNetworkAgent()) {
+        if (InspectorNetworkAgent* networkAgent = m_instrumentingAgents.inspectorNetworkAgent()) {
             networkAgent->searchInRequest(errorString, *optionalRequestId, query, caseSensitive, isRegex, results);
             return;
         }
@@ -764,21 +658,19 @@ void InspectorPageAgent::searchInResources(ErrorString&, const String& text, con
             if (auto textContent = InspectorNetworkAgent::textContentForCachedResource(*cachedResource)) {
                 int matchesCount = ContentSearchUtilities::countRegularExpressionMatches(regex, *textContent);
                 if (matchesCount)
-                    result->addItem(buildObjectForSearchResult(frameId(frame), cachedResource->url().string(), matchesCount));
+                    result->addItem(buildObjectForSearchResult(frameId(frame), cachedResource->url(), matchesCount));
             }
         }
     }
 
-    if (auto* networkAgent = m_instrumentingAgents.enabledNetworkAgent())
+    if (InspectorNetworkAgent* networkAgent = m_instrumentingAgents.inspectorNetworkAgent())
         networkAgent->searchOtherRequests(regex, result);
 }
 
-#if !PLATFORM(IOS_FAMILY)
 void InspectorPageAgent::setShowRulers(ErrorString&, bool showRulers)
 {
     m_overlay->setShowRulers(showRulers);
 }
-#endif
 
 void InspectorPageAgent::setShowPaintRects(ErrorString&, bool show)
 {
@@ -874,12 +766,10 @@ void InspectorPageAgent::frameClearedScheduledNavigation(Frame& frame)
     m_frontendDispatcher->frameClearedScheduledNavigation(frameId(&frame));
 }
 
-#if ENABLE(DARK_MODE_CSS) || HAVE(OS_DARK_MODE_SUPPORT)
 void InspectorPageAgent::defaultAppearanceDidChange(bool useDarkAppearance)
 {
     m_frontendDispatcher->defaultAppearanceDidChange(useDarkAppearance ? Inspector::Protocol::Page::Appearance::Dark : Inspector::Protocol::Page::Appearance::Light);
 }
-#endif
 
 void InspectorPageAgent::didClearWindowObjectInWorld(Frame& frame, DOMWrapperWorld& world)
 {
@@ -969,7 +859,7 @@ Ref<Inspector::Protocol::Page::FrameResourceTree> InspectorPageAgent::buildObjec
 
     for (auto* cachedResource : cachedResourcesForFrame(frame)) {
         auto resourceObject = Inspector::Protocol::Page::FrameResource::create()
-            .setUrl(cachedResource->url().string())
+            .setUrl(cachedResource->url())
             .setType(cachedResourceTypeJSON(*cachedResource))
             .setMimeType(cachedResource->response().mimeType())
             .release();
@@ -1015,9 +905,13 @@ void InspectorPageAgent::setEmulatedMedia(ErrorString&, const String& media)
     document->evaluateMediaQueriesAndReportChanges();
 }
 
-#if ENABLE(DARK_MODE_CSS) || HAVE(OS_DARK_MODE_SUPPORT)
 void InspectorPageAgent::setForcedAppearance(ErrorString&, const String& appearance)
 {
+    if (appearance == m_forcedAppearance)
+        return;
+
+    m_forcedAppearance = appearance;
+
     if (appearance == "Light"_s)
         m_inspectedPage.setUseDarkAppearanceOverride(false);
     else if (appearance == "Dark"_s)
@@ -1025,7 +919,6 @@ void InspectorPageAgent::setForcedAppearance(ErrorString&, const String& appeara
     else
         m_inspectedPage.setUseDarkAppearanceOverride(WTF::nullopt);
 }
-#endif
 
 void InspectorPageAgent::applyUserAgentOverride(String& userAgent)
 {
@@ -1041,7 +934,7 @@ void InspectorPageAgent::applyEmulatedMedia(String& media)
 
 void InspectorPageAgent::snapshotNode(ErrorString& errorString, int nodeId, String* outDataURL)
 {
-    InspectorDOMAgent* domAgent = m_instrumentingAgents.persistentDOMAgent();
+    InspectorDOMAgent* domAgent = m_instrumentingAgents.inspectorDOMAgent();
     ASSERT(domAgent);
     Node* node = domAgent->assertNode(errorString, nodeId);
     if (!node)
@@ -1073,9 +966,9 @@ void InspectorPageAgent::snapshotRect(ErrorString& errorString, int x, int y, in
     *outDataURL = snapshot->toDataURL("image/png"_s, WTF::nullopt, PreserveResolution::Yes);
 }
 
-#if ENABLE(WEB_ARCHIVE) && USE(CF)
 void InspectorPageAgent::archive(ErrorString& errorString, String* data)
 {
+#if ENABLE(WEB_ARCHIVE) && USE(CF)
     auto archive = LegacyWebArchive::create(m_inspectedPage.mainFrame());
     if (!archive) {
         errorString = "Could not create web archive for main frame"_s;
@@ -1084,7 +977,10 @@ void InspectorPageAgent::archive(ErrorString& errorString, String* data)
 
     RetainPtr<CFDataRef> buffer = archive->rawDataRepresentation();
     *data = base64Encode(CFDataGetBytePtr(buffer.get()), CFDataGetLength(buffer.get()));
-}
+#else
+    UNUSED_PARAM(data);
+    errorString = "Not supported"_s;
 #endif
+}
 
 } // namespace WebCore

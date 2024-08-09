@@ -26,7 +26,6 @@
 #include "config.h"
 #include "WasmCompilationMode.h"
 
-#include "Options.h"
 #include <wtf/Assertions.h>
 
 namespace JSC { namespace Wasm {
@@ -47,11 +46,6 @@ const char* makeString(CompilationMode mode)
     }
     RELEASE_ASSERT_NOT_REACHED();
     return "";
-}
-
-bool wasmFunctionSizeCanBeOMGCompiled(size_t size)
-{
-    return size < Options::webAssemblyBBQFallbackSize();
 }
 
 } } // namespace JSC::Wasm

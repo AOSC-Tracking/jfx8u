@@ -152,7 +152,7 @@ HTMLTableRowElement* HTMLTableRowsCollection::lastRow(HTMLTableElement& table)
 }
 
 HTMLTableRowsCollection::HTMLTableRowsCollection(HTMLTableElement& table)
-    : CachedHTMLCollection(table, TableRows)
+    : CachedHTMLCollection<HTMLTableRowsCollection, CollectionTypeTraits<TableRows>::traversalType>(table, TableRows)
 {
 }
 

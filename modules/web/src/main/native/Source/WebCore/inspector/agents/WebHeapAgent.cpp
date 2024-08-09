@@ -64,7 +64,7 @@ SendGarbageCollectionEventsTask::SendGarbageCollectionEventsTask(WebHeapAgent& a
 void SendGarbageCollectionEventsTask::addGarbageCollection(GarbageCollectionData&& collection)
 {
     {
-        auto locker = holdLock(m_mutex);
+        std::lock_guard<Lock> lock(m_mutex);
         m_collections.append(WTFMove(collection));
     }
 
@@ -75,7 +75,7 @@ void SendGarbageCollectionEventsTask::addGarbageCollection(GarbageCollectionData
 void SendGarbageCollectionEventsTask::reset()
 {
     {
-        auto locker = holdLock(m_mutex);
+        std::lock_guard<Lock> lock(m_mutex);
         m_collections.clear();
     }
 
@@ -87,7 +87,7 @@ void SendGarbageCollectionEventsTask::timerFired()
     Vector<GarbageCollectionData> collectionsToSend;
 
     {
-        auto locker = holdLock(m_mutex);
+        std::lock_guard<Lock> lock(m_mutex);
         m_collections.swap(collectionsToSend);
     }
 
@@ -108,7 +108,7 @@ void WebHeapAgent::enable(ErrorString& errorString)
     InspectorHeapAgent::enable(errorString);
 
     if (auto* consoleAgent = m_instrumentingAgents.webConsoleAgent())
-        consoleAgent->setHeapAgent(this);
+        consoleAgent->setInspectorHeapAgent(this);
 }
 
 void WebHeapAgent::disable(ErrorString& errorString)
@@ -116,7 +116,7 @@ void WebHeapAgent::disable(ErrorString& errorString)
     m_sendGarbageCollectionEventsTask->reset();
 
     if (auto* consoleAgent = m_instrumentingAgents.webConsoleAgent())
-        consoleAgent->setHeapAgent(nullptr);
+        consoleAgent->setInspectorHeapAgent(nullptr);
 
     InspectorHeapAgent::disable(errorString);
 }

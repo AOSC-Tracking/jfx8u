@@ -64,8 +64,6 @@ public:
         TextDecorationStyle overlineStyle;
         TextDecorationStyle linethroughStyle;
     };
-    static Color decorationColor(const RenderStyle&);
-    static OptionSet<TextDecoration> textDecorationsInEffectForStyle(const Styles&);
     static Styles stylesForRenderer(const RenderObject&, OptionSet<TextDecoration> requestedDecorations, bool firstLineStyle = false, PseudoId = PseudoId::None);
 
 private:

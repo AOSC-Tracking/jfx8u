@@ -30,7 +30,6 @@
 #include <wtf/MainThread.h>
 #include <wtf/ProcessID.h>
 #include <wtf/ProcessPrivilege.h>
-#include <wtf/UUID.h>
 #include <wtf/text/StringConcatenateNumbers.h>
 
 static std::unique_ptr<WebCore::NetworkStorageSession>& defaultNetworkStorageSession()
@@ -86,7 +85,7 @@ void NetworkStorageSessionMap::ensureSession(const PAL::SessionID& sessionID, co
     if (!addResult.isNewEntry)
         return;
 
-    RetainPtr<CFStringRef> cfIdentifier = makeString(identifierBase, ".PrivateBrowsing.", createCanonicalUUIDString()).createCFString();
+    RetainPtr<CFStringRef> cfIdentifier = String(identifierBase + ".PrivateBrowsing").createCFString();
 
     RetainPtr<CFURLStorageSessionRef> storageSession;
     if (sessionID.isEphemeral())

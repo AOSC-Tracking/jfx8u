@@ -60,7 +60,6 @@
 #include <pal/system/Sound.h>
 #include <wtf/JSONValues.h>
 #include <wtf/StdLibExtras.h>
-#include <wtf/persistence/PersistentDecoder.h>
 #include <wtf/text/Base64.h>
 
 namespace WebCore {
@@ -172,41 +171,18 @@ void InspectorFrontendHost::loaded()
         m_client->frontendLoaded();
 }
 
-static Optional<InspectorFrontendClient::DockSide> dockSideFromString(const String& dockSideString)
-{
-    if (dockSideString == "undocked")
-        return InspectorFrontendClient::DockSide::Undocked;
-    if (dockSideString == "right")
-        return InspectorFrontendClient::DockSide::Right;
-    if (dockSideString == "left")
-        return InspectorFrontendClient::DockSide::Left;
-    if (dockSideString == "bottom")
-        return InspectorFrontendClient::DockSide::Bottom;
-    return WTF::nullopt;
-}
-
-bool InspectorFrontendHost::supportsDockSide(const String& dockSideString)
-{
-    if (!m_client)
-        return false;
-
-    auto dockSide = dockSideFromString(dockSideString);
-    if (!dockSide)
-        return false;
-
-    return m_client->supportsDockSide(dockSide.value());
-}
-
-void InspectorFrontendHost::requestSetDockSide(const String& dockSideString)
+void InspectorFrontendHost::requestSetDockSide(const String& side)
 {
     if (!m_client)
         return;
-
-    auto dockSide = dockSideFromString(dockSideString);
-    if (!dockSide)
-        return;
-
-    m_client->requestSetDockSide(dockSide.value());
+    if (side == "undocked")
+        m_client->requestSetDockSide(InspectorFrontendClient::DockSide::Undocked);
+    else if (side == "right")
+        m_client->requestSetDockSide(InspectorFrontendClient::DockSide::Right);
+    else if (side == "left")
+        m_client->requestSetDockSide(InspectorFrontendClient::DockSide::Left);
+    else if (side == "bottom")
+        m_client->requestSetDockSide(InspectorFrontendClient::DockSide::Bottom);
 }
 
 void InspectorFrontendHost::closeWindow()
@@ -254,30 +230,6 @@ float InspectorFrontendHost::zoomFactor()
         return m_frontendPage->mainFrame().pageZoomFactor();
 
     return 1.0;
-}
-
-void InspectorFrontendHost::setForcedAppearance(String appearance)
-{
-    if (appearance == "light"_s) {
-        if (m_frontendPage)
-            m_frontendPage->setUseDarkAppearanceOverride(false);
-        if (m_client)
-            m_client->setForcedAppearance(InspectorFrontendClient::Appearance::Light);
-        return;
-    }
-
-    if (appearance == "dark"_s) {
-        if (m_frontendPage)
-            m_frontendPage->setUseDarkAppearanceOverride(true);
-        if (m_client)
-            m_client->setForcedAppearance(InspectorFrontendClient::Appearance::Dark);
-        return;
-    }
-
-    if (m_frontendPage)
-        m_frontendPage->setUseDarkAppearanceOverride(WTF::nullopt);
-    if (m_client)
-        m_client->setForcedAppearance(InspectorFrontendClient::Appearance::System);
 }
 
 String InspectorFrontendHost::userInterfaceLayoutDirection()
@@ -336,8 +288,6 @@ String InspectorFrontendHost::backendCommandsURL() const
 static String debuggableTypeToString(DebuggableType debuggableType)
 {
     switch (debuggableType) {
-    case DebuggableType::ITML:
-        return "itml"_s;
     case DebuggableType::JavaScript:
         return "javascript"_s;
     case DebuggableType::Page:
@@ -577,16 +527,15 @@ bool InspectorFrontendHost::showCertificate(const String& serializedCertificate)
     if (!base64Decode(serializedCertificate, data))
         return false;
 
+    CertificateInfo certificateInfo;
     WTF::Persistence::Decoder decoder(data.data(), data.size());
-    Optional<CertificateInfo> certificateInfo;
-    decoder >> certificateInfo;
-    if (!certificateInfo)
+    if (!decoder.decode(certificateInfo))
         return false;
 
-    if (certificateInfo->isEmpty())
+    if (certificateInfo.isEmpty())
         return false;
 
-    m_client->showCertificate(*certificateInfo);
+    m_client->showCertificate(certificateInfo);
     return true;
 }
 

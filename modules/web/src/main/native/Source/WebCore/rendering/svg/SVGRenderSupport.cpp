@@ -6,7 +6,6 @@
  * Copyright (C) 2009 Dirk Schulze <krit@webkit.org>
  * Copyright (C) Research In Motion Limited 2009-2010. All rights reserved.
  * Copyright (C) 2018 Adobe Systems Incorporated. All rights reserved.
- * Copyright (C) 2020 Apple Inc. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -27,7 +26,6 @@
 #include "config.h"
 #include "SVGRenderSupport.h"
 
-#include "ElementAncestorIterator.h"
 #include "NodeRenderStyle.h"
 #include "RenderChildIterator.h"
 #include "RenderElement.h"
@@ -100,7 +98,7 @@ const RenderElement& SVGRenderSupport::localToParentTransform(const RenderElemen
     return parent;
 }
 
-void SVGRenderSupport::mapLocalToContainer(const RenderElement& renderer, const RenderLayerModelObject* ancestorContainer, TransformState& transformState, bool* wasFixed)
+void SVGRenderSupport::mapLocalToContainer(const RenderElement& renderer, const RenderLayerModelObject* repaintContainer, TransformState& transformState, bool* wasFixed)
 {
     AffineTransform transform;
     auto& parent = localToParentTransform(renderer, transform);
@@ -108,7 +106,7 @@ void SVGRenderSupport::mapLocalToContainer(const RenderElement& renderer, const 
     transformState.applyTransform(transform);
 
     MapCoordinatesFlags mode = UseTransforms;
-    parent.mapLocalToContainer(ancestorContainer, transformState, mode, wasFixed);
+    parent.mapLocalToContainer(repaintContainer, transformState, mode, wasFixed);
 }
 
 const RenderElement* SVGRenderSupport::pushMappingToContainer(const RenderElement& renderer, const RenderLayerModelObject* ancestorToStopAt, RenderGeometryMap& geometryMap)
@@ -395,15 +393,8 @@ void SVGRenderSupport::clipContextToCSSClippingArea(GraphicsContext& context, co
     ClipPathOperation* clipPathOperation = renderer.style().clipPath();
     if (is<ShapeClipPathOperation>(clipPathOperation)) {
         auto& clipPath = downcast<ShapeClipPathOperation>(*clipPathOperation);
-        auto localToParentTransform = renderer.localToParentTransform();
-
-        auto referenceBox = clipPathReferenceBox(renderer, clipPath.referenceBox());
-        referenceBox = localToParentTransform.mapRect(referenceBox);
-
-        auto path = clipPath.pathForReferenceRect(referenceBox);
-        path.transform(localToParentTransform.inverse().valueOr(AffineTransform()));
-
-        context.clipPath(path, clipPath.windRule());
+        FloatRect referenceBox = clipPathReferenceBox(renderer, clipPath.referenceBox());
+        context.clipPath(clipPath.pathForReferenceRect(referenceBox), clipPath.windRule());
     }
     if (is<BoxClipPathOperation>(clipPathOperation)) {
         auto& clipPath = downcast<BoxClipPathOperation>(*clipPathOperation);
@@ -414,9 +405,6 @@ void SVGRenderSupport::clipContextToCSSClippingArea(GraphicsContext& context, co
 
 bool SVGRenderSupport::pointInClippingArea(const RenderElement& renderer, const FloatPoint& point)
 {
-    if (SVGHitTestCycleDetectionScope::isVisiting(renderer))
-        return false;
-
     ClipPathOperation* clipPathOperation = renderer.style().clipPath();
     if (is<ShapeClipPathOperation>(clipPathOperation) || is<BoxClipPathOperation>(clipPathOperation))
         return isPointInCSSClippingArea(renderer, point);
@@ -493,7 +481,6 @@ void SVGRenderSupport::styleChanged(RenderElement& renderer, const RenderStyle* 
 }
 
 #if ENABLE(CSS_COMPOSITING)
-
 bool SVGRenderSupport::isolatesBlending(const RenderStyle& style)
 {
     return style.svgStyle().isolatesBlending() || style.hasFilter() || style.hasBlendMode() || style.opacity() < 1.0f;
@@ -504,45 +491,20 @@ void SVGRenderSupport::updateMaskedAncestorShouldIsolateBlending(const RenderEle
     ASSERT(renderer.element());
     ASSERT(renderer.element()->isSVGElement());
 
-    for (auto& ancestor : ancestorsOfType<SVGGraphicsElement>(*renderer.element())) {
-        auto* style = ancestor.computedStyle();
+    bool maskedAncestorShouldIsolateBlending = renderer.style().hasBlendMode();
+    for (auto* ancestor = renderer.element()->parentElement(); ancestor && ancestor->isSVGElement(); ancestor = ancestor->parentElement()) {
+        if (!downcast<SVGElement>(*ancestor).isSVGGraphicsElement())
+            continue;
+
+        const auto* style = ancestor->computedStyle();
         if (!style || !isolatesBlending(*style))
             continue;
-        if (style->svgStyle().hasMasker())
-            ancestor.setShouldIsolateBlending(renderer.style().hasBlendMode());
+
+        if (ancestor->computedStyle()->svgStyle().hasMasker())
+            downcast<SVGGraphicsElement>(*ancestor).setShouldIsolateBlending(maskedAncestorShouldIsolateBlending);
+
         return;
     }
 }
-
 #endif
-
-SVGHitTestCycleDetectionScope::SVGHitTestCycleDetectionScope(const RenderElement& element)
-{
-    m_element = makeWeakPtr(&element);
-    auto result = visitedElements().add(*m_element);
-    ASSERT_UNUSED(result, result.isNewEntry);
-}
-
-SVGHitTestCycleDetectionScope::~SVGHitTestCycleDetectionScope()
-{
-    bool result = visitedElements().remove(*m_element);
-    ASSERT_UNUSED(result, result);
-}
-
-WeakHashSet<RenderElement>& SVGHitTestCycleDetectionScope::visitedElements()
-{
-    static NeverDestroyed<WeakHashSet<RenderElement>> s_visitedElements;
-    return s_visitedElements;
-}
-
-bool SVGHitTestCycleDetectionScope::isEmpty()
-{
-    return visitedElements().computesEmpty();
-}
-
-bool SVGHitTestCycleDetectionScope::isVisiting(const RenderElement& element)
-{
-    return visitedElements().contains(element);
-}
-
 }

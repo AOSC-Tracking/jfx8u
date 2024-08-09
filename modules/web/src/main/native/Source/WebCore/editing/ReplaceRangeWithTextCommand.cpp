@@ -40,8 +40,8 @@
 
 namespace WebCore {
 
-ReplaceRangeWithTextCommand::ReplaceRangeWithTextCommand(const SimpleRange& rangeToBeReplaced, const String& text)
-    : CompositeEditCommand(rangeToBeReplaced.start.container->document(), EditAction::InsertReplacement)
+ReplaceRangeWithTextCommand::ReplaceRangeWithTextCommand(RefPtr<Range> rangeToBeReplaced, const String& text)
+    : CompositeEditCommand(rangeToBeReplaced->startContainer().document(), EditAction::InsertReplacement)
     , m_rangeToBeReplaced(rangeToBeReplaced)
     , m_text(text)
 {
@@ -49,18 +49,22 @@ ReplaceRangeWithTextCommand::ReplaceRangeWithTextCommand(const SimpleRange& rang
 
 bool ReplaceRangeWithTextCommand::willApplyCommand()
 {
-    m_textFragment = createFragmentFromText(m_rangeToBeReplaced, m_text);
+    m_textFragment = createFragmentFromText(*m_rangeToBeReplaced, m_text);
     return CompositeEditCommand::willApplyCommand();
 }
 
 void ReplaceRangeWithTextCommand::doApply()
 {
-    VisibleSelection selection { m_rangeToBeReplaced };
+    VisibleSelection selection = *m_rangeToBeReplaced;
 
-    if (!document().selection().shouldChangeSelection(selection))
+    if (!m_rangeToBeReplaced)
         return;
 
-    if (!characterCount(m_rangeToBeReplaced))
+    if (!frame().selection().shouldChangeSelection(selection))
+        return;
+
+    String previousText = plainText(m_rangeToBeReplaced.get());
+    if (!previousText.length())
         return;
 
     applyCommandToComposite(SetSelectionCommand::create(selection, FrameSelection::defaultSetSelectionOptions()));
@@ -85,7 +89,7 @@ RefPtr<DataTransfer> ReplaceRangeWithTextCommand::inputEventDataTransfer() const
 
 Vector<RefPtr<StaticRange>> ReplaceRangeWithTextCommand::targetRanges() const
 {
-    return { 1, StaticRange::create(m_rangeToBeReplaced) };
+    return { 1, StaticRange::createFromRange(*m_rangeToBeReplaced) };
 }
 
 } // namespace WebCore

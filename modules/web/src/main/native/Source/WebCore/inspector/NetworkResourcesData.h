@@ -99,7 +99,7 @@ public:
         bool hasData() const { return m_dataBuffer; }
         size_t dataLength() const;
         void appendData(const char* data, size_t dataLength);
-        unsigned decodeDataToContent();
+        size_t decodeDataToContent();
 
         String m_requestId;
         String m_loaderId;

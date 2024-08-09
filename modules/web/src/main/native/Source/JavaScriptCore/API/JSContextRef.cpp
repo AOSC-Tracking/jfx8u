@@ -28,18 +28,20 @@
 #include "JSContextRefInternal.h"
 
 #include "APICast.h"
+#include "APIUtils.h"
 #include "CallFrame.h"
 #include "InitializeThreading.h"
 #include "JSAPIGlobalObject.h"
-#include "JSAPIWrapperObject.h"
 #include "JSCallbackObject.h"
 #include "JSClassRef.h"
 #include "JSObject.h"
+#include "JSCInlines.h"
+#include "SourceProvider.h"
 #include "StackVisitor.h"
 #include "StrongInlines.h"
-#include "StructureInlines.h"
 #include "Watchdog.h"
 #include <wtf/text/StringBuilder.h>
+#include <wtf/text/StringHash.h>
 
 #if ENABLE(REMOTE_INSPECTOR)
 #include "JSGlobalObjectDebuggable.h"
@@ -66,7 +68,7 @@ using namespace JSC;
 
 JSContextGroupRef JSContextGroupCreate()
 {
-    JSC::initialize();
+    initializeThreading();
     return toRef(&VM::createContextGroup().leakRef());
 }
 
@@ -116,7 +118,7 @@ void JSContextGroupClearExecutionTimeLimit(JSContextGroupRef group)
 
 JSGlobalContextRef JSGlobalContextCreate(JSClassRef globalObjectClass)
 {
-    JSC::initialize();
+    initializeThreading();
 
 #if OS(DARWIN)
     // If the application was linked before JSGlobalContextCreate was changed to use a unique VM,
@@ -126,12 +128,12 @@ JSGlobalContextRef JSGlobalContextCreate(JSClassRef globalObjectClass)
     }
 #endif // OS(DARWIN)
 
-    return JSGlobalContextCreateInGroup(nullptr, globalObjectClass);
+    return JSGlobalContextCreateInGroup(0, globalObjectClass);
 }
 
 JSGlobalContextRef JSGlobalContextCreateInGroup(JSContextGroupRef group, JSClassRef globalObjectClass)
 {
-    JSC::initialize();
+    initializeThreading();
 
     Ref<VM> vm = group ? Ref<VM>(*toJS(group)) : VM::createContextGroup();
 
@@ -146,7 +148,7 @@ JSGlobalContextRef JSGlobalContextCreateInGroup(JSContextGroupRef group, JSClass
         return JSGlobalContextRetain(toGlobalRef(globalObject));
     }
 
-    JSGlobalObject* globalObject = JSCallbackObject<JSGlobalObject>::create(vm.get(), globalObjectClass, JSCallbackObject<JSGlobalObject>::createStructure(vm.get(), nullptr, jsNull()));
+    JSGlobalObject* globalObject = JSCallbackObject<JSGlobalObject>::create(vm.get(), globalObjectClass, JSCallbackObject<JSGlobalObject>::createStructure(vm.get(), 0, jsNull()));
     JSValue prototype = globalObjectClass->prototype(globalObject);
     if (!prototype)
         prototype = jsNull();
@@ -185,20 +187,20 @@ JSObjectRef JSContextGetGlobalObject(JSContextRef ctx)
 {
     if (!ctx) {
         ASSERT_NOT_REACHED();
-        return nullptr;
+        return 0;
     }
     JSGlobalObject* globalObject = toJS(ctx);
     VM& vm = globalObject->vm();
     JSLockHolder locker(vm);
 
-    return toRef(jsCast<JSObject*>(globalObject->methodTable(vm)->toThis(globalObject, globalObject, ECMAMode::sloppy())));
+    return toRef(jsCast<JSObject*>(globalObject->methodTable(vm)->toThis(globalObject, globalObject, NotStrictMode)));
 }
 
 JSContextGroupRef JSContextGetGroup(JSContextRef ctx)
 {
     if (!ctx) {
         ASSERT_NOT_REACHED();
-        return nullptr;
+        return 0;
     }
     JSGlobalObject* globalObject = toJS(ctx);
     return toRef(&globalObject->vm());
@@ -208,7 +210,7 @@ JSGlobalContextRef JSContextGetGlobalContext(JSContextRef ctx)
 {
     if (!ctx) {
         ASSERT_NOT_REACHED();
-        return nullptr;
+        return 0;
     }
     JSGlobalObject* globalObject = toJS(ctx);
     JSLockHolder locker(globalObject);
@@ -220,7 +222,7 @@ JSStringRef JSGlobalContextCopyName(JSGlobalContextRef ctx)
 {
     if (!ctx) {
         ASSERT_NOT_REACHED();
-        return nullptr;
+        return 0;
     }
 
     JSGlobalObject* globalObject = toJS(ctx);
@@ -229,7 +231,7 @@ JSStringRef JSGlobalContextCopyName(JSGlobalContextRef ctx)
 
     String name = globalObject->name();
     if (name.isNull())
-        return nullptr;
+        return 0;
 
     return OpaqueJSString::tryCreate(name).leakRef();
 }
@@ -260,7 +262,7 @@ void JSGlobalContextSetUnhandledRejectionCallback(JSGlobalContextRef ctx, JSObje
     JSLockHolder locker(vm);
 
     JSObject* object = toJS(function);
-    if (!object->isCallable(vm)) {
+    if (!object->isFunction(vm)) {
         *exception = toRef(createTypeError(globalObject));
         return;
     }
@@ -322,7 +324,7 @@ JSStringRef JSContextCreateBacktrace(JSContextRef ctx, unsigned maxStackSize)
 {
     if (!ctx) {
         ASSERT_NOT_REACHED();
-        return nullptr;
+        return 0;
     }
     JSGlobalObject* globalObject = toJS(ctx);
     VM& vm = globalObject->vm();

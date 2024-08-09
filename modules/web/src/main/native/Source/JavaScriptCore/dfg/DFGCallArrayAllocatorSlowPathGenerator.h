@@ -33,7 +33,7 @@
 
 namespace JSC { namespace DFG {
 
-class CallArrayAllocatorSlowPathGenerator final : public JumpingSlowPathGenerator<MacroAssembler::JumpList> {
+class CallArrayAllocatorSlowPathGenerator : public JumpingSlowPathGenerator<MacroAssembler::JumpList> {
 public:
     CallArrayAllocatorSlowPathGenerator(
         MacroAssembler::JumpList from, SpeculativeJIT* jit, P_JITOperation_VmStZB function,
@@ -49,8 +49,8 @@ public:
         jit->silentSpillAllRegistersImpl(false, m_plans, resultGPR);
     }
 
-private:
-    void generateInternal(SpeculativeJIT* jit) final
+protected:
+    void generateInternal(SpeculativeJIT* jit) override
     {
         linkFrom(jit);
         for (unsigned i = 0; i < m_plans.size(); ++i)
@@ -63,6 +63,7 @@ private:
         jumpTo(jit);
     }
 
+private:
     P_JITOperation_VmStZB m_function;
     GPRReg m_resultGPR;
     GPRReg m_storageGPR;
@@ -71,7 +72,7 @@ private:
     Vector<SilentRegisterSavePlan, 2> m_plans;
 };
 
-class CallArrayAllocatorWithVariableSizeSlowPathGenerator final : public JumpingSlowPathGenerator<MacroAssembler::JumpList> {
+class CallArrayAllocatorWithVariableSizeSlowPathGenerator : public JumpingSlowPathGenerator<MacroAssembler::JumpList> {
 public:
     CallArrayAllocatorWithVariableSizeSlowPathGenerator(
         MacroAssembler::JumpList from, SpeculativeJIT* jit, P_JITOperation_GStZB function,
@@ -88,8 +89,8 @@ public:
         jit->silentSpillAllRegistersImpl(false, m_plans, resultGPR);
     }
 
-private:
-    void generateInternal(SpeculativeJIT* jit) final
+protected:
+    void generateInternal(SpeculativeJIT* jit) override
     {
         linkFrom(jit);
         for (unsigned i = 0; i < m_plans.size(); ++i)
@@ -111,6 +112,7 @@ private:
         jumpTo(jit);
     }
 
+private:
     P_JITOperation_GStZB m_function;
     RegisteredStructure m_contiguousStructure;
     RegisteredStructure m_arrayStorageOrContiguousStructure;
@@ -121,7 +123,7 @@ private:
     Vector<SilentRegisterSavePlan, 2> m_plans;
 };
 
-class CallArrayAllocatorWithVariableStructureVariableSizeSlowPathGenerator final : public JumpingSlowPathGenerator<MacroAssembler::JumpList> {
+class CallArrayAllocatorWithVariableStructureVariableSizeSlowPathGenerator : public JumpingSlowPathGenerator<MacroAssembler::JumpList> {
 public:
     CallArrayAllocatorWithVariableStructureVariableSizeSlowPathGenerator(
         MacroAssembler::JumpList from, SpeculativeJIT* jit, P_JITOperation_GStZB function,
@@ -137,8 +139,8 @@ public:
         jit->silentSpillAllRegistersImpl(false, m_plans, resultGPR);
     }
 
-private:
-    void generateInternal(SpeculativeJIT* jit) final
+protected:
+    void generateInternal(SpeculativeJIT* jit) override
     {
         linkFrom(jit);
         for (unsigned i = 0; i < m_plans.size(); ++i)
@@ -150,6 +152,7 @@ private:
         jumpTo(jit);
     }
 
+private:
     P_JITOperation_GStZB m_function;
     GPRReg m_resultGPR;
     CCallHelpers::TrustedImmPtr m_globalObject;

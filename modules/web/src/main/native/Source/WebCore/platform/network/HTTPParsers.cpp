@@ -37,9 +37,12 @@
 #include "HTTPHeaderNames.h"
 #include "ParsedContentType.h"
 #include <wtf/DateMath.h>
+#include <wtf/Language.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/Optional.h>
+#include <wtf/text/StringBuilder.h>
 #include <wtf/unicode/CharacterNames.h>
+
 
 namespace WebCore {
 
@@ -126,6 +129,7 @@ bool isValidHTTPHeaderValue(const String& value)
         return false;
     for (unsigned i = 0; i < value.length(); ++i) {
         c = value[i];
+        ASSERT(isLatin1(c));
         if (c == 0x00 || c == 0x0A || c == 0x0D)
             return false;
     }
@@ -138,7 +142,7 @@ bool isValidAcceptHeaderValue(const String& value)
     for (unsigned i = 0; i < value.length(); ++i) {
         UChar c = value[i];
 
-        // First check for alphanumeric for performance reasons then allowlist four delimiter characters.
+        // First check for alphanumeric for performance reasons then whitelist four delimiter characters.
         if (isASCIIAlphanumeric(c) || c == ',' || c == '/' || c == ';' || c == '=')
             continue;
 
@@ -393,15 +397,24 @@ String extractMIMETypeFromMediaType(const String& mediaType)
 
 String extractCharsetFromMediaType(const String& mediaType)
 {
-    unsigned charsetPos = 0, charsetLen = 0;
-    size_t pos = 0;
+    unsigned int pos, len;
+    findCharsetInMediaType(mediaType, pos, len);
+    return mediaType.substring(pos, len);
+}
+
+void findCharsetInMediaType(const String& mediaType, unsigned int& charsetPos, unsigned int& charsetLen, unsigned int start)
+{
+    charsetPos = start;
+    charsetLen = 0;
+
+    size_t pos = start;
     unsigned length = mediaType.length();
 
     while (pos < length) {
         pos = mediaType.findIgnoringASCIICase("charset", pos);
         if (pos == notFound || pos == 0) {
             charsetLen = 0;
-            break;
+            return;
         }
 
         // is what we found a beginning of a word?
@@ -429,9 +442,8 @@ String extractCharsetFromMediaType(const String& mediaType)
 
         charsetPos = pos;
         charsetLen = endpos - pos;
-        break;
+        return;
     }
-    return mediaType.substring(charsetPos, charsetLen);
 }
 
 XSSProtectionDisposition parseXSSProtectionHeader(const String& header, String& failureReason, unsigned& failurePosition, String& reportURL)
@@ -527,8 +539,8 @@ ContentTypeOptionsDisposition parseContentTypeOptionsHeader(StringView header)
 {
     StringView leftToken = header.left(header.find(','));
     if (equalLettersIgnoringASCIICase(stripLeadingAndTrailingHTTPSpaces(leftToken), "nosniff"))
-        return ContentTypeOptionsDisposition::Nosniff;
-    return ContentTypeOptionsDisposition::None;
+        return ContentTypeOptionsNosniff;
+    return ContentTypeOptionsNone;
 }
 
 // For example: "HTTP/1.1 200 OK" => "OK".
@@ -548,27 +560,27 @@ AtomString extractReasonPhraseFromHTTPStatusLine(const String& statusLine)
 
 XFrameOptionsDisposition parseXFrameOptionsHeader(const String& header)
 {
-    XFrameOptionsDisposition result = XFrameOptionsDisposition::None;
+    XFrameOptionsDisposition result = XFrameOptionsNone;
 
     if (header.isEmpty())
         return result;
 
     for (auto& currentHeader : header.split(',')) {
         currentHeader = currentHeader.stripWhiteSpace();
-        XFrameOptionsDisposition currentValue = XFrameOptionsDisposition::None;
+        XFrameOptionsDisposition currentValue = XFrameOptionsNone;
         if (equalLettersIgnoringASCIICase(currentHeader, "deny"))
-            currentValue = XFrameOptionsDisposition::Deny;
+            currentValue = XFrameOptionsDeny;
         else if (equalLettersIgnoringASCIICase(currentHeader, "sameorigin"))
-            currentValue = XFrameOptionsDisposition::SameOrigin;
+            currentValue = XFrameOptionsSameOrigin;
         else if (equalLettersIgnoringASCIICase(currentHeader, "allowall"))
-            currentValue = XFrameOptionsDisposition::AllowAll;
+            currentValue = XFrameOptionsAllowAll;
         else
-            currentValue = XFrameOptionsDisposition::Invalid;
+            currentValue = XFrameOptionsInvalid;
 
-        if (result == XFrameOptionsDisposition::None)
+        if (result == XFrameOptionsNone)
             result = currentValue;
         else if (result != currentValue)
-            return XFrameOptionsDisposition::Conflict;
+            return XFrameOptionsConflict;
     }
     return result;
 }
@@ -629,6 +641,69 @@ bool parseRange(const String& range, long long& rangeOffset, long long& rangeEnd
     rangeOffset = firstBytePos;
     rangeEnd = lastBytePos;
     return true;
+}
+
+// HTTP/1.1 - RFC 2616
+// http://www.w3.org/Protocols/rfc2616/rfc2616-sec5.html#sec5.1
+// Request-Line = Method SP Request-URI SP HTTP-Version CRLF
+size_t parseHTTPRequestLine(const char* data, size_t length, String& failureReason, String& method, String& url, HTTPVersion& httpVersion)
+{
+    method = String();
+    url = String();
+    httpVersion = Unknown;
+
+    const char* space1 = 0;
+    const char* space2 = 0;
+    const char* p;
+    size_t consumedLength;
+
+    for (p = data, consumedLength = 0; consumedLength < length; p++, consumedLength++) {
+        if (*p == ' ') {
+            if (!space1)
+                space1 = p;
+            else if (!space2)
+                space2 = p;
+        } else if (*p == '\n')
+            break;
+    }
+
+    // Haven't finished header line.
+    if (consumedLength == length) {
+        failureReason = "Incomplete Request Line"_s;
+        return 0;
+    }
+
+    // RequestLine does not contain 3 parts.
+    if (!space1 || !space2) {
+        failureReason = "Request Line does not appear to contain: <Method> <Url> <HTTPVersion>."_s;
+        return 0;
+    }
+
+    // The line must end with "\r\n".
+    const char* end = p + 1;
+    if (*(end - 2) != '\r') {
+        failureReason = "Request line does not end with CRLF"_s;
+        return 0;
+    }
+
+    // Request Method.
+    method = String(data, space1 - data); // For length subtract 1 for space, but add 1 for data being the first character.
+
+    // Request URI.
+    url = String(space1 + 1, space2 - space1 - 1); // For length subtract 1 for space.
+
+    // HTTP Version.
+    String httpVersionString(space2 + 1, end - space2 - 3); // For length subtract 1 for space, and 2 for "\r\n".
+    if (httpVersionString.length() != 8 || !httpVersionString.startsWith("HTTP/1."))
+        httpVersion = Unknown;
+    else if (httpVersionString[7] == '0')
+        httpVersion = HTTP_1_0;
+    else if (httpVersionString[7] == '1')
+        httpVersion = HTTP_1_1;
+    else
+        httpVersion = Unknown;
+
+    return end - data;
 }
 
 static inline bool isValidHeaderNameCharacter(const char* character)

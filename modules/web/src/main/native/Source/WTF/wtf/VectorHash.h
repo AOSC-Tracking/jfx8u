@@ -37,7 +37,7 @@ struct VectorHash {
     {
         IntegerHasher hasher;
         for (const auto& value : vector)
-            hasher.add(DefaultHash<T>::hash(value));
+            hasher.add(DefaultHash<T>::Hash::hash(value));
         return hasher.hash();
     }
     static bool equal(const Vector<T, inlineCapacity>& a, const Vector<T, inlineCapacity>& b)
@@ -48,6 +48,8 @@ struct VectorHash {
 };
 
 template<typename T, size_t inlineCapacity>
-struct DefaultHash<Vector<T, inlineCapacity>> : VectorHash<T, inlineCapacity> { };
+struct DefaultHash<Vector<T, inlineCapacity>> {
+    using Hash = VectorHash<T, inlineCapacity>;
+};
 
 }

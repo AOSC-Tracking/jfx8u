@@ -143,7 +143,9 @@ template<typename P> struct PtrHash<WebCore::GCReachableRef<P>> : PtrHashBase<We
     static const bool safeToCompareToEmptyOrDeleted = false;
 };
 
-template<typename P> struct DefaultHash<WebCore::GCReachableRef<P>> : PtrHash<WebCore::GCReachableRef<P>> { };
+template<typename P> struct DefaultHash<WebCore::GCReachableRef<P>> {
+    typedef PtrHash<WebCore::GCReachableRef<P>> Hash;
+};
 
 } // namespace WTF
 

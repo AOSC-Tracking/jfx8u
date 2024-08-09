@@ -31,11 +31,11 @@ namespace WebCore {
 class GLContext;
 class TextureMapperPlatformLayerProxy;
 
-class TextureMapperGCGLPlatformLayer : public PlatformLayer {
+class TextureMapperGC3DPlatformLayer : public PlatformLayer {
     WTF_MAKE_FAST_ALLOCATED;
 public:
-    TextureMapperGCGLPlatformLayer(GraphicsContextGLOpenGL&, GraphicsContextGLOpenGL::Destination);
-    virtual ~TextureMapperGCGLPlatformLayer();
+    TextureMapperGC3DPlatformLayer(GraphicsContextGLOpenGL&, GraphicsContextGLOpenGL::Destination);
+    virtual ~TextureMapperGC3DPlatformLayer();
 
     bool makeContextCurrent();
     PlatformGraphicsContextGL platformContext() const;

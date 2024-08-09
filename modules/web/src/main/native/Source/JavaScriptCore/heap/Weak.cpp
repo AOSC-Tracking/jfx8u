@@ -26,7 +26,8 @@
 #include "config.h"
 #include "Weak.h"
 
-#include "WeakSet.h"
+#include "JSCInlines.h"
+#include "WeakSetInlines.h"
 
 namespace JSC {
 
@@ -35,7 +36,7 @@ void weakClearSlowCase(WeakImpl*& impl)
     ASSERT(impl);
 
     WeakSet::deallocate(impl);
-    impl = nullptr;
+    impl = 0;
 }
 
 } // namespace JSC

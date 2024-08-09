@@ -1,6 +1,5 @@
 /*
- * Copyright (C) 2016 Igalia S.L.
- * Copyright (C) 2020 Sony Interactive Entertainment Inc.
+ * Copyright (C) 2017 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -26,47 +25,47 @@
 
 #pragma once
 
-#include <memory>
-#include <openssl/evp.h>
+#include "DisallowScope.h"
+#include <wtf/NeverDestroyed.h>
+#include <wtf/ThreadSpecific.h>
 
-namespace WebCore {
+namespace JSC {
 
-template <typename T>
-struct OpenSSLCryptoPtrDeleter {
-    void operator()(T* ptr) const = delete;
-};
+class DisallowVMReentry : public DisallowScope<DisallowVMReentry> {
+    WTF_MAKE_NONCOPYABLE(DisallowVMReentry);
+    typedef DisallowScope<DisallowVMReentry> Base;
+public:
+#ifdef NDEBUG
 
-template <typename T>
-using OpenSSLCryptoPtr = std::unique_ptr<T, OpenSSLCryptoPtrDeleter<T>>;
+    ALWAYS_INLINE DisallowVMReentry(bool = false) { }
+    ALWAYS_INLINE static void initialize() { }
 
-template <>
-struct OpenSSLCryptoPtrDeleter<EVP_CIPHER_CTX> {
-    void operator()(EVP_CIPHER_CTX* ptr) const
+#else // not NDEBUG
+
+    DisallowVMReentry(bool enabled = true)
+        : Base(enabled)
+    { }
+
+    static void initialize()
     {
-        EVP_CIPHER_CTX_free(ptr);
+        s_scopeReentryCount.construct();
     }
-};
 
-using EvpCipherCtxPtr = OpenSSLCryptoPtr<EVP_CIPHER_CTX>;
-
-template <>
-struct OpenSSLCryptoPtrDeleter<EVP_MD_CTX> {
-    void operator()(EVP_MD_CTX* ptr) const
+private:
+    static unsigned scopeReentryCount()
     {
-        EVP_MD_CTX_free(ptr);
+        return *s_scopeReentryCount.get();
     }
-};
-
-using EvpDigestCtxPtr = OpenSSLCryptoPtr<EVP_MD_CTX>;
-
-template <>
-struct OpenSSLCryptoPtrDeleter<EVP_PKEY> {
-    void operator()(EVP_PKEY* ptr) const
+    static void setScopeReentryCount(unsigned value)
     {
-        EVP_PKEY_free(ptr);
+        *s_scopeReentryCount.get() = value;
     }
+
+    JS_EXPORT_PRIVATE static LazyNeverDestroyed<ThreadSpecific<unsigned, WTF::CanBeGCThread::True>> s_scopeReentryCount;
+
+#endif // NDEBUG
+
+    friend class DisallowScope<DisallowVMReentry>;
 };
 
-using EvpPKeyPtr = OpenSSLCryptoPtr<EVP_PKEY>;
-
-} // namespace WebCore
+} // namespace JSC

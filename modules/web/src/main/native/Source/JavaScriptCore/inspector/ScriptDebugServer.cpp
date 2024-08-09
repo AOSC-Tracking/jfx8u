@@ -34,6 +34,7 @@
 #include "DebuggerCallFrame.h"
 #include "DebuggerScope.h"
 #include "Exception.h"
+#include "JSCInlines.h"
 #include "JSJavaScriptCallFrame.h"
 #include "JavaScriptCallFrame.h"
 #include "SourceProvider.h"
@@ -139,11 +140,11 @@ void ScriptDebugServer::sourceParsed(JSGlobalObject* globalObject, SourceProvide
         return;
 
     if (errorLine != -1) {
-        auto sourceURL = sourceProvider->sourceURL();
+        auto url = sourceProvider->url();
         auto data = sourceProvider->source().toString();
         auto firstLine = sourceProvider->startPosition().m_line.oneBasedInt();
         dispatchFunctionToListeners([&] (ScriptDebugListener& listener) {
-            listener.failedToParseSource(sourceURL, data, firstLine, errorLine, errorMessage);
+            listener.failedToParseSource(url, data, firstLine, errorLine, errorMessage);
         });
         return;
     }
@@ -153,7 +154,7 @@ void ScriptDebugServer::sourceParsed(JSGlobalObject* globalObject, SourceProvide
     // FIXME: <https://webkit.org/b/162773> Web Inspector: Simplify ScriptDebugListener::Script to use SourceProvider
     ScriptDebugListener::Script script;
     script.sourceProvider = sourceProvider;
-    script.url = sourceProvider->sourceURL();
+    script.url = sourceProvider->url();
     script.source = sourceProvider->source().toString();
     script.startLine = sourceProvider->startPosition().m_line.zeroBasedInt();
     script.startColumn = sourceProvider->startPosition().m_column.zeroBasedInt();

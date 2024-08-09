@@ -63,7 +63,7 @@ bool textColorIsLegibleAgainstBackgroundColor(const Color& textColor, const Colo
 {
     // Uses the WCAG 2.0 definition of legibility: a contrast ratio of 4.5:1 or greater.
     // https://www.w3.org/TR/WCAG20/#visual-audio-contrast-contrast
-    return contrastRatio(textColor.toSRGBALossy<float>(), backgroundColor.toSRGBALossy<float>()) > 4.5;
+    return contrastRatio(textColor, backgroundColor) > 4.5;
 }
 
 static Color adjustColorForVisibilityOnBackground(const Color& textColor, const Color& backgroundColor)
@@ -71,9 +71,12 @@ static Color adjustColorForVisibilityOnBackground(const Color& textColor, const 
     if (textColorIsLegibleAgainstBackgroundColor(textColor, backgroundColor))
         return textColor;
 
-    if (textColor.luminance() > 0.5)
-        return textColor.darkened();
-    return textColor.lightened();
+    int distanceFromWhite = differenceSquared(textColor, Color::white);
+    int distanceFromBlack = differenceSquared(textColor, Color::black);
+    if (distanceFromWhite < distanceFromBlack)
+        return textColor.dark();
+
+    return textColor.light();
 }
 
 TextPaintStyle computeTextPaintStyle(const Frame& frame, const RenderStyle& lineStyle, const PaintInfo& paintInfo)
@@ -182,12 +185,12 @@ void updateGraphicsContext(GraphicsContext& context, const TextPaintStyle& paint
     TextDrawingModeFlags newMode = mode;
 #if ENABLE(LETTERPRESS)
     if (paintStyle.useLetterpressEffect)
-        newMode.add(TextDrawingMode::Letterpress);
+        newMode |= TextModeLetterpress;
     else
-        newMode.remove(TextDrawingMode::Letterpress);
+        newMode &= ~TextModeLetterpress;
 #endif
     if (paintStyle.strokeWidth > 0 && paintStyle.strokeColor.isVisible())
-        newMode.add(TextDrawingMode::Stroke);
+        newMode |= TextModeStroke;
     if (mode != newMode) {
         context.setTextDrawingMode(newMode);
         mode = newMode;
@@ -198,10 +201,10 @@ void updateGraphicsContext(GraphicsContext& context, const TextPaintStyle& paint
 #endif
 
     Color fillColor = fillColorType == UseEmphasisMarkColor ? paintStyle.emphasisMarkColor : paintStyle.fillColor;
-    if (mode.contains(TextDrawingMode::Fill) && (fillColor != context.fillColor()))
+    if (mode & TextModeFill && (fillColor != context.fillColor()))
         context.setFillColor(fillColor);
 
-    if (mode & TextDrawingMode::Stroke) {
+    if (mode & TextModeStroke) {
         if (paintStyle.strokeColor != context.strokeColor())
             context.setStrokeColor(paintStyle.strokeColor);
         if (paintStyle.strokeWidth != context.strokeThickness())

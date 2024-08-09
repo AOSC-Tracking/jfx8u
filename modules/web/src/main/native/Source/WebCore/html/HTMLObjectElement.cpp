@@ -54,6 +54,7 @@
 
 #if PLATFORM(IOS_FAMILY)
 #include "RuntimeApplicationChecks.h"
+#include <wtf/spi/darwin/dyldSPI.h>
 #endif
 
 namespace WebCore {
@@ -76,9 +77,13 @@ Ref<HTMLObjectElement> HTMLObjectElement::create(const QualifiedName& tagName, D
     return result;
 }
 
-HTMLObjectElement::~HTMLObjectElement()
+RenderWidget* HTMLObjectElement::renderWidgetLoadingPlugin() const
 {
-    clearForm();
+    // Needs to load the plugin immediatedly because this function is called
+    // when JavaScript code accesses the plugin.
+    // FIXME: <rdar://16893708> Check if dispatching events here is safe.
+    document().updateLayoutIgnorePendingStylesheets(Document::RunPostLayoutTasks::Synchronously);
+    return renderWidget(); // This will return 0 if the renderer is not a RenderWidget.
 }
 
 int HTMLObjectElement::defaultTabIndex() const
@@ -206,7 +211,7 @@ void HTMLObjectElement::parametersForPlugin(Vector<String>& paramNames, Vector<S
     // if we know that resource points to a plug-in.
 
     if (url.isEmpty() && !urlParameter.isEmpty()) {
-        auto& loader = document().frame()->loader().subframeLoader();
+        SubframeLoader& loader = document().frame()->loader().subframeLoader();
         if (loader.resourceWillUsePlugin(urlParameter, serviceType))
             url = urlParameter;
     }

@@ -94,7 +94,7 @@ public:
     void endPrinting();
     void setRootChildLayer(GraphicsLayer*);
     void setNeedsOneShotDrawingSynchronization();
-    void scheduleRenderingUpdate();
+    void scheduleCompositingLayerSync();
     void debugStarted();
     void debugEnded();
     void enableWatchdog();

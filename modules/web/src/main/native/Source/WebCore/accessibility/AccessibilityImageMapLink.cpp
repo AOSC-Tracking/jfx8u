@@ -173,7 +173,7 @@ LayoutRect AccessibilityImageMapLink::elementRect() const
 
 String AccessibilityImageMapLink::stringValueForMSAA() const
 {
-    return url().string();
+    return url();
 }
 
 String AccessibilityImageMapLink::nameForMSAA() const

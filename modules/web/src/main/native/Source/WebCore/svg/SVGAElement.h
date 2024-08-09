@@ -28,8 +28,6 @@
 
 namespace WebCore {
 
-class DOMTokenList;
-
 class SVGAElement final : public SVGGraphicsElement, public SVGURIReference {
     WTF_MAKE_ISO_ALLOCATED(SVGAElement);
 public:
@@ -39,8 +37,6 @@ public:
     Ref<SVGAnimatedString>& targetAnimated() { return m_target; }
 
     SharedStringHash visitedLinkHash() const;
-
-    DOMTokenList& relList();
 
 private:
     SVGAElement(const QualifiedName&, Document&);
@@ -72,8 +68,6 @@ private:
 
     // This is computed only once and must not be affected by subsequent URL changes.
     mutable Optional<SharedStringHash> m_storedVisitedLinkHash;
-
-    std::unique_ptr<DOMTokenList> m_relList;
 };
 
 } // namespace WebCore

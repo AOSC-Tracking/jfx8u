@@ -42,11 +42,18 @@ public:
         return adoptRef(*new CSSPendingSubstitutionValue(shorthandPropertyId, WTFMove(shorthandValue)));
     }
 
-    CSSVariableReferenceValue& shorthandValue() const { return m_shorthandValue; }
-    CSSPropertyID shorthandPropertyId() const { return m_shorthandPropertyId; }
+    CSSVariableReferenceValue* shorthandValue() const
+    {
+        return m_shorthandValue.get();
+    }
 
-    bool equals(const CSSPendingSubstitutionValue& other) const { return m_shorthandValue.ptr() == other.m_shorthandValue.ptr(); }
-    static String customCSSText() { return emptyString(); }
+    CSSPropertyID shorthandPropertyId() const
+    {
+        return m_shorthandPropertyId;
+    }
+
+    bool equals(const CSSPendingSubstitutionValue& other) const { return m_shorthandValue == other.m_shorthandValue; }
+    String customCSSText() const;
 
 private:
     CSSPendingSubstitutionValue(CSSPropertyID shorthandPropertyId, Ref<CSSVariableReferenceValue>&& shorthandValue)
@@ -56,8 +63,8 @@ private:
     {
     }
 
-    const CSSPropertyID m_shorthandPropertyId;
-    Ref<CSSVariableReferenceValue> m_shorthandValue;
+    CSSPropertyID m_shorthandPropertyId;
+    RefPtr<CSSVariableReferenceValue> m_shorthandValue;
 };
 
 } // namespace WebCore

@@ -27,15 +27,8 @@ namespace JSC {
 
 class RegExpPrototype final : public JSNonFinalObject {
 public:
-    using Base = JSNonFinalObject;
+    typedef JSNonFinalObject Base;
     static constexpr unsigned StructureFlags = Base::StructureFlags;
-
-    template<typename CellType, SubspaceAccess>
-    static IsoSubspace* subspaceFor(VM& vm)
-    {
-        STATIC_ASSERT_ISO_SUBSPACE_SHARABLE(RegExpPrototype, Base);
-        return &vm.plainObjectSpace;
-    }
 
     static RegExpPrototype* create(VM& vm, JSGlobalObject* globalObject, Structure* structure)
     {
@@ -51,8 +44,10 @@ public:
         return Structure::create(vm, globalObject, prototype, TypeInfo(ObjectType, StructureFlags), info());
     }
 
-private:
+protected:
     RegExpPrototype(VM&, Structure*);
+
+private:
     void finishCreation(VM&, JSGlobalObject*);
 };
 

@@ -98,6 +98,8 @@ template<> struct HashTraits<WebCore::GlobalWindowIdentifier> : GenericHashTrait
     static bool isDeletedValue(const WebCore::GlobalWindowIdentifier& slot) { return slot.windowIdentifier.toUInt64() == std::numeric_limits<uint64_t>::max(); }
 };
 
-template<> struct DefaultHash<WebCore::GlobalWindowIdentifier> : GlobalWindowIdentifierHash { };
+template<> struct DefaultHash<WebCore::GlobalWindowIdentifier> {
+    typedef GlobalWindowIdentifierHash Hash;
+};
 
 } // namespace WTF

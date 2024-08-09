@@ -31,6 +31,7 @@
 #include "AirBasicBlock.h"
 #include "AirCode.h"
 #include "AirInst.h"
+#include "B3Value.h"
 #include "CCallHelpers.h"
 #include "Disassembler.h"
 #include "LinkBuffer.h"

@@ -27,7 +27,6 @@
 #if USE(LIBWEBRTC)
 
 #include "PeerConnectionBackend.h"
-#include "RealtimeMediaSource.h"
 #include <wtf/HashMap.h>
 
 namespace webrtc {
@@ -39,7 +38,6 @@ namespace WebCore {
 class LibWebRTCMediaEndpoint;
 class LibWebRTCProvider;
 class LibWebRTCRtpSenderBackend;
-class LibWebRTCRtpReceiverBackend;
 class LibWebRTCRtpTransceiverBackend;
 class RTCRtpReceiver;
 class RTCRtpReceiverBackend;
@@ -98,17 +96,32 @@ private:
     void setSenderSourceFromTrack(LibWebRTCRtpSenderBackend&, MediaStreamTrack&);
 
     RTCRtpTransceiver* existingTransceiver(WTF::Function<bool(LibWebRTCRtpTransceiverBackend&)>&&);
-    RTCRtpTransceiver& newRemoteTransceiver(std::unique_ptr<LibWebRTCRtpTransceiverBackend>&&, RealtimeMediaSource::Type);
+    RTCRtpTransceiver& newRemoteTransceiver(std::unique_ptr<LibWebRTCRtpTransceiverBackend>&&, Ref<RealtimeMediaSource>&&);
 
     void collectTransceivers() final;
+
+    struct VideoReceiver {
+        Ref<RTCRtpReceiver> receiver;
+        Ref<RealtimeIncomingVideoSource> source;
+    };
+    struct AudioReceiver {
+        Ref<RTCRtpReceiver> receiver;
+        Ref<RealtimeIncomingAudioSource> source;
+    };
+    VideoReceiver videoReceiver(String&& trackId);
+    AudioReceiver audioReceiver(String&& trackId);
 
 private:
     bool isLocalDescriptionSet() const final { return m_isLocalDescriptionSet; }
 
+    Ref<RTCRtpTransceiver> completeAddTransceiver(Ref<RTCRtpSender>&&, const RTCRtpTransceiverInit&, const String& trackId, const String& trackKind);
+
+    Ref<RTCRtpReceiver> createReceiver(const String& trackKind, const String& trackId);
+
     template<typename T>
     ExceptionOr<Ref<RTCRtpTransceiver>> addTransceiverFromTrackOrKind(T&& trackOrKind, const RTCRtpTransceiverInit&);
 
-    Ref<RTCRtpReceiver> createReceiver(std::unique_ptr<LibWebRTCRtpReceiverBackend>&&);
+    Ref<RTCRtpReceiver> createReceiverForSource(Ref<RealtimeMediaSource>&&, std::unique_ptr<RTCRtpReceiverBackend>&&);
 
     void suspend() final;
     void resume() final;

@@ -106,6 +106,11 @@ void ActiveDOMObject::assertSuspendIfNeededWasCalled() const
 
 #endif // ASSERT_ENABLED
 
+bool ActiveDOMObject::hasPendingActivity() const
+{
+    return m_pendingActivityCount;
+}
+
 void ActiveDOMObject::suspend(ReasonForSuspension)
 {
 }
@@ -144,13 +149,13 @@ public:
         , m_target(target)
         , m_event(WTFMove(event))
     {
-        ++m_object.m_pendingActivityInstanceCount;
+        ++m_object.m_pendingActivityCount;
     }
 
     ~ActiveDOMObjectEventDispatchTask()
     {
-        ASSERT(m_object.m_pendingActivityInstanceCount);
-        --m_object.m_pendingActivityInstanceCount;
+        ASSERT(m_object.m_pendingActivityCount);
+        --m_object.m_pendingActivityCount;
     }
 
     void execute() final { m_target->dispatchEvent(m_event.get()); }

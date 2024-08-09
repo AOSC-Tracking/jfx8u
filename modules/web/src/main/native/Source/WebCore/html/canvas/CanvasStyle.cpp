@@ -33,8 +33,6 @@
 #include "CSSPropertyNames.h"
 #include "CanvasGradient.h"
 #include "CanvasPattern.h"
-#include "ColorConversion.h"
-#include "Gradient.h"
 #include "GraphicsContext.h"
 #include "HTMLCanvasElement.h"
 #if ENABLE(OFFSCREEN_CANVAS)
@@ -56,15 +54,17 @@ bool isCurrentColorString(const String& colorString)
 Color parseColor(const String& colorString, CanvasBase& canvasBase)
 {
 #if ENABLE(OFFSCREEN_CANVAS)
-    if (canvasBase.isOffscreenCanvas())
-        return CSSParser::parseColorWorkerSafe(colorString);
+    if (canvasBase.isOffscreenCanvas()) {
+        auto& canvas = downcast<OffscreenCanvas>(canvasBase);
+        return CSSParser::parseColorWorkerSafe(colorString, canvas.cssValuePool());
+    }
 #else
     UNUSED_PARAM(canvasBase);
 #endif
     Color color = CSSParser::parseColor(colorString);
     if (color.isValid())
         return color;
-    return CSSParser::parseSystemColor(colorString);
+    return CSSParser::parseSystemColor(colorString, nullptr);
 }
 
 Color currentColor(CanvasBase& canvasBase)
@@ -94,13 +94,18 @@ CanvasStyle::CanvasStyle(Color color)
 {
 }
 
-CanvasStyle::CanvasStyle(const SRGBA<float>& colorComponents)
-    : m_style(convertToComponentBytes(colorComponents))
+CanvasStyle::CanvasStyle(float grayLevel, float alpha)
+    : m_style(Color { grayLevel, grayLevel, grayLevel, alpha })
 {
 }
 
-CanvasStyle::CanvasStyle(const CMYKA<float>& colorComponents)
-    : m_style(CMYKAColor { convertToComponentBytes(toSRGBA(colorComponents)), colorComponents })
+CanvasStyle::CanvasStyle(float r, float g, float b, float a)
+    : m_style(Color { r, g, b, a })
+{
+}
+
+CanvasStyle::CanvasStyle(float c, float m, float y, float k, float a)
+    : m_style(CMYKAColor { Color { c, m, y, k, a }, c, m, y, k, a })
 {
 }
 
@@ -140,7 +145,7 @@ CanvasStyle CanvasStyle::createFromStringWithOverrideAlpha(const String& colorSt
     if (!color.isValid())
         return { };
 
-    return color.colorWithAlpha(alpha);
+    return Color { colorWithOverrideAlpha(color.rgb(), alpha) };
 }
 
 bool CanvasStyle::isEquivalentColor(const CanvasStyle& other) const
@@ -148,20 +153,27 @@ bool CanvasStyle::isEquivalentColor(const CanvasStyle& other) const
     if (WTF::holds_alternative<Color>(m_style) && WTF::holds_alternative<Color>(other.m_style))
         return WTF::get<Color>(m_style) == WTF::get<Color>(other.m_style);
 
-    if (WTF::holds_alternative<CMYKAColor>(m_style) && WTF::holds_alternative<CMYKAColor>(other.m_style))
-        return WTF::get<CMYKAColor>(m_style).components == WTF::get<CMYKAColor>(other.m_style).components;
+    if (WTF::holds_alternative<CMYKAColor>(m_style) && WTF::holds_alternative<CMYKAColor>(other.m_style)) {
+        auto& a = WTF::get<CMYKAColor>(m_style);
+        auto& b = WTF::get<CMYKAColor>(other.m_style);
+        return a.c == b.c && a.m == b.m && a.y == b.y && a.k == b.k && a.a == b.a;
+    }
 
     return false;
 }
 
-bool CanvasStyle::isEquivalent(const SRGBA<float>& components) const
+bool CanvasStyle::isEquivalentRGBA(float r, float g, float b, float a) const
 {
-    return WTF::holds_alternative<Color>(m_style) && WTF::get<Color>(m_style) == convertToComponentBytes(components);
+    return WTF::holds_alternative<Color>(m_style) && WTF::get<Color>(m_style) == Color { r, g, b, a };
 }
 
-bool CanvasStyle::isEquivalent(const CMYKA<float>& components) const
+bool CanvasStyle::isEquivalentCMYKA(float c, float m, float y, float k, float a) const
 {
-    return WTF::holds_alternative<CMYKAColor>(m_style) && WTF::get<CMYKAColor>(m_style).components == components;
+    if (!WTF::holds_alternative<CMYKAColor>(m_style))
+        return false;
+
+    auto& channels = WTF::get<CMYKAColor>(m_style);
+    return c == channels.c && m == channels.m && y == channels.y && k == channels.k && a == channels.a;
 }
 
 void CanvasStyle::applyStrokeColor(GraphicsContext& context) const
@@ -174,9 +186,9 @@ void CanvasStyle::applyStrokeColor(GraphicsContext& context) const
             // FIXME: Do this through platform-independent GraphicsContext API.
             // We'll need a fancier Color abstraction to support CMYKA correctly
 #if USE(CG)
-            CGContextSetCMYKStrokeColor(context.platformContext(), color.components.cyan, color.components.magenta, color.components.yellow, color.components.black, color.components.alpha);
+            CGContextSetCMYKStrokeColor(context.platformContext(), color.c, color.m, color.y, color.k, color.a);
 #else
-            context.setStrokeColor(color.colorConvertedToSRGBA);
+            context.setStrokeColor(color.color);
 #endif
         },
         [&context] (const RefPtr<CanvasGradient>& gradient) {
@@ -204,9 +216,9 @@ void CanvasStyle::applyFillColor(GraphicsContext& context) const
             // FIXME: Do this through platform-independent GraphicsContext API.
             // We'll need a fancier Color abstraction to support CMYKA correctly
 #if USE(CG)
-            CGContextSetCMYKFillColor(context.platformContext(), color.components.cyan, color.components.magenta, color.components.yellow, color.components.black, color.components.alpha);
+            CGContextSetCMYKFillColor(context.platformContext(), color.c, color.m, color.y, color.k, color.a);
 #else
-            context.setFillColor(color.colorConvertedToSRGBA);
+            context.setFillColor(color.color);
 #endif
         },
         [&context] (const RefPtr<CanvasGradient>& gradient) {

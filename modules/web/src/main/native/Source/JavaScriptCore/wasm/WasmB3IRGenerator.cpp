@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2020 Apple Inc. All rights reserved.
+ * Copyright (C) 2016-2019 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -31,10 +31,12 @@
 #include "AllowMacroScratchRegisterUsageIf.h"
 #include "B3BasicBlockInlines.h"
 #include "B3CCallValue.h"
+#include "B3Compile.h"
 #include "B3ConstPtrValue.h"
 #include "B3FixSSA.h"
 #include "B3Generate.h"
 #include "B3InsertionSet.h"
+#include "B3SlotBaseValue.h"
 #include "B3StackmapGenerationParams.h"
 #include "B3SwitchValue.h"
 #include "B3UpsilonValue.h"
@@ -45,15 +47,18 @@
 #include "B3VariableValue.h"
 #include "B3WasmAddressValue.h"
 #include "B3WasmBoundsCheckValue.h"
-#include "JSCJSValueInlines.h"
+#include "DisallowMacroScratchRegisterUsage.h"
+#include "JSCInlines.h"
 #include "JSWebAssemblyInstance.h"
 #include "ScratchRegisterAllocator.h"
+#include "VirtualRegister.h"
 #include "WasmCallingConvention.h"
 #include "WasmContextInlines.h"
 #include "WasmExceptionType.h"
 #include "WasmFunctionParser.h"
 #include "WasmInstance.h"
 #include "WasmMemory.h"
+#include "WasmOMGPlan.h"
 #include "WasmOSREntryData.h"
 #include "WasmOpcodeOrigin.h"
 #include "WasmOperations.h"
@@ -537,7 +542,6 @@ B3IRGenerator::B3IRGenerator(const ModuleInformation& info, Procedure& procedure
         });
     }
 
-    if (wasmFunctionSizeCanBeOMGCompiled(m_info.functions[m_functionIndex].data.size()))
     emitEntryTierUpCheck();
 
     if (m_compilationMode == CompilationMode::OMGForOSREntryMode)
@@ -694,7 +698,7 @@ auto B3IRGenerator::addTableGet(unsigned tableIndex, ExpressionType index, Expre
 {
     // FIXME: Emit this inline <https://bugs.webkit.org/show_bug.cgi?id=198506>.
     result = m_currentBlock->appendNew<CCallValue>(m_proc, toB3Type(Anyref), origin(),
-        m_currentBlock->appendNew<ConstPtrValue>(m_proc, origin(), tagCFunction<B3CCallPtrTag>(operationGetWasmTableElement)),
+        m_currentBlock->appendNew<ConstPtrValue>(m_proc, origin(), tagCFunctionPtr<void*>(&operationGetWasmTableElement, B3CCallPtrTag)),
         instanceValue(), m_currentBlock->appendNew<Const32Value>(m_proc, origin(), tableIndex), index);
 
     {
@@ -713,7 +717,7 @@ auto B3IRGenerator::addTableSet(unsigned tableIndex, ExpressionType index, Expre
 {
     // FIXME: Emit this inline <https://bugs.webkit.org/show_bug.cgi?id=198506>.
     auto shouldThrow = m_currentBlock->appendNew<CCallValue>(m_proc, B3::Int32, origin(),
-        m_currentBlock->appendNew<ConstPtrValue>(m_proc, origin(), tagCFunction<B3CCallPtrTag>(operationSetWasmTableElement)),
+        m_currentBlock->appendNew<ConstPtrValue>(m_proc, origin(), tagCFunctionPtr<void*>(&operationSetWasmTableElement, B3CCallPtrTag)),
         instanceValue(), m_currentBlock->appendNew<Const32Value>(m_proc, origin(), tableIndex), index, value);
 
     {
@@ -733,7 +737,7 @@ auto B3IRGenerator::addRefFunc(uint32_t index, ExpressionType& result) -> Partia
     // FIXME: Emit this inline <https://bugs.webkit.org/show_bug.cgi?id=198506>.
 
     result = m_currentBlock->appendNew<CCallValue>(m_proc, B3::Int64, origin(),
-        m_currentBlock->appendNew<ConstPtrValue>(m_proc, origin(), tagCFunction<B3CCallPtrTag>(operationWasmRefFunc)),
+        m_currentBlock->appendNew<ConstPtrValue>(m_proc, origin(), tagCFunctionPtr<void*>(&operationWasmRefFunc, B3CCallPtrTag)),
         instanceValue(), addConstant(Type::I32, index));
 
     return { };
@@ -743,7 +747,7 @@ auto B3IRGenerator::addTableSize(unsigned tableIndex, ExpressionType& result) ->
 {
     // FIXME: Emit this inline <https://bugs.webkit.org/show_bug.cgi?id=198506>.
     result = m_currentBlock->appendNew<CCallValue>(m_proc, toB3Type(I32), origin(),
-        m_currentBlock->appendNew<ConstPtrValue>(m_proc, origin(), tagCFunction<B3CCallPtrTag>(operationGetWasmTableSize)),
+        m_currentBlock->appendNew<ConstPtrValue>(m_proc, origin(), tagCFunctionPtr<void*>(&operationGetWasmTableSize, B3CCallPtrTag)),
         instanceValue(), m_currentBlock->appendNew<Const32Value>(m_proc, origin(), tableIndex));
 
     return { };
@@ -752,7 +756,7 @@ auto B3IRGenerator::addTableSize(unsigned tableIndex, ExpressionType& result) ->
 auto B3IRGenerator::addTableGrow(unsigned tableIndex, ExpressionType fill, ExpressionType delta, ExpressionType& result) -> PartialResult
 {
     result = m_currentBlock->appendNew<CCallValue>(m_proc, toB3Type(I32), origin(),
-        m_currentBlock->appendNew<ConstPtrValue>(m_proc, origin(), tagCFunction<B3CCallPtrTag>(operationWasmTableGrow)),
+        m_currentBlock->appendNew<ConstPtrValue>(m_proc, origin(), tagCFunctionPtr<void*>(&operationWasmTableGrow, B3CCallPtrTag)),
         instanceValue(), m_currentBlock->appendNew<Const32Value>(m_proc, origin(), tableIndex), fill, delta);
 
     return { };
@@ -761,7 +765,7 @@ auto B3IRGenerator::addTableGrow(unsigned tableIndex, ExpressionType fill, Expre
 auto B3IRGenerator::addTableFill(unsigned tableIndex, ExpressionType offset, ExpressionType fill, ExpressionType count) -> PartialResult
 {
     auto result = m_currentBlock->appendNew<CCallValue>(m_proc, toB3Type(I32), origin(),
-        m_currentBlock->appendNew<ConstPtrValue>(m_proc, origin(), tagCFunction<B3CCallPtrTag>(operationWasmTableFill)),
+        m_currentBlock->appendNew<ConstPtrValue>(m_proc, origin(), tagCFunctionPtr<void*>(&operationWasmTableFill, B3CCallPtrTag)),
         instanceValue(), m_currentBlock->appendNew<Const32Value>(m_proc, origin(), tableIndex), offset, fill, count);
 
     {
@@ -796,7 +800,7 @@ auto B3IRGenerator::addUnreachable() -> PartialResult
 auto B3IRGenerator::addGrowMemory(ExpressionType delta, ExpressionType& result) -> PartialResult
 {
     result = m_currentBlock->appendNew<CCallValue>(m_proc, Int32, origin(),
-        m_currentBlock->appendNew<ConstPtrValue>(m_proc, origin(), tagCFunction<B3CCallPtrTag>(operationGrowMemory)),
+        m_currentBlock->appendNew<ConstPtrValue>(m_proc, origin(), tagCFunctionPtr<void*>(&operationGrowMemory, B3CCallPtrTag)),
         framePointer(), instanceValue(), delta);
 
     restoreWebAssemblyGlobalState(RestoreCachedStackLimit::No, m_info.memory, instanceValue(), m_proc, m_currentBlock);
@@ -900,7 +904,7 @@ auto B3IRGenerator::setGlobal(uint32_t index, ExpressionType value) -> PartialRe
             continuation->addPredecessor(m_currentBlock);
             m_currentBlock = doSlowPath;
 
-            Value* writeBarrierAddress = m_currentBlock->appendNew<ConstPtrValue>(m_proc, origin(), tagCFunction<B3CCallPtrTag>(operationWasmWriteBarrierSlowPath));
+            Value* writeBarrierAddress = m_currentBlock->appendNew<ConstPtrValue>(m_proc, origin(), tagCFunctionPtr<void*>(&operationWasmWriteBarrierSlowPath, B3CCallPtrTag));
             m_currentBlock->appendNew<CCallValue>(m_proc, B3::Void, origin(), writeBarrierAddress, cell, vm);
             m_currentBlock->appendNewControlValue(m_proc, Jump, origin(), continuation);
 
@@ -953,7 +957,7 @@ inline void B3IRGenerator::emitWriteBarrierForJSWrapper()
     continuation->addPredecessor(m_currentBlock);
     m_currentBlock = doSlowPath;
 
-    Value* writeBarrierAddress = m_currentBlock->appendNew<ConstPtrValue>(m_proc, origin(), tagCFunction<B3CCallPtrTag>(operationWasmWriteBarrierSlowPath));
+    Value* writeBarrierAddress = m_currentBlock->appendNew<ConstPtrValue>(m_proc, origin(), tagCFunctionPtr<void*>(&operationWasmWriteBarrierSlowPath, B3CCallPtrTag));
     m_currentBlock->appendNew<CCallValue>(m_proc, B3::Void, origin(), writeBarrierAddress, cell, vm);
     m_currentBlock->appendNewControlValue(m_proc, Jump, origin(), continuation);
 
@@ -1334,7 +1338,7 @@ void B3IRGenerator::emitLoopTierUpCheck(uint32_t loopIndex, const Stack& enclosi
             forceOSREntry.link(&jit);
             tierUp.link(&jit);
 
-            jit.probe(tagCFunction<JITProbePtrTag>(operationWasmTriggerOSREntryNow), osrEntryDataPtr);
+            jit.probe(operationWasmTriggerOSREntryNow, osrEntryDataPtr);
             jit.branchTestPtr(CCallHelpers::Zero, GPRInfo::argumentGPR0).linkTo(tierUpResume, &jit);
             jit.farJump(GPRInfo::argumentGPR1, WasmEntryPtrTag);
         });
@@ -1974,7 +1978,7 @@ Expected<std::unique_ptr<InternalFunction>, String> parseAndCompile(CompilationC
     // optLevel=1.
     procedure.setNeedsUsedRegisters(false);
 
-    procedure.setOptLevel(compilationMode == CompilationMode::BBQMode || !wasmFunctionSizeCanBeOMGCompiled(function.data.size())
+    procedure.setOptLevel(compilationMode == CompilationMode::BBQMode
         ? Options::webAssemblyBBQB3OptimizationLevel()
         : Options::webAssemblyOMGOptimizationLevel());
 
@@ -2146,7 +2150,7 @@ auto B3IRGenerator::addOp<OpType::I32Popcnt>(ExpressionType arg, ExpressionType&
     }
 #endif
 
-    Value* funcAddress = m_currentBlock->appendNew<ConstPtrValue>(m_proc, origin(), tagCFunction<B3CCallPtrTag>(operationPopcount32));
+    Value* funcAddress = m_currentBlock->appendNew<ConstPtrValue>(m_proc, origin(), tagCFunctionPtr<void*>(&operationPopcount32, B3CCallPtrTag));
     result = m_currentBlock->appendNew<CCallValue>(m_proc, Int32, origin(), Effects::none(), funcAddress, arg);
     return { };
 }
@@ -2167,7 +2171,7 @@ auto B3IRGenerator::addOp<OpType::I64Popcnt>(ExpressionType arg, ExpressionType&
     }
 #endif
 
-    Value* funcAddress = m_currentBlock->appendNew<ConstPtrValue>(m_proc, origin(), tagCFunction<B3CCallPtrTag>(operationPopcount64));
+    Value* funcAddress = m_currentBlock->appendNew<ConstPtrValue>(m_proc, origin(), tagCFunctionPtr<void*>(operationPopcount64, B3CCallPtrTag));
     result = m_currentBlock->appendNew<CCallValue>(m_proc, Int64, origin(), Effects::none(), funcAddress, arg);
     return { };
 }
@@ -2270,10 +2274,10 @@ template<>
 auto B3IRGenerator::addOp<OpType::I32TruncSF64>(ExpressionType arg, ExpressionType& result) -> PartialResult
 {
     Value* max = constant(Double, bitwise_cast<uint64_t>(-static_cast<double>(std::numeric_limits<int32_t>::min())));
-    Value* min = constant(Double, bitwise_cast<uint64_t>(static_cast<double>(std::numeric_limits<int32_t>::min()) - 1.0));
+    Value* min = constant(Double, bitwise_cast<uint64_t>(static_cast<double>(std::numeric_limits<int32_t>::min())));
     Value* outOfBounds = m_currentBlock->appendNew<Value>(m_proc, BitAnd, origin(),
         m_currentBlock->appendNew<Value>(m_proc, LessThan, origin(), arg, max),
-        m_currentBlock->appendNew<Value>(m_proc, GreaterThan, origin(), arg, min));
+        m_currentBlock->appendNew<Value>(m_proc, GreaterEqual, origin(), arg, min));
     outOfBounds = m_currentBlock->appendNew<Value>(m_proc, Equal, origin(), outOfBounds, constant(Int32, 0));
     CheckValue* trap = m_currentBlock->appendNew<CheckValue>(m_proc, Check, origin(), outOfBounds);
     trap->setGenerator([=] (CCallHelpers& jit, const StackmapGenerationParams&) {

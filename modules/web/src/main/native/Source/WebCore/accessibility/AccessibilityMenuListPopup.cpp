@@ -70,10 +70,13 @@ bool AccessibilityMenuListPopup::computeAccessibilityIsIgnored() const
 
 AccessibilityMenuListOption* AccessibilityMenuListPopup::menuListOptionAccessibilityObject(HTMLElement* element) const
 {
-    if (!element || !element->inRenderedDocument())
+    if (!is<HTMLOptionElement>(element) || !element->inRenderedDocument())
         return nullptr;
 
-    return downcast<AccessibilityMenuListOption>(document()->axObjectCache()->getOrCreate(element));
+    auto& option = downcast<AccessibilityMenuListOption>(*document()->axObjectCache()->getOrCreate(AccessibilityRole::MenuListOption));
+    option.setElement(element);
+
+    return &option;
 }
 
 bool AccessibilityMenuListPopup::press()
@@ -97,9 +100,11 @@ void AccessibilityMenuListPopup::addChildren()
     m_haveChildren = true;
 
     for (const auto& listItem : downcast<HTMLSelectElement>(*selectNode).listItems()) {
-        // FIXME: Why does AccessibilityListBox::addChildren check accessibilityIsIgnored but this does not?
-        if (auto option = menuListOptionAccessibilityObject(listItem))
+        AccessibilityMenuListOption* option = menuListOptionAccessibilityObject(listItem);
+        if (option) {
+            option->setParent(this);
             m_children.append(option);
+        }
     }
 }
 

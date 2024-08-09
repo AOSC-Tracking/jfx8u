@@ -192,7 +192,7 @@ JNIEXPORT jstring JNICALL Java_com_sun_webkit_dom_DocumentImpl_getDomainImpl(JNI
 JNIEXPORT jstring JNICALL Java_com_sun_webkit_dom_DocumentImpl_getURLImpl(JNIEnv* env, jclass, jlong peer)
 {
     WebCore::JSMainThreadNullState state;
-    return JavaReturn<String>(env, IMPL->urlForBindings().string());
+    return JavaReturn<String>(env, IMPL->urlForBindings());
 }
 
 JNIEXPORT jstring JNICALL Java_com_sun_webkit_dom_DocumentImpl_getCookieImpl(JNIEnv* env, jclass, jlong peer)
@@ -382,10 +382,7 @@ JNIEXPORT jboolean JNICALL Java_com_sun_webkit_dom_DocumentImpl_getHiddenImpl(JN
 JNIEXPORT jlong JNICALL Java_com_sun_webkit_dom_DocumentImpl_getCurrentScriptImpl(JNIEnv* env, jclass, jlong peer)
 {
     WebCore::JSMainThreadNullState state;
-    WebCore::Element* element = IMPL->currentScript();
-    if (!is<WebCore::HTMLScriptElement>(element))
-        return 0;
-    return JavaReturn<HTMLScriptElement>(env, WTF::getPtr(downcast<WebCore::HTMLScriptElement>(element)));
+    return JavaReturn<HTMLScriptElement>(env, WTF::getPtr(IMPL->currentScript()));
 }
 
 JNIEXPORT jstring JNICALL Java_com_sun_webkit_dom_DocumentImpl_getOriginImpl(JNIEnv* env, jclass, jlong peer)

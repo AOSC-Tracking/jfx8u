@@ -74,13 +74,14 @@ inline CapabilityLevel canCompile(Node* node)
     case PutStructure:
     case GetButterfly:
     case NewObject:
+    case NewPromise:
     case NewGenerator:
     case NewAsyncGenerator:
     case NewStringObject:
     case NewSymbol:
     case NewArray:
     case NewArrayWithSpread:
-    case NewInternalFieldObject:
+    case NewArrayIterator:
     case Spread:
     case NewArrayBuffer:
     case NewTypedArray:
@@ -158,8 +159,8 @@ inline CapabilityLevel canCompile(Node* node)
     case GetArgument:
     case InvalidationPoint:
     case StringCharAt:
-    case CheckIsConstant:
-    case CheckBadValue:
+    case CheckCell:
+    case CheckBadCell:
     case CheckNotEmpty:
     case AssertNotEmpty:
     case CheckIdent:
@@ -219,7 +220,6 @@ inline CapabilityLevel canCompile(Node* node)
     case ToObject:
     case CallObjectConstructor:
     case CallStringConstructor:
-    case CallNumberConstructor:
     case ObjectCreate:
     case ObjectKeys:
     case MakeRope:
@@ -233,7 +233,6 @@ inline CapabilityLevel canCompile(Node* node)
     case ToThis:
     case MultiGetByOffset:
     case MultiPutByOffset:
-    case MultiDeleteByOffset:
     case ToPrimitive:
     case ToPropertyKey:
     case Throw:
@@ -257,16 +256,14 @@ inline CapabilityLevel canCompile(Node* node)
     case WeakSetAdd:
     case WeakMapSet:
     case IsEmpty:
-    case TypeOfIsUndefined:
+    case IsUndefined:
     case IsUndefinedOrNull:
     case IsBoolean:
     case IsNumber:
-    case IsBigInt:
     case NumberIsInteger:
     case IsObject:
     case IsObjectOrNull:
     case IsFunction:
-    case IsConstructor:
     case IsTypedArrayView:
     case CheckTypeInfoFlags:
     case OverridesHasInstance:
@@ -280,8 +277,6 @@ inline CapabilityLevel canCompile(Node* node)
     case BooleanToNumber:
     case HasGenericProperty:
     case HasStructureProperty:
-    case HasOwnStructureProperty:
-    case InStructureProperty:
     case HasIndexedProperty:
     case GetDirectPname:
     case GetEnumerableLength:
@@ -296,7 +291,7 @@ inline CapabilityLevel canCompile(Node* node)
     case PhantomNewGeneratorFunction:
     case PhantomNewAsyncGeneratorFunction:
     case PhantomNewAsyncFunction:
-    case PhantomNewInternalFieldObject:
+    case PhantomNewArrayIterator:
     case PhantomCreateActivation:
     case PhantomNewRegexp:
     case PutHint:
@@ -364,8 +359,7 @@ inline CapabilityLevel canCompile(Node* node)
     case ToLowerCase:
     case NumberToStringWithRadix:
     case NumberToStringWithValidRadixConstant:
-    case CheckJSCast:
-    case CheckNotJSCast:
+    case CheckSubClass:
     case CallDOM:
     case CallDOMGetter:
     case ArraySlice:
@@ -398,7 +392,6 @@ inline CapabilityLevel canCompile(Node* node)
     case FilterGetByStatus:
     case FilterPutByIdStatus:
     case FilterInByIdStatus:
-    case FilterDeleteByStatus:
     case CreateThis:
     case CreatePromise:
     case CreateGenerator:
@@ -489,9 +482,7 @@ CapabilityLevel canCompile(Graph& graph)
                 case StringObjectUse:
                 case StringOrStringObjectUse:
                 case SymbolUse:
-                case AnyBigIntUse:
-                case BigInt32Use:
-                case HeapBigIntUse:
+                case BigIntUse:
                 case DateObjectUse:
                 case MapObjectUse:
                 case SetObjectUse:
@@ -504,7 +495,6 @@ CapabilityLevel canCompile(Graph& graph)
                 case ProxyObjectUse:
                 case DerivedArrayUse:
                 case NotCellUse:
-                case NotCellNorBigIntUse:
                 case OtherUse:
                 case KnownOtherUse:
                 case MiscUse:

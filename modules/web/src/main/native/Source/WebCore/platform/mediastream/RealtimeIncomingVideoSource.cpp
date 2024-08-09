@@ -39,42 +39,37 @@ RealtimeIncomingVideoSource::RealtimeIncomingVideoSource(rtc::scoped_refptr<webr
     : RealtimeMediaSource(Type::Video, "remote video"_s, WTFMove(videoTrackId))
     , m_videoTrack(WTFMove(videoTrack))
 {
-    ASSERT(m_videoTrack);
+    notifyMutedChange(!m_videoTrack);
 
     RealtimeMediaSourceSupportedConstraints constraints;
     constraints.setSupportsWidth(true);
     constraints.setSupportsHeight(true);
     m_currentSettings = RealtimeMediaSourceSettings { };
     m_currentSettings->setSupportedConstraints(WTFMove(constraints));
-
-    m_videoTrack->RegisterObserver(this);
-}
-
-RealtimeIncomingVideoSource::~RealtimeIncomingVideoSource()
-{
-    stop();
-    m_videoTrack->UnregisterObserver(this);
 }
 
 void RealtimeIncomingVideoSource::startProducingData()
 {
-    m_videoTrack->AddOrUpdateSink(this, rtc::VideoSinkWants());
+    if (m_videoTrack)
+        m_videoTrack->AddOrUpdateSink(this, rtc::VideoSinkWants());
+}
+
+void RealtimeIncomingVideoSource::setSourceTrack(rtc::scoped_refptr<webrtc::VideoTrackInterface>&& track)
+{
+    ASSERT(track);
+
+    if (m_videoTrack && isProducingData())
+        m_videoTrack->RemoveSink(this);
+    m_videoTrack = WTFMove(track);
+    notifyMutedChange(!m_videoTrack);
+    if (isProducingData())
+        m_videoTrack->AddOrUpdateSink(this, rtc::VideoSinkWants());
 }
 
 void RealtimeIncomingVideoSource::stopProducingData()
 {
-    m_videoTrack->RemoveSink(this);
-}
-
-void RealtimeIncomingVideoSource::OnChanged()
-{
-    callOnMainThread([this, weakThis = makeWeakPtr(this)] {
-        if (!weakThis)
-            return;
-
-        if (m_videoTrack->state() == webrtc::MediaStreamTrackInterface::kEnded)
-            end();
-    });
+    if (m_videoTrack)
+        m_videoTrack->RemoveSink(this);
 }
 
 const RealtimeMediaSourceCapabilities& RealtimeIncomingVideoSource::capabilities()

@@ -32,8 +32,7 @@
             "name": "workerCreated",
             "parameters": [
                 { "name": "workerId", "type": "string" },
-                { "name": "url", "type": "string" },
-                { "name": "name", "type": "string" }
+                { "name": "url", "type": "string" }
             ]
         },
         {

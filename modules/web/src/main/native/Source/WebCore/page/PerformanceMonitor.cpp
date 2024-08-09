@@ -262,8 +262,6 @@ static inline const char* stringForCPUSamplingActivityState(ActivityStateForCPUS
     case ActivityStateForCPUSampling::VisibleAndActive:
         return "VisibleAndActive";
     }
-    RELEASE_ASSERT_NOT_REACHED();
-    return "";
 }
 
 #endif

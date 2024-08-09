@@ -29,7 +29,6 @@
 
 #include "IDBKeyData.h"
 #include "IDBObjectStoreInfo.h"
-#include "IndexKey.h"
 #include "MemoryIndex.h"
 #include "MemoryObjectStoreCursor.h"
 #include "ThreadSafeDataBuffer.h"
@@ -52,7 +51,7 @@ struct IDBKeyRangeData;
 
 namespace IndexedDB {
 enum class GetAllType;
-enum class IndexRecordType : bool;
+enum class IndexRecordType;
 }
 
 namespace IDBServer {
@@ -81,7 +80,6 @@ public:
     void deleteRecord(const IDBKeyData&);
     void deleteRange(const IDBKeyRangeData&);
     IDBError addRecord(MemoryBackingStoreTransaction&, const IDBKeyData&, const IDBValue&);
-    IDBError addRecord(MemoryBackingStoreTransaction&, const IDBKeyData&, const IndexIDToIndexKeyMap&, const IDBValue&);
 
     uint64_t currentKeyGeneratorValue() const { return m_keyGeneratorValue; }
     void setKeyGeneratorValue(uint64_t value) { m_keyGeneratorValue = value; }
@@ -116,7 +114,7 @@ private:
     IDBKeyDataSet::iterator lowestIteratorInRange(const IDBKeyRangeData&, bool reverse) const;
 
     IDBError populateIndexWithExistingRecords(MemoryIndex&);
-    IDBError updateIndexesForPutRecord(const IDBKeyData&, const IndexIDToIndexKeyMap&);
+    IDBError updateIndexesForPutRecord(const IDBKeyData&, const ThreadSafeDataBuffer& value);
     void updateIndexesForDeleteRecord(const IDBKeyData& value);
     void updateCursorsForPutRecord(IDBKeyDataSet::iterator);
     void updateCursorsForDeleteRecord(const IDBKeyData&);

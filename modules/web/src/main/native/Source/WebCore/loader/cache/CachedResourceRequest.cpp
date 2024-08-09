@@ -35,7 +35,6 @@
 #include "HTTPHeaderValues.h"
 #include "ImageDecoder.h"
 #include "MemoryCache.h"
-#include "SecurityPolicy.h"
 #include "ServiceWorkerRegistrationData.h"
 #include <wtf/NeverDestroyed.h>
 
@@ -55,7 +54,7 @@ String CachedResourceRequest::splitFragmentIdentifierFromRequestURL(ResourceRequ
     if (!MemoryCache::shouldRemoveFragmentIdentifier(request.url()))
         return { };
     URL url = request.url();
-    auto fragmentIdentifier = url.fragmentIdentifier().toString();
+    String fragmentIdentifier = url.fragmentIdentifier();
     url.removeFragmentIdentifier();
     request.setURL(url);
     return fragmentIdentifier;
@@ -82,7 +81,7 @@ const AtomString& CachedResourceRequest::initiatorName() const
     if (!m_initiatorName.isEmpty())
         return m_initiatorName;
 
-    static MainThreadNeverDestroyed<const AtomString> defaultName("other", AtomString::ConstructFromLiteral);
+    static NeverDestroyed<AtomString> defaultName("other", AtomString::ConstructFromLiteral);
     return defaultName;
 }
 
@@ -122,26 +121,15 @@ void CachedResourceRequest::setDomainForCachePartition(const String& domain)
     m_resourceRequest.setDomainForCachePartition(domain);
 }
 
-static inline constexpr ASCIILiteral acceptHeaderValueForImageResource(bool supportsVideoImage)
-{
-#if HAVE(WEBP) || USE(WEBP)
-    #define WEBP_HEADER_PART "image/webp,"
-#else
-    #define WEBP_HEADER_PART ""
-#endif
-    if (supportsVideoImage)
-        return WEBP_HEADER_PART "image/png,image/svg+xml,image/*;q=0.8,video/*;q=0.8,*/*;q=0.5"_s;
-    return WEBP_HEADER_PART "image/png,image/svg+xml,image/*;q=0.8,*/*;q=0.5"_s;
-    #undef WEBP_HEADER_PART
-}
-
-String CachedResourceRequest::acceptHeaderValueFromType(CachedResource::Type type)
+static inline String acceptHeaderValueFromType(CachedResource::Type type)
 {
     switch (type) {
     case CachedResource::Type::MainResource:
         return "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"_s;
     case CachedResource::Type::ImageResource:
-        return acceptHeaderValueForImageResource(ImageDecoder::supportsMediaType(ImageDecoder::MediaType::Video));
+        if (ImageDecoder::supportsMediaType(ImageDecoder::MediaType::Video))
+            return "image/png,image/svg+xml,image/*;q=0.8,video/*;q=0.8,*/*;q=0.5"_s;
+        return "image/png,image/svg+xml,image/*;q=0.8,*/*;q=0.5"_s;
     case CachedResource::Type::CSSStyleSheet:
         return "text/css,*/*;q=0.1"_s;
     case CachedResource::Type::SVGDocumentResource:
@@ -232,26 +220,19 @@ void CachedResourceRequest::updateReferrerPolicy(ReferrerPolicy defaultPolicy)
         m_options.referrerPolicy = defaultPolicy;
 }
 
-void CachedResourceRequest::updateReferrerAndOriginHeaders(FrameLoader& frameLoader)
+void CachedResourceRequest::updateReferrerOriginAndUserAgentHeaders(FrameLoader& frameLoader)
 {
     // Implementing step 9 to 11 of https://fetch.spec.whatwg.org/#http-network-or-cache-fetch as of 16 March 2018
     String outgoingReferrer = frameLoader.outgoingReferrer();
-    if (m_resourceRequest.hasHTTPReferrer())
+    String outgoingOrigin = frameLoader.outgoingOrigin();
+    if (m_resourceRequest.hasHTTPReferrer()) {
         outgoingReferrer = m_resourceRequest.httpReferrer();
+        outgoingOrigin = SecurityOrigin::createFromString(outgoingReferrer)->toString();
+    }
     updateRequestReferrer(m_resourceRequest, m_options.referrerPolicy, outgoingReferrer);
 
-    if (!m_resourceRequest.httpOrigin().isEmpty())
-        return;
-    String outgoingOrigin;
-    if (m_options.mode == FetchOptions::Mode::Cors)
-        outgoingOrigin = SecurityOrigin::createFromString(outgoingReferrer)->toString();
-    else
-        outgoingOrigin = SecurityPolicy::generateOriginHeader(m_options.referrerPolicy, m_resourceRequest.url(), SecurityOrigin::createFromString(outgoingReferrer));
     FrameLoader::addHTTPOriginIfNeeded(m_resourceRequest, outgoingOrigin);
-}
 
-void CachedResourceRequest::updateUserAgentHeader(FrameLoader& frameLoader)
-{
     frameLoader.applyUserAgentIfNeeded(m_resourceRequest);
 }
 

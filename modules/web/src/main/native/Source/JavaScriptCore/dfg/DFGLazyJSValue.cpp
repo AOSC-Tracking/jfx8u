@@ -30,7 +30,7 @@
 
 #include "CCallHelpers.h"
 #include "DFGGraph.h"
-#include "JSCJSValueInlines.h"
+#include "JSCInlines.h"
 #include "LinkBuffer.h"
 
 namespace JSC { namespace DFG {
@@ -62,15 +62,15 @@ JSValue LazyJSValue::getValue(VM& vm) const
 static TriState equalToSingleCharacter(JSValue value, UChar character)
 {
     if (!value.isString())
-        return TriState::False;
+        return FalseTriState;
 
     JSString* jsString = asString(value);
     if (jsString->length() != 1)
-        return TriState::False;
+        return FalseTriState;
 
     const StringImpl* string = jsString->tryGetValueImpl();
     if (!string)
-        return TriState::Indeterminate;
+        return MixedTriState;
 
     return triState(string->at(0) == character);
 }
@@ -78,12 +78,12 @@ static TriState equalToSingleCharacter(JSValue value, UChar character)
 static TriState equalToStringImpl(JSValue value, StringImpl* stringImpl)
 {
     if (!value.isString())
-        return TriState::False;
+        return FalseTriState;
 
     JSString* jsString = asString(value);
     const StringImpl* string = jsString->tryGetValueImpl();
     if (!string)
-        return TriState::Indeterminate;
+        return MixedTriState;
 
     return triState(WTF::equal(stringImpl, string));
 }
@@ -142,18 +142,18 @@ TriState LazyJSValue::strictEqual(const LazyJSValue& other) const
         switch (other.m_kind) {
         case KnownValue: {
             if (!value()->value() || !other.value()->value())
-                return value()->value() == other.value()->value() ? TriState::True : TriState::False;
+                return value()->value() == other.value()->value() ? TrueTriState : FalseTriState;
             return JSValue::pureStrictEqual(value()->value(), other.value()->value());
         }
         case SingleCharacterString: {
             if (!value()->value())
-                return TriState::False;
+                return FalseTriState;
             return equalToSingleCharacter(value()->value(), other.character());
         }
         case KnownStringImpl:
         case NewStringImpl: {
             if (!value()->value())
-                return TriState::False;
+                return FalseTriState;
             return equalToStringImpl(value()->value(), other.stringImpl());
         }
         }
@@ -165,7 +165,7 @@ TriState LazyJSValue::strictEqual(const LazyJSValue& other) const
         case KnownStringImpl:
         case NewStringImpl:
             if (other.stringImpl()->length() != 1)
-                return TriState::False;
+                return FalseTriState;
             return triState(other.stringImpl()->at(0) == character());
         case KnownValue:
             return other.strictEqual(*this);
@@ -184,7 +184,7 @@ TriState LazyJSValue::strictEqual(const LazyJSValue& other) const
         break;
     }
     RELEASE_ASSERT_NOT_REACHED();
-    return TriState::False;
+    return FalseTriState;
 }
 
 uintptr_t LazyJSValue::switchLookupValue(SwitchKind kind) const
@@ -286,7 +286,7 @@ void LazyJSValue::dumpInContext(PrintStream& out, DumpContext* context) const
 
 void LazyJSValue::dump(PrintStream& out) const
 {
-    dumpInContext(out, nullptr);
+    dumpInContext(out, 0);
 }
 
 } } // namespace JSC::DFG

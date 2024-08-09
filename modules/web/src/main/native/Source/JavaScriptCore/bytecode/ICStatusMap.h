@@ -37,7 +37,6 @@ class CodeBlock;
 class GetByStatus;
 class InByIdStatus;
 class PutByIdStatus;
-class DeleteByStatus;
 class StructureStubInfo;
 struct ByValInfo;
 
@@ -49,7 +48,6 @@ struct ICStatus {
     GetByStatus* getStatus { nullptr };
     InByIdStatus* inStatus { nullptr };
     PutByIdStatus* putStatus { nullptr };
-    DeleteByStatus* deleteStatus { nullptr };
 };
 
 typedef HashMap<CodeOrigin, ICStatus, CodeOriginApproximateHash> ICStatusMap;

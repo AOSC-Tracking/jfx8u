@@ -31,7 +31,7 @@
 namespace JSC {
 
 template<typename OuterType, typename InnerType, typename UnwrapFunc>
-class ParallelSourceAdapter final : public SharedTask<InnerType()> {
+class ParallelSourceAdapter : public SharedTask<InnerType()> {
 public:
     ParallelSourceAdapter(RefPtr<SharedTask<OuterType()>> outerSource, const UnwrapFunc& unwrapFunc)
         : m_outerSource(outerSource)
@@ -39,7 +39,7 @@ public:
     {
     }
 
-    InnerType run() final
+    InnerType run() override
     {
         auto locker = holdLock(m_lock);
         do {

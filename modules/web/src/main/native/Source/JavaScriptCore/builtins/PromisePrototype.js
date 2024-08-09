@@ -102,7 +102,7 @@ function getThenFinally(onFinally, constructor)
 {
     "use strict";
 
-    return (value) =>
+    return function(value)
     {
         @assert(typeof onFinally === "function");
         var result = onFinally();
@@ -113,7 +113,9 @@ function getThenFinally(onFinally, constructor)
         resultCapability.@resolve.@call(@undefined, result);
 
         var promise = resultCapability.@promise;
-        return promise.then(() => value);
+        var valueThunk = function () { return value; };
+
+        return promise.then(valueThunk);
     }
 }
 
@@ -122,7 +124,7 @@ function getCatchFinally(onFinally, constructor)
 {
     "use strict";
 
-    return (reason) =>
+    return function(reason)
     {
         @assert(typeof onFinally === "function");
         var result = onFinally();
@@ -133,6 +135,8 @@ function getCatchFinally(onFinally, constructor)
         resultCapability.@resolve.@call(@undefined, result);
 
         var promise = resultCapability.@promise;
-        return promise.then(() => { throw reason; });
+        var thrower = function () { throw reason; };
+
+        return promise.then(thrower);
     }
 }

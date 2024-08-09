@@ -220,7 +220,13 @@ static bool isValidStandardizedPaymentMethodIdentifier(StringView identifier)
 // https://www.w3.org/TR/payment-method-id/#validation
 static bool isValidURLBasedPaymentMethodIdentifier(const URL& url)
 {
-    return url.protocolIs("https") && !url.hasCredentials();
+    if (!url.protocolIs("https"))
+        return false;
+
+    if (!url.user().isEmpty() || !url.pass().isEmpty())
+        return false;
+
+    return true;
 }
 
 // Implements "validate a payment method identifier"

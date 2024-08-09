@@ -29,13 +29,14 @@
 #if ENABLE(B3_JIT)
 
 #include "AirCode.h"
+#include "AirInstInlines.h"
 #include "AirPhaseScope.h"
 
 namespace JSC { namespace B3 { namespace Air {
 
 bool simplifyCFG(Code& code)
 {
-    constexpr bool verbose = false;
+    const bool verbose = false;
 
     PhaseScope phaseScope(code, "simplifyCFG");
 

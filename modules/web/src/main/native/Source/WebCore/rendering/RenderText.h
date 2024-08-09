@@ -71,7 +71,6 @@ public:
 
     InlineTextBox* createInlineTextBox() { return m_lineBoxes.createAndAppendLineBox(*this); }
     void dirtyLineBoxes(bool fullLayout);
-    void deleteLineBoxes();
 
     void absoluteRects(Vector<IntRect>&, const LayoutPoint& accumulatedOffset) const final;
     Vector<IntRect> absoluteRectsForRange(unsigned startOffset = 0, unsigned endOffset = UINT_MAX, bool useSelectionHeight = false, bool* wasFixed = nullptr) const;
@@ -208,7 +207,7 @@ private:
 
     VisiblePosition positionForPoint(const LayoutPoint&, const RenderFragmentContainer*) override;
 
-    void setSelectionState(HighlightState) final;
+    void setSelectionState(SelectionState) final;
     LayoutRect selectionRectForRepaint(const RenderLayerModelObject* repaintContainer, bool clipToVisibleContent = true) final;
     LayoutRect localCaretRect(InlineBox*, unsigned caretOffset, LayoutUnit* extraWidthToEndOfLine = nullptr) override;
     LayoutRect clippedOverflowRectForRepaint(const RenderLayerModelObject* repaintContainer) const final;
@@ -283,38 +282,27 @@ inline const RenderStyle& RenderText::firstLineStyle() const
 
 inline const RenderStyle* RenderText::getCachedPseudoStyle(PseudoId pseudoId, const RenderStyle* parentStyle) const
 {
-    // Pseudostyle is associated with an element, so ascend the tree until we find a non-anonymous ancestor.
-    if (auto* ancestor = firstNonAnonymousAncestor())
-        return ancestor->getCachedPseudoStyle(pseudoId, parentStyle);
-    return nullptr;
+    return parent()->getCachedPseudoStyle(pseudoId, parentStyle);
 }
 
 inline Color RenderText::selectionBackgroundColor() const
 {
-    if (auto* ancestor = firstNonAnonymousAncestor())
-        return ancestor->selectionBackgroundColor();
-    return Color();
+    return parent()->selectionBackgroundColor();
 }
 
 inline Color RenderText::selectionForegroundColor() const
 {
-    if (auto* ancestor = firstNonAnonymousAncestor())
-        return ancestor->selectionForegroundColor();
-    return Color();
+    return parent()->selectionForegroundColor();
 }
 
 inline Color RenderText::selectionEmphasisMarkColor() const
 {
-    if (auto* ancestor = firstNonAnonymousAncestor())
-        return ancestor->selectionEmphasisMarkColor();
-    return Color();
+    return parent()->selectionEmphasisMarkColor();
 }
 
 inline std::unique_ptr<RenderStyle> RenderText::selectionPseudoStyle() const
 {
-    if (auto* ancestor = firstNonAnonymousAncestor())
-        return ancestor->selectionPseudoStyle();
-    return nullptr;
+    return parent()->selectionPseudoStyle();
 }
 
 inline RenderText* Text::renderer() const
