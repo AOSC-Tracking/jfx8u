@@ -56,7 +56,7 @@ CFLAGS =-fPIC                   \
         -DGST_DISABLE_GST_DEBUG \
         -DGST_DISABLE_LOADSAVE  \
         -DG_DISABLE_DEPRECATED   \
-        -ffunction-sections -fdata-sections
+        -ffunction-sections -fdata-sections -fcommon
 
 ifeq ($(BUILD_TYPE), Release)
     CFLAGS += -Os
