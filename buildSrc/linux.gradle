@@ -46,6 +46,10 @@ def commonFlags = [
         "-fstack-protector",
         "-W", "-Wall", "-Wno-unused", "-Wno-parentheses", "-Werror=implicit-function-declaration"] // warning flags
 
+if (System.env.CFLAGS) {
+    commonFlags = System.env.CFLAGS.tokenize(' ')
+}
+
 if (!IS_64) {
     commonFlags += "-m32"
 }
