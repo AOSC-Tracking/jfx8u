@@ -18,12 +18,15 @@
 */
 
 #include "config.h"
-#include "HashTable.h"
+#include <wtf/HashTable.h>
 
-#include "DataLog.h"
 #include <mutex>
+#include <wtf/DataLog.h>
+#include <wtf/NeverDestroyed.h>
 
 namespace WTF {
+
+DEFINE_ALLOCATOR_WITH_HEAP_IDENTIFIER(HashTable);
 
 #if DUMP_HASHTABLE_STATS
 

@@ -26,6 +26,7 @@
 #include "config.h"
 #include "PerformanceLogging.h"
 
+#include "BackForwardCache.h"
 #include "CommonVM.h"
 #include "DOMWindow.h"
 #include "Document.h"
@@ -35,7 +36,6 @@
 #include "JSDOMWindow.h"
 #include "Logging.h"
 #include "Page.h"
-#include "PageCache.h"
 
 namespace WebCore {
 
@@ -59,8 +59,8 @@ HashMap<const char*, size_t> PerformanceLogging::memoryUsageStatistics(ShouldInc
     stats.add("javascript_gc_heap_capacity", vm.heap.capacity());
     stats.add("javascript_gc_heap_extra_memory_size", vm.heap.extraMemorySize());
 
-    auto& pageCache = PageCache::singleton();
-    stats.add("pagecache_page_count", pageCache.pageCount());
+    auto& backForwardCache = BackForwardCache::singleton();
+    stats.add("backforward_cache_page_count", backForwardCache.pageCount());
 
     stats.add("document_count", Document::allDocuments().size());
 
@@ -105,7 +105,7 @@ void PerformanceLogging::didReachPointOfInterest(PointOfInterest poi)
 
 #if !PLATFORM(COCOA)
 void PerformanceLogging::getPlatformMemoryUsageStatistics(HashMap<const char*, size_t>&) { }
-std::optional<uint64_t> PerformanceLogging::physicalFootprint() { return std::nullopt; }
+Optional<uint64_t> PerformanceLogging::physicalFootprint() { return WTF::nullopt; }
 #endif
 
 }

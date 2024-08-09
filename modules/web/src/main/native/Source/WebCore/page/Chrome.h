@@ -59,6 +59,7 @@ class PopupOpeningObserver;
 class SearchPopupMenu;
 
 struct DateTimeChooserParameters;
+struct ShareDataWithParsedURL;
 struct ViewportArguments;
 struct WindowFeatures;
 
@@ -76,10 +77,8 @@ public:
     void scroll(const IntSize&, const IntRect&, const IntRect&) override;
     IntPoint screenToRootView(const IntPoint&) const override;
     IntRect rootViewToScreen(const IntRect&) const override;
-#if PLATFORM(IOS)
     IntPoint accessibilityScreenToRootView(const IntPoint&) const override;
     IntRect rootViewToAccessibilityScreen(const IntRect&) const override;
-#endif
     PlatformPageClient platformPageClient() const override;
     void setCursor(const Cursor&) override;
     void setCursorHiddenUntilMouseMoves(bool) override;
@@ -143,8 +142,6 @@ public:
 
     void mouseDidMoveOverElement(const HitTestResult&, unsigned modifierFlags);
 
-    void setToolTip(const HitTestResult&);
-
     WEBCORE_EXPORT bool print(Frame&);
 
     WEBCORE_EXPORT void enableSuddenTermination();
@@ -159,6 +156,7 @@ public:
 #endif
 
     void runOpenPanel(Frame&, FileChooser&);
+    void showShareSheet(ShareDataWithParsedURL&, CompletionHandler<void(bool)>&&);
     void loadIconForFiles(const Vector<String>&, FileIconLoader&);
 
     void dispatchDisabledAdaptationsDidChange(const OptionSet<DisabledAdaptations>&) const;
@@ -175,7 +173,7 @@ public:
     RefPtr<PopupMenu> createPopupMenu(PopupMenuClient&) const;
     RefPtr<SearchPopupMenu> createSearchPopupMenu(PopupMenuClient&) const;
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     // FIXME: Can we come up with a better name for this setter?
     void setDispatchViewportDataDidChangeSuppressed(bool dispatchViewportDataDidChangeSuppressed) { m_isDispatchViewportDataDidChangeSuppressed = dispatchViewportDataDidChangeSuppressed; }
 #endif
@@ -188,11 +186,13 @@ public:
 private:
     void notifyPopupOpeningObservers() const;
 
+    void getToolTip(const HitTestResult&, String&, TextDirection&);
+
     Page& m_page;
     ChromeClient& m_client;
     PlatformDisplayID m_displayID { 0 };
     Vector<PopupOpeningObserver*> m_popupOpeningObservers;
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     bool m_isDispatchViewportDataDidChangeSuppressed { false };
 #endif
 };

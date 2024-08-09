@@ -68,7 +68,7 @@ RenderStyle resolveForDocument(const Document& document)
 
     // This overrides any -webkit-user-modify inherited from the parent iframe.
     documentStyle.setUserModify(document.inDesignMode() ? UserModify::ReadWrite : UserModify::ReadOnly);
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     if (document.inDesignMode())
         documentStyle.setTextSizeAdjust(TextSizeAdjustment(NoTextSizeAdjustment));
 #endif
@@ -117,9 +117,7 @@ RenderStyle resolveForDocument(const Document& document)
     bool useSVGZoomRules = document.isSVGDocument();
     fontDescription.setComputedSize(computedFontSizeFromSpecifiedSize(size, fontDescription.isAbsoluteSize(), useSVGZoomRules, &documentStyle, document));
 
-    FontOrientation fontOrientation;
-    NonCJKGlyphOrientation glyphOrientation;
-    std::tie(fontOrientation, glyphOrientation) = documentStyle.fontAndGlyphOrientation();
+    auto [fontOrientation, glyphOrientation] = documentStyle.fontAndGlyphOrientation();
     fontDescription.setOrientation(fontOrientation);
     fontDescription.setNonCJKGlyphOrientation(glyphOrientation);
 
@@ -128,7 +126,7 @@ RenderStyle resolveForDocument(const Document& document)
     documentStyle.fontCascade().update(&const_cast<Document&>(document).fontSelector());
 
     for (auto& it : document.constantProperties().values())
-        documentStyle.setCustomPropertyValue(it.key, makeRef(it.value.get()));
+        documentStyle.setInheritedCustomPropertyValue(it.key, makeRef(it.value.get()));
 
     return documentStyle;
 }

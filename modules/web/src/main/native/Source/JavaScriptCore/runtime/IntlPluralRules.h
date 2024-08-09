@@ -27,7 +27,7 @@
 
 #if ENABLE(INTL)
 
-#include "JSDestructibleObject.h"
+#include "JSObject.h"
 #include <unicode/unum.h>
 #include <unicode/upluralrules.h>
 #include <unicode/uvernum.h>
@@ -40,23 +40,35 @@ namespace JSC {
 class IntlPluralRulesConstructor;
 class JSBoundFunction;
 
-class IntlPluralRules final : public JSDestructibleObject {
+class IntlPluralRules final : public JSNonFinalObject {
 public:
-    typedef JSDestructibleObject Base;
+    using Base = JSNonFinalObject;
+
+    static constexpr bool needsDestruction = true;
+
+    static void destroy(JSCell* cell)
+    {
+        static_cast<IntlPluralRules*>(cell)->IntlPluralRules::~IntlPluralRules();
+    }
+
+    template<typename CellType, SubspaceAccess mode>
+    static IsoSubspace* subspaceFor(VM& vm)
+    {
+        return vm.intlPluralRulesSpace<mode>();
+    }
 
     static IntlPluralRules* create(VM&, Structure*);
     static Structure* createStructure(VM&, JSGlobalObject*, JSValue);
 
     DECLARE_INFO;
 
-    void initializePluralRules(ExecState&, JSValue locales, JSValue options);
-    JSValue select(ExecState&, double value);
-    JSObject* resolvedOptions(ExecState&);
+    void initializePluralRules(JSGlobalObject*, JSValue locales, JSValue options);
+    JSValue select(JSGlobalObject*, double value);
+    JSObject* resolvedOptions(JSGlobalObject*);
 
 protected:
     IntlPluralRules(VM&, Structure*);
     void finishCreation(VM&);
-    static void destroy(JSCell*);
     static void visitChildren(JSCell*, SlotVisitor&);
 
 private:
@@ -76,8 +88,8 @@ private:
     unsigned m_minimumIntegerDigits { 1 };
     unsigned m_minimumFractionDigits { 0 };
     unsigned m_maximumFractionDigits { 3 };
-    std::optional<unsigned> m_minimumSignificantDigits;
-    std::optional<unsigned> m_maximumSignificantDigits;
+    Optional<unsigned> m_minimumSignificantDigits;
+    Optional<unsigned> m_maximumSignificantDigits;
 };
 
 } // namespace JSC

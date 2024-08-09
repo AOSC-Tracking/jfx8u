@@ -77,7 +77,7 @@ function speciesConstructor(obj, defaultConstructor)
     if (!@isObject(constructor))
         @throwTypeError("|this|.constructor is not an Object or undefined");
     constructor = constructor.@speciesSymbol;
-    if (constructor == null)
+    if (@isUndefinedOrNull(constructor))
         return defaultConstructor;
     if (@isConstructor(constructor))
         return constructor;
@@ -92,17 +92,17 @@ function copyDataProperties(target, source, excludedSet)
     if (!@isObject(target))
         @throwTypeError("target needs to be an object");
 
-    if (source == null) 
+    if (@isUndefinedOrNull(source))
         return target;
 
-    let from = @toObject(source);
-    let keys = @Reflect.@ownKeys(from); 
-    let keysLength = keys.length;
-    for (let i = 0; i < keysLength; i++) {
-        let nextKey = keys[i];
+    var from = @toObject(source);
+    var keys = @ownKeys(from);
+    var keysLength = keys.length;
+    for (var i = 0; i < keysLength; i++) {
+        var nextKey = keys[i];
         if (!excludedSet.@has(nextKey)) {
             if (@propertyIsEnumerable(from, nextKey)) {
-                let propValue = from[nextKey];
+                var propValue = from[nextKey];
                 @defineEnumerableWritableConfigurableDataProperty(target, nextKey, propValue);
             }
         }
@@ -119,16 +119,16 @@ function copyDataPropertiesNoExclusions(target, source)
     if (!@isObject(target))
         @throwTypeError("target needs to be an object");
 
-    if (source == null) 
+    if (@isUndefinedOrNull(source))
         return target;
 
-    let from = @toObject(source);
-    let keys = @Reflect.@ownKeys(from); 
-    let keysLength = keys.length;
-    for (let i = 0; i < keysLength; i++) {
-        let nextKey = keys[i];
+    var from = @toObject(source);
+    var keys = @ownKeys(from);
+    var keysLength = keys.length;
+    for (var i = 0; i < keysLength; i++) {
+        var nextKey = keys[i];
         if (@propertyIsEnumerable(from, nextKey)) {
-            let propValue = from[nextKey];
+            var propValue = from[nextKey];
             @defineEnumerableWritableConfigurableDataProperty(target, nextKey, propValue);
         }
     }

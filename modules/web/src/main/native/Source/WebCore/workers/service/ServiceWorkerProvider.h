@@ -27,10 +27,6 @@
 
 #if ENABLE(SERVICE_WORKER)
 
-namespace PAL {
-class SessionID;
-}
-
 namespace WebCore {
 
 class SWClientConnection;
@@ -41,14 +37,10 @@ class WEBCORE_EXPORT ServiceWorkerProvider {
 public:
     virtual ~ServiceWorkerProvider();
 
-    WEBCORE_EXPORT static ServiceWorkerProvider& singleton();
-    WEBCORE_EXPORT static void setSharedProvider(ServiceWorkerProvider&);
+    static ServiceWorkerProvider& singleton();
+    static void setSharedProvider(ServiceWorkerProvider&);
 
-    bool mayHaveServiceWorkerRegisteredForOrigin(PAL::SessionID, const SecurityOriginData&);
-    virtual SWClientConnection* existingServiceWorkerConnectionForSession(PAL::SessionID) = 0;
-    virtual SWClientConnection& serviceWorkerConnectionForSession(PAL::SessionID) = 0;
-
-    WEBCORE_EXPORT void registerServiceWorkerClients();
+    virtual SWClientConnection& serviceWorkerConnection() = 0;
 
     void setMayHaveRegisteredServiceWorkers() { m_mayHaveRegisteredServiceWorkers = true; }
 

@@ -34,16 +34,16 @@ namespace JSC {
 
 bool HeapCell::isLive()
 {
-    if (isLargeAllocation())
-        return largeAllocation().isLive();
+    if (isPreciseAllocation())
+        return preciseAllocation().isLive();
     auto& markedBlockHandle = markedBlock().handle();
     if (markedBlockHandle.isFreeListed())
         return !markedBlockHandle.isFreeListedCell(this);
     return markedBlockHandle.isLive(this);
 }
 
-#if !COMPILER(GCC_OR_CLANG)
-void HeapCell::use() const
+#if !COMPILER(GCC_COMPATIBLE)
+NEVER_INLINE void keepAlive(const void*)
 {
 }
 #endif

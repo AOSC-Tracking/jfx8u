@@ -46,18 +46,32 @@ public:
     bool scheduleAnimation(DisplayRefreshMonitorClient&);
     void windowScreenDidChange(PlatformDisplayID, DisplayRefreshMonitorClient&);
 
-    WEBCORE_EXPORT void displayWasUpdated();
+    WEBCORE_EXPORT void displayWasUpdated(PlatformDisplayID);
 
-    DisplayRefreshMonitorManager() { }
 private:
     friend class DisplayRefreshMonitor;
     void displayDidRefresh(DisplayRefreshMonitor&);
 
+    DisplayRefreshMonitorManager() { }
     virtual ~DisplayRefreshMonitorManager();
+
+    size_t findMonitorForDisplayID(PlatformDisplayID) const;
+    DisplayRefreshMonitor* monitorForDisplayID(PlatformDisplayID) const;
 
     DisplayRefreshMonitor* createMonitorForClient(DisplayRefreshMonitorClient&);
 
-    Vector<RefPtr<DisplayRefreshMonitor>> m_monitors;
+    struct DisplayRefreshMonitorWrapper {
+        DisplayRefreshMonitorWrapper(DisplayRefreshMonitorWrapper&&) = default;
+        ~DisplayRefreshMonitorWrapper()
+        {
+            if (monitor)
+                monitor->stop();
+        }
+
+        RefPtr<DisplayRefreshMonitor> monitor;
+    };
+
+    Vector<DisplayRefreshMonitorWrapper> m_monitors;
 };
 
 }

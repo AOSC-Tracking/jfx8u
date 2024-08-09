@@ -42,7 +42,7 @@ enum CollapsedBorderSide {
 // Helper class for paintObject.
 struct CellSpan {
 public:
-    CellSpan(unsigned start, unsigned end)
+    explicit CellSpan(unsigned start, unsigned end)
         : start(start)
         , end(end)
     {
@@ -62,7 +62,7 @@ public:
     RenderTableRow* firstRow() const;
     RenderTableRow* lastRow() const;
 
-    std::optional<int> firstLineBaseline() const override;
+    Optional<int> firstLineBaseline() const override;
 
     void addCell(RenderTableCell*, RenderTableRow* row);
 

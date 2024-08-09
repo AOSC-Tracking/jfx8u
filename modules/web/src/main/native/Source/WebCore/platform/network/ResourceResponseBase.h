@@ -31,7 +31,8 @@
 #include "HTTPHeaderMap.h"
 #include "NetworkLoadMetrics.h"
 #include "ParsedContentRange.h"
-#include "URL.h"
+#include <wtf/Markable.h>
+#include <wtf/URL.h>
 #include <wtf/WallTime.h>
 
 namespace WebCore {
@@ -40,12 +41,16 @@ class ResourceResponse;
 
 bool isScriptAllowedByNosniff(const ResourceResponse&);
 
-// Do not use this class directly, use the class ResponseResponse instead
+enum class UsedLegacyTLS : bool { No, Yes };
+
+// Do not use this class directly, use the class ResourceResponse instead
 class ResourceResponseBase {
     WTF_MAKE_FAST_ALLOCATED;
 public:
     enum class Type : uint8_t { Basic, Cors, Default, Error, Opaque, Opaqueredirect };
+    static constexpr unsigned bitWidthOfType = 3;
     enum class Tainting : uint8_t { Basic, Cors, Opaque, Opaqueredirect };
+    static constexpr unsigned bitWidthOfTainting = 2;
 
     static bool isRedirectionStatusCode(int code) { return code == 301 || code == 302 || code == 303 || code == 307 || code == 308; }
 
@@ -67,6 +72,7 @@ public:
         Type type;
         Tainting tainting;
         bool isRedirected;
+        bool isRangeRequested;
     };
 
     CrossThreadData crossThreadData() const;
@@ -90,7 +96,7 @@ public:
 
     WEBCORE_EXPORT int httpStatusCode() const;
     WEBCORE_EXPORT void setHTTPStatusCode(int);
-    bool isRedirection() const { return isRedirectionStatusCode(m_httpStatusCode); }
+    WEBCORE_EXPORT bool isRedirection() const;
 
     WEBCORE_EXPORT const String& httpStatusText() const;
     WEBCORE_EXPORT void setHTTPStatusText(const String&);
@@ -125,8 +131,9 @@ public:
     WEBCORE_EXPORT String suggestedFilename() const;
     WEBCORE_EXPORT static String sanitizeSuggestedFilename(const String&);
 
-    WEBCORE_EXPORT void includeCertificateInfo() const;
-    const std::optional<CertificateInfo>& certificateInfo() const { return m_certificateInfo; };
+    WEBCORE_EXPORT void includeCertificateInfo(UsedLegacyTLS = UsedLegacyTLS::No) const;
+    const Optional<CertificateInfo>& certificateInfo() const { return m_certificateInfo; };
+    bool usedLegacyTLS() const { return m_usedLegacyTLS == UsedLegacyTLS::Yes; }
 
     // These functions return parsed values of the corresponding response headers.
     WEBCORE_EXPORT bool cacheControlContainsNoCache() const;
@@ -134,14 +141,15 @@ public:
     WEBCORE_EXPORT bool cacheControlContainsMustRevalidate() const;
     WEBCORE_EXPORT bool cacheControlContainsImmutable() const;
     WEBCORE_EXPORT bool hasCacheValidatorFields() const;
-    WEBCORE_EXPORT std::optional<Seconds> cacheControlMaxAge() const;
-    WEBCORE_EXPORT std::optional<WallTime> date() const;
-    WEBCORE_EXPORT std::optional<Seconds> age() const;
-    WEBCORE_EXPORT std::optional<WallTime> expires() const;
-    WEBCORE_EXPORT std::optional<WallTime> lastModified() const;
-    ParsedContentRange& contentRange() const;
+    WEBCORE_EXPORT Optional<Seconds> cacheControlMaxAge() const;
+    WEBCORE_EXPORT Optional<Seconds> cacheControlStaleWhileRevalidate() const;
+    WEBCORE_EXPORT Optional<WallTime> date() const;
+    WEBCORE_EXPORT Optional<Seconds> age() const;
+    WEBCORE_EXPORT Optional<WallTime> expires() const;
+    WEBCORE_EXPORT Optional<WallTime> lastModified() const;
+    const ParsedContentRange& contentRange() const;
 
-    enum class Source : uint8_t { Unknown, Network, DiskCache, DiskCacheAfterValidation, MemoryCache, MemoryCacheAfterValidation, ServiceWorker, ApplicationCache };
+    enum class Source : uint8_t { Unknown, Network, DiskCache, DiskCacheAfterValidation, MemoryCache, MemoryCacheAfterValidation, ServiceWorker, ApplicationCache, DOMCache, InspectorOverride };
     WEBCORE_EXPORT Source source() const;
     void setSource(Source source)
     {
@@ -172,10 +180,15 @@ public:
 
     static ResourceResponse filter(const ResourceResponse&);
 
+    WEBCORE_EXPORT static ResourceResponse syntheticRedirectResponse(const URL& fromURL, const URL& toURL);
+
     static bool compare(const ResourceResponse&, const ResourceResponse&);
 
     template<class Encoder> void encode(Encoder&) const;
     template<class Decoder> static bool decode(Decoder&, ResourceResponseBase&);
+
+    bool isRangeRequested() const { return m_isRangeRequested; }
+    void setAsRangeRequested() { m_isRangeRequested = true; }
 
 protected:
     enum InitLevel {
@@ -203,39 +216,43 @@ private:
 
 protected:
     URL m_url;
-    AtomicString m_mimeType;
+    AtomString m_mimeType;
     long long m_expectedContentLength { 0 };
-    AtomicString m_textEncodingName;
-    AtomicString m_httpStatusText;
-    AtomicString m_httpVersion;
+    AtomString m_textEncodingName;
+    AtomString m_httpStatusText;
+    AtomString m_httpVersion;
     HTTPHeaderMap m_httpHeaderFields;
     mutable NetworkLoadMetrics m_networkLoadMetrics;
 
-    mutable std::optional<CertificateInfo> m_certificateInfo;
+    mutable Optional<CertificateInfo> m_certificateInfo;
 
 private:
-    mutable std::optional<Seconds> m_age;
-    mutable std::optional<WallTime> m_date;
-    mutable std::optional<WallTime> m_expires;
-    mutable std::optional<WallTime> m_lastModified;
+    mutable Markable<Seconds, Seconds::MarkableTraits> m_age;
+    mutable Markable<WallTime, WallTime::MarkableTraits> m_date;
+    mutable Markable<WallTime, WallTime::MarkableTraits> m_expires;
+    mutable Markable<WallTime, WallTime::MarkableTraits> m_lastModified;
     mutable ParsedContentRange m_contentRange;
     mutable CacheControlDirectives m_cacheControlDirectives;
 
-    mutable bool m_haveParsedCacheControlHeader { false };
-    mutable bool m_haveParsedAgeHeader { false };
-    mutable bool m_haveParsedDateHeader { false };
-    mutable bool m_haveParsedExpiresHeader { false };
-    mutable bool m_haveParsedLastModifiedHeader { false };
-    mutable bool m_haveParsedContentRangeHeader { false };
-    bool m_isRedirected { false };
+    mutable bool m_haveParsedCacheControlHeader : 1;
+    mutable bool m_haveParsedAgeHeader : 1;
+    mutable bool m_haveParsedDateHeader : 1;
+    mutable bool m_haveParsedExpiresHeader : 1;
+    mutable bool m_haveParsedLastModifiedHeader : 1;
+    mutable bool m_haveParsedContentRangeHeader : 1;
+    bool m_isRedirected : 1;
+protected:
+    bool m_isNull : 1;
 
+private:
     Source m_source { Source::Unknown };
     Type m_type { Type::Default };
     Tainting m_tainting { Tainting::Basic };
+    bool m_isRangeRequested { false };
 
 protected:
-    bool m_isNull { true };
-    int m_httpStatusCode { 0 };
+    short m_httpStatusCode { 0 };
+    mutable UsedLegacyTLS m_usedLegacyTLS { UsedLegacyTLS::No };
 };
 
 inline bool operator==(const ResourceResponse& a, const ResourceResponse& b) { return ResourceResponseBase::compare(a, b); }
@@ -268,6 +285,8 @@ void ResourceResponseBase::encode(Encoder& encoder) const
     encoder.encodeEnum(m_type);
     encoder.encodeEnum(m_tainting);
     encoder << m_isRedirected;
+    encoder << m_usedLegacyTLS;
+    encoder << m_isRangeRequested;
 }
 
 template<class Decoder>
@@ -279,6 +298,8 @@ bool ResourceResponseBase::decode(Decoder& decoder, ResourceResponseBase& respon
         return false;
     if (responseIsNull)
         return true;
+
+    response.m_isNull = false;
 
     if (!decoder.decode(response.m_url))
         return false;
@@ -309,9 +330,16 @@ bool ResourceResponseBase::decode(Decoder& decoder, ResourceResponseBase& respon
         return false;
     if (!decoder.decodeEnum(response.m_tainting))
         return false;
-    if (!decoder.decode(response.m_isRedirected))
+    bool isRedirected = false;
+    if (!decoder.decode(isRedirected))
         return false;
-    response.m_isNull = false;
+    response.m_isRedirected = isRedirected;
+    if (!decoder.decode(response.m_usedLegacyTLS))
+        return false;
+    bool isRangeRequested = false;
+    if (!decoder.decode(isRangeRequested))
+        return false;
+    response.m_isRangeRequested = isRangeRequested;
 
     return true;
 }

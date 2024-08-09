@@ -34,7 +34,6 @@
 namespace WebCore {
 
 class SecurityOrigin;
-class URL;
 
 class SecurityPolicy {
 public:
@@ -52,6 +51,8 @@ public:
     WEBCORE_EXPORT static String generateReferrerHeader(ReferrerPolicy, const URL&, const String& referrer);
 
     static bool shouldInheritSecurityOriginFromOwner(const URL&);
+
+    static bool isBaseURLSchemeAllowed(const URL&);
 
     enum LocalLoadPolicy {
         AllowLocalLoadsForAll, // No restriction on local loads.

@@ -30,35 +30,80 @@
 #include "LayoutUnit.h"
 #include "LayoutPoint.h"
 #include "LayoutRect.h"
+#include "MarginTypes.h"
+#include <wtf/Optional.h>
 
 namespace WebCore {
+
+#define USE_FLOAT_AS_INLINE_LAYOUT_UNIT 1
+
+#if USE_FLOAT_AS_INLINE_LAYOUT_UNIT
+using InlineLayoutUnit = float;
+using InlineLayoutPoint = FloatPoint;
+using InlineLayoutSize = FloatSize;
+using InlineLayoutRect = FloatRect;
+#else
+using InlineLayoutUnit = LayoutUnit;
+using InlineLayoutPoint = LayoutPoint;
+using InlineLayoutSize = LayoutSize;
+using InlineLayoutRect = LayoutRect;
+#endif
+
 namespace Layout {
 
 struct Position {
-    // FIXME: Use LayoutUnit<Horizontal> to avoid top/left vs. x/y confusion.
+    operator LayoutUnit() const { return value; }
+    LayoutUnit value;
+};
+
+inline bool operator<(const Position& a, const Position& b)
+{
+    return a.value < b.value;
+}
+
+inline bool operator==(const Position& a, const Position& b)
+{
+    return a.value == b.value;
+}
+
+struct Point {
+    // FIXME: Use Position<Horizontal>, Position<Vertical> to avoid top/left vs. x/y confusion.
     LayoutUnit x; // left
     LayoutUnit y; // top
 
-    Position() = default;
-    Position(LayoutUnit, LayoutUnit);
-    Position(LayoutPoint);
+    Point() = default;
+    Point(LayoutUnit, LayoutUnit);
+    Point(LayoutPoint);
+    static Point max() { return { LayoutUnit::max(), LayoutUnit::max() }; }
+
+    void move(LayoutSize);
     void moveBy(LayoutPoint);
     operator LayoutPoint() const { return { x, y }; }
 };
 
-inline Position::Position(LayoutPoint point)
+// FIXME: Wrap these into structs.
+using PointInContextRoot = Point;
+using PositionInContextRoot = Position;
+
+inline Point::Point(LayoutPoint point)
     : x(point.x())
     , y(point.y())
 {
 }
 
-inline Position::Position(LayoutUnit x, LayoutUnit y)
+inline Point::Point(LayoutUnit x, LayoutUnit y)
     : x(x)
     , y(y)
 {
 }
 
-inline void Position::moveBy(LayoutPoint offset)
+inline void Point::move(LayoutSize offset)
+{
+    x += offset.width();
+    y += offset.height();
+}
+
+inline void Point::moveBy(LayoutPoint offset)
 {
     x += offset.x();
     y += offset.y();
@@ -68,11 +113,15 @@ inline void Position::moveBy(LayoutPoint offset)
 struct HorizontalEdges {
     LayoutUnit left;
     LayoutUnit right;
+
+    LayoutUnit width() const { return left + right; }
 };
 
 struct VerticalEdges {
     LayoutUnit top;
     LayoutUnit bottom;
+
+    LayoutUnit height() const { return top + bottom; }
 };
 
 struct Edges {
@@ -80,28 +129,72 @@ struct Edges {
     VerticalEdges vertical;
 };
 
-struct WidthAndMargin {
-    LayoutUnit width;
-    HorizontalEdges margin;
+struct ContentWidthAndMargin {
+    LayoutUnit contentWidth;
+    UsedHorizontalMargin usedMargin;
+    ComputedHorizontalMargin computedMargin;
 };
 
-struct HeightAndMargin {
-    LayoutUnit height;
-    VerticalEdges margin;
-    std::optional<VerticalEdges> collapsedMargin;
+struct ContentHeightAndMargin {
+    LayoutUnit contentHeight;
+    UsedVerticalMargin::NonCollapsedValues nonCollapsedMargin;
 };
 
 struct HorizontalGeometry {
     LayoutUnit left;
     LayoutUnit right;
-    WidthAndMargin widthAndMargin;
+    ContentWidthAndMargin contentWidthAndMargin;
 };
 
 struct VerticalGeometry {
     LayoutUnit top;
     LayoutUnit bottom;
-    HeightAndMargin heightAndMargin;
+    ContentHeightAndMargin contentHeightAndMargin;
 };
+
+struct HorizontalConstraints {
+    LayoutUnit logicalLeft;
+    LayoutUnit logicalWidth;
+};
+
+struct VerticalConstraints {
+    LayoutUnit logicalTop;
+    Optional<LayoutUnit> logicalHeight;
+};
+
+struct OverrideHorizontalValues {
+    Optional<LayoutUnit> width;
+    Optional<UsedHorizontalMargin> margin;
+};
+
+struct OverrideVerticalValues {
+    // Consider collapsing it.
+    Optional<LayoutUnit> height;
+};
+
+inline LayoutUnit toLayoutUnit(InlineLayoutUnit value)
+{
+    return LayoutUnit { value };
+}
+
+inline LayoutPoint toLayoutPoint(const InlineLayoutPoint& point)
+{
+    return LayoutPoint { point };
+}
+
+inline LayoutRect toLayoutRect(const InlineLayoutRect& rect)
+{
+    return LayoutRect { rect };
+}
+
+inline InlineLayoutUnit maxInlineLayoutUnit()
+{
+#if USE_FLOAT_AS_INLINE_LAYOUT_UNIT
+    return std::numeric_limits<float>::max();
+#else
+    return LayoutUnit::max();
+#endif
+}
 
 }
 }

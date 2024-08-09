@@ -27,6 +27,7 @@
 #include "Editing.h"
 
 #include "AXObjectCache.h"
+#include "CachedImage.h"
 #include "Document.h"
 #include "Editor.h"
 #include "Frame.h"
@@ -34,6 +35,7 @@
 #include "HTMLDListElement.h"
 #include "HTMLDivElement.h"
 #include "HTMLElementFactory.h"
+#include "HTMLImageElement.h"
 #include "HTMLInterchange.h"
 #include "HTMLLIElement.h"
 #include "HTMLNames.h"
@@ -375,7 +377,7 @@ TextDirection directionOfEnclosingBlock(const Position& position)
 // on a Position before using it to create a DOM Range, or an exception will be thrown.
 int lastOffsetForEditing(const Node& node)
 {
-    if (node.offsetInCharacters())
+    if (node.isCharacterDataNode())
         return node.maxCharacterOffset();
 
     if (node.hasChildNodes())
@@ -420,7 +422,7 @@ String stringWithRebalancedWhitespace(const String& string, bool startIsStartOfP
         if (character == selectedWhitespaceCharacter)
             continue;
         rebalancedString.reserveCapacity(length);
-        rebalancedString.append(string, rebalancedString.length(), i - rebalancedString.length());
+        rebalancedString.appendSubstring(string, rebalancedString.length(), i - rebalancedString.length());
         rebalancedString.append(selectedWhitespaceCharacter);
     }
 
@@ -428,7 +430,7 @@ String stringWithRebalancedWhitespace(const String& string, bool startIsStartOfP
         return string;
 
     rebalancedString.reserveCapacity(length);
-    rebalancedString.append(string, rebalancedString.length(), length - rebalancedString.length());
+    rebalancedString.appendSubstring(string, rebalancedString.length(), length - rebalancedString.length());
     return rebalancedString.toString();
 }
 
@@ -888,7 +890,7 @@ Ref<HTMLElement> createHTMLElement(Document& document, const QualifiedName& name
     return HTMLElementFactory::createElement(name, document);
 }
 
-Ref<HTMLElement> createHTMLElement(Document& document, const AtomicString& tagName)
+Ref<HTMLElement> createHTMLElement(Document& document, const AtomString& tagName)
 {
     return createHTMLElement(document, QualifiedName(nullAtom(), tagName, xhtmlNamespaceURI));
 }
@@ -917,7 +919,7 @@ static Ref<Element> createTabSpanElement(Document& document, Text& tabTextNode)
 
     spanElement->appendChild(tabTextNode);
 
-    return WTFMove(spanElement);
+    return spanElement;
 }
 
 Ref<Element> createTabSpanElement(Document& document, const String& tabText)
@@ -1117,10 +1119,18 @@ VisiblePosition visiblePositionForIndexUsingCharacterIterator(Node& node, int in
     if (index <= 0)
         return { firstPositionInOrBeforeNode(&node), DOWNSTREAM };
 
-    RefPtr<Range> range = Range::create(node.document());
+    auto range = Range::create(node.document());
     range->selectNodeContents(node);
-    CharacterIterator it(*range);
+    CharacterIterator it(range.get());
     it.advance(index - 1);
+
+    if (!it.atEnd() && it.text().length() == 1 && it.text()[0] == '\n') {
+        // FIXME: workaround for collapsed range (where only start position is correct) emitted for some emitted newlines.
+        it.advance(1);
+        if (!it.atEnd())
+            return VisiblePosition(it.range()->startPosition());
+    }
+
     return { it.atEnd() ? range->endPosition() : it.range()->endPosition(), UPSTREAM };
 }
 
@@ -1165,7 +1175,7 @@ bool areIdenticalElements(const Node& first, const Node& second)
         return false;
     auto& firstElement = downcast<Element>(first);
     auto& secondElement = downcast<Element>(second);
-    return firstElement.hasTagName(secondElement.tagQName()) && firstElement.hasEquivalentAttributes(&secondElement);
+    return firstElement.hasTagName(secondElement.tagQName()) && firstElement.hasEquivalentAttributes(secondElement);
 }
 
 bool isNonTableCellHTMLBlockElement(const Node* node)
@@ -1292,6 +1302,21 @@ IntRect absoluteBoundsForLocalCaretRect(RenderBlock* rendererForCaretPainting, c
     LayoutRect localRect(rect);
     rendererForCaretPainting->flipForWritingMode(localRect);
     return rendererForCaretPainting->localToAbsoluteQuad(FloatRect(localRect), UseTransforms, insideFixed).enclosingBoundingBox();
+}
+
+HashSet<RefPtr<HTMLImageElement>> visibleImageElementsInRangeWithNonLoadedImages(const Range& range)
+{
+    HashSet<RefPtr<HTMLImageElement>> result;
+    for (TextIterator iterator(&range); !iterator.atEnd(); iterator.advance()) {
+        if (!is<HTMLImageElement>(iterator.node()))
+            continue;
+
+        auto& imageElement = downcast<HTMLImageElement>(*iterator.node());
+        auto* cachedImage = imageElement.cachedImage();
+        if (cachedImage && cachedImage->isLoading())
+            result.add(&imageElement);
+    }
+    return result;
 }
 
 } // namespace WebCore

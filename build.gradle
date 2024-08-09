@@ -297,12 +297,16 @@ defineProperty("GRADLE_VERSION_CHECK", "true")
 ext.IS_GRADLE_VERSION_CHECK = Boolean.parseBoolean(GRADLE_VERSION_CHECK)
 
 // COMPILE_WEBKIT specifies whether to build all of webkit.
-defineProperty("COMPILE_WEBKIT", "false")
+defineProperty("COMPILE_WEBKIT", "true")
 ext.IS_COMPILE_WEBKIT = Boolean.parseBoolean(COMPILE_WEBKIT)
 
 // COMPILE_MEDIA specifies whether to build all of media.
-defineProperty("COMPILE_MEDIA", "false")
+defineProperty("COMPILE_MEDIA", "true")
 ext.IS_COMPILE_MEDIA = Boolean.parseBoolean(COMPILE_MEDIA)
+
+// COMPILE_AVPLUGIN specifies whether to build the avplugin, requires COMPILE_MEDIA=true.
+defineProperty("COMPILE_AVPLUGIN", "false")
+ext.IS_COMPILE_AVPLUGIN = Boolean.parseBoolean(COMPILE_AVPLUGIN)
 
 // COMPILE_PANGO specifies whether to build javafx_font_pango.
 defineProperty("COMPILE_PANGO", "${IS_LINUX}")
@@ -317,7 +321,7 @@ defineProperty("COMPILE_PARFAIT", "false")
 ext.IS_COMPILE_PARFAIT = Boolean.parseBoolean(COMPILE_PARFAIT)
 
 // COMPILE_JFR specifies whether to build code that logs to JRockit Flight Recorder
-defineProperty("COMPILE_JFR", Boolean.toString(file("$JDK_HOME/jre/lib/jfr.jar").exists()))
+defineProperty("COMPILE_JFR", "false")
 ext.IS_COMPILE_JFR = Boolean.parseBoolean(COMPILE_JFR)
 
 // RETAIN_PACKAGER_TESTS specifies whether the tests in fxpackager should
@@ -739,18 +743,18 @@ if (!file(JAVADOC).exists()) throw new Exception("Missing or incorrect path to '
 // We need to parse the second line
 def inStream = new java.io.BufferedReader(new java.io.InputStreamReader(new java.lang.ProcessBuilder(JAVA, "-version").start().getErrorStream()));
 try {
-    if (inStream.readLine() != null) {
-        String v = inStream.readLine();
-        if (v != null) {
-            int ib = v.indexOf(" (build ");
-            if (ib != -1) {
-                String ver = v.substring(ib + 8, v.size() - 1);
+    String v = inStream.readLine();
+    String ver = null;
+    while (v != null && ver == null) {
+        int ib = v.indexOf(" (build ");
+        if (ib != -1) {
+            ver = v.substring(ib + 8, v.size() - 1);
 
-                defineProperty("jdkRuntimeVersion", ver)
-                defineProperty("jdkVersion", jdkRuntimeVersion.split("-")[0])
-                defineProperty("jdkBuildNumber", jdkRuntimeVersion.substring(jdkRuntimeVersion.lastIndexOf("-b") + 2))
-            }
+            defineProperty("jdkRuntimeVersion", ver)
+            defineProperty("jdkVersion", jdkRuntimeVersion.split("-")[0])
+            defineProperty("jdkBuildNumber", jdkRuntimeVersion.substring(jdkRuntimeVersion.lastIndexOf("-b") + 2))
         }
+        v = inStream.readLine();
     }
 } finally {
     inStream.close();
@@ -2341,7 +2345,7 @@ project(":media") {
 
             if (t.name == "linux") {
                 def buildAVPlugin = task( "buildAVPlugin", dependsOn: [buildPlugins]) {
-                    enabled = IS_COMPILE_MEDIA
+                    enabled = IS_COMPILE_MEDIA && IS_COMPILE_AVPLUGIN
 
                     doLast {
                         if (project.ext.properties.containsKey("libav")) {
@@ -2636,7 +2640,7 @@ project(":web") {
                     cmakeArgs += " -DJAVAFX_RELEASE_VERSION=8.0"
                     commandLine("perl", "$projectDir/src/main/native/Tools/Scripts/build-webkit",
                         "--java", "--icu-unicode", targetCpuBitDepthSwitch,
-                        "--cmakeargs=${cmakeArgs}")
+                        "--no-experimental-features", "--cmakeargs=${cmakeArgs}")
                 }
 
                 // Cmake places Windows DLL in bin directory

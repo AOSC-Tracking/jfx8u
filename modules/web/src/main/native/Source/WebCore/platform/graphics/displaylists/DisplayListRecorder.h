@@ -48,10 +48,11 @@ namespace DisplayList {
 class DrawingItem;
 
 class Recorder : public GraphicsContextImpl {
+    WTF_MAKE_FAST_ALLOCATED;
     WTF_MAKE_NONCOPYABLE(Recorder);
 public:
-    Recorder(GraphicsContext&, DisplayList&, const GraphicsContextState&, const FloatRect& initialClip, const AffineTransform&);
-    virtual ~Recorder();
+    WEBCORE_EXPORT Recorder(GraphicsContext&, DisplayList&, const GraphicsContextState&, const FloatRect& initialClip, const AffineTransform&);
+    WEBCORE_EXPORT virtual ~Recorder();
 
     size_t itemCount() const { return m_displayList.itemCount(); }
 
@@ -90,15 +91,15 @@ private:
     ImageDrawResult drawImage(Image&, const FloatRect& destination, const FloatRect& source, const ImagePaintingOptions&) override;
     ImageDrawResult drawTiledImage(Image&, const FloatRect& destination, const FloatPoint& source, const FloatSize& tileSize, const FloatSize& spacing, const ImagePaintingOptions&) override;
     ImageDrawResult drawTiledImage(Image&, const FloatRect& destination, const FloatRect& source, const FloatSize& tileScaleFactor, Image::TileRule hRule, Image::TileRule vRule, const ImagePaintingOptions&) override;
-#if USE(CG) || USE(CAIRO)
-    void drawNativeImage(const NativeImagePtr&, const FloatSize& selfSize, const FloatRect& destRect, const FloatRect& srcRect, CompositeOperator, BlendMode, ImageOrientation) override;
+#if USE(CG) || USE(CAIRO) || USE(DIRECT2D)
+    void drawNativeImage(const NativeImagePtr&, const FloatSize& selfSize, const FloatRect& destRect, const FloatRect& srcRect, const ImagePaintingOptions&) override;
 #endif
-    void drawPattern(Image&, const FloatRect& destRect, const FloatRect& srcRect, const AffineTransform&, const FloatPoint& phase, const FloatSize& spacing, CompositeOperator, BlendMode = BlendMode::Normal) override;
+    void drawPattern(Image&, const FloatRect& destRect, const FloatRect& srcRect, const AffineTransform&, const FloatPoint& phase, const FloatSize& spacing, const ImagePaintingOptions&) override;
 
     void drawRect(const FloatRect&, float borderThickness) override;
     void drawLine(const FloatPoint&, const FloatPoint&) override;
-    void drawLinesForText(const FloatPoint&, const DashArray& widths, bool printing, bool doubleLines, float strokeThickness) override;
-    void drawLineForDocumentMarker(const FloatPoint&, float width, DocumentMarkerLineStyle) override;
+    void drawLinesForText(const FloatPoint&, float thickness, const DashArray& widths, bool printing, bool doubleLines) override;
+    void drawDotsForDocumentMarker(const FloatRect&, DocumentMarkerLineStyle) override;
     void drawEllipse(const FloatRect&) override;
     void drawPath(const Path&) override;
 
@@ -165,6 +166,7 @@ private:
         void rotate(float angleInRadians);
         void scale(const FloatSize&);
         void concatCTM(const AffineTransform&);
+        void setCTM(const AffineTransform&);
     };
 
     const ContextState& currentState() const;

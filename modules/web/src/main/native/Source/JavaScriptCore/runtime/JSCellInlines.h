@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2018 Apple Inc. All rights reserved.
+ * Copyright (C) 2012-2019 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -25,20 +25,24 @@
 
 #pragma once
 
+#include "AllocatorForMode.h"
 #include "AllocatorInlines.h"
 #include "CompleteSubspaceInlines.h"
 #include "CPU.h"
-#include "CallFrame.h"
+#include "CallFrameInlines.h"
 #include "DeferGC.h"
 #include "FreeListInlines.h"
 #include "Handle.h"
+#include "HeapInlines.h"
 #include "IsoSubspaceInlines.h"
+#include "JSBigInt.h"
 #include "JSCast.h"
 #include "JSDestructibleObject.h"
 #include "JSObject.h"
 #include "JSString.h"
 #include "LocalAllocatorInlines.h"
 #include "MarkedBlock.h"
+#include "SlotVisitorInlines.h"
 #include "Structure.h"
 #include "Symbol.h"
 #include <wtf/CompilationThread.h>
@@ -117,7 +121,7 @@ inline IndexingType JSCell::indexingMode() const
 
 ALWAYS_INLINE Structure* JSCell::structure() const
 {
-    return structure(*vm());
+    return structure(vm());
 }
 
 ALWAYS_INLINE Structure* JSCell::structure(VM& vm) const
@@ -134,28 +138,26 @@ inline void JSCell::visitOutputConstraints(JSCell*, SlotVisitor&)
 {
 }
 
-ALWAYS_INLINE VM& ExecState::vm() const
+ALWAYS_INLINE VM& CallFrame::deprecatedVM() const
 {
     JSCell* callee = this->callee().asCell();
     ASSERT(callee);
-    ASSERT(callee->vm());
-    ASSERT(!callee->isLargeAllocation());
-    // This is an important optimization since we access this so often.
-    return *callee->markedBlock().vm();
+    ASSERT(&callee->vm());
+    return callee->vm();
 }
 
-template<typename CellType>
-CompleteSubspace* JSCell::subspaceFor(VM& vm)
+template<typename Type>
+inline Allocator allocatorForNonVirtualConcurrently(VM& vm, size_t allocationSize, AllocatorForMode mode)
 {
-    if (CellType::needsDestruction)
-        return &vm.destructibleCellSpace;
-    return &vm.cellDangerousBitsSpace;
+    if (auto* subspace = subspaceForConcurrently<Type>(vm))
+        return subspace->allocatorForNonVirtual(allocationSize, mode);
+    return { };
 }
 
 template<typename T>
 ALWAYS_INLINE void* tryAllocateCellHelper(Heap& heap, size_t size, GCDeferralContext* deferralContext, AllocationFailureMode failureMode)
 {
-    VM& vm = *heap.vm();
+    VM& vm = heap.vm();
     ASSERT(deferralContext || !DisallowGC::isInEffectOnCurrentThread());
     ASSERT(size >= sizeof(T));
     JSCell* result = static_cast<JSCell*>(subspaceFor<T>(vm)->allocateNonVirtual(vm, size, deferralContext, failureMode));
@@ -290,7 +292,7 @@ ALWAYS_INLINE void JSCell::setStructure(VM& vm, Structure* structure)
 inline const MethodTable* JSCell::methodTable(VM& vm) const
 {
     Structure* structure = this->structure(vm);
-#if !ASSERT_DISABLED
+#if ASSERT_ENABLED
     if (Structure* rootStructure = structure->structure(vm))
         ASSERT(rootStructure == rootStructure->structure(vm));
 #endif
@@ -335,17 +337,21 @@ ALWAYS_INLINE const ClassInfo* JSCell::classInfo(VM& vm) const
     return structure(vm)->classInfo();
 }
 
-inline bool JSCell::toBoolean(ExecState* exec) const
+inline bool JSCell::toBoolean(JSGlobalObject* globalObject) const
 {
     if (isString())
         return static_cast<const JSString*>(this)->toBoolean();
-    return !structure(exec->vm())->masqueradesAsUndefined(exec->lexicalGlobalObject());
+    if (isBigInt())
+        return static_cast<const JSBigInt*>(this)->toBoolean();
+    return !structure(getVM(globalObject))->masqueradesAsUndefined(globalObject);
 }
 
 inline TriState JSCell::pureToBoolean() const
 {
     if (isString())
         return static_cast<const JSString*>(this)->toBoolean() ? TrueTriState : FalseTriState;
+    if (isBigInt())
+        return static_cast<const JSBigInt*>(this)->toBoolean() ? TrueTriState : FalseTriState;
     if (isSymbol())
         return TrueTriState;
     return MixedTriState;
@@ -377,36 +383,40 @@ inline bool JSCellLock::isLocked() const
     return IndexingTypeLockAlgorithm::isLocked(*lock);
 }
 
-inline bool JSCell::mayBePrototype() const
+inline bool JSCell::perCellBit() const
 {
-    return TypeInfo::mayBePrototype(inlineTypeFlags());
+    return TypeInfo::perCellBit(inlineTypeFlags());
 }
 
-inline void JSCell::didBecomePrototype()
+inline void JSCell::setPerCellBit(bool value)
 {
-    if (mayBePrototype())
+    if (value == perCellBit())
         return;
-    m_flags |= static_cast<TypeInfo::InlineTypeFlags>(TypeInfoMayBePrototype);
+
+    if (value)
+        m_flags |= static_cast<TypeInfo::InlineTypeFlags>(TypeInfoPerCellBit);
+    else
+        m_flags &= ~static_cast<TypeInfo::InlineTypeFlags>(TypeInfoPerCellBit);
 }
 
-inline JSObject* JSCell::toObject(ExecState* exec, JSGlobalObject* globalObject) const
+inline JSObject* JSCell::toObject(JSGlobalObject* globalObject) const
 {
     if (isObject())
         return jsCast<JSObject*>(const_cast<JSCell*>(this));
-    return toObjectSlow(exec, globalObject);
+    return toObjectSlow(globalObject);
 }
 
-ALWAYS_INLINE bool JSCell::putInline(ExecState* exec, PropertyName propertyName, JSValue value, PutPropertySlot& slot)
+ALWAYS_INLINE bool JSCell::putInline(JSGlobalObject* globalObject, PropertyName propertyName, JSValue value, PutPropertySlot& slot)
 {
-    auto putMethod = methodTable(exec->vm())->put;
+    auto putMethod = methodTable(getVM(globalObject))->put;
     if (LIKELY(putMethod == JSObject::put))
-        return JSObject::putInlineForJSObject(asObject(this), exec, propertyName, value, slot);
-    return putMethod(this, exec, propertyName, value, slot);
+        return JSObject::putInlineForJSObject(asObject(this), globalObject, propertyName, value, slot);
+    return putMethod(this, globalObject, propertyName, value, slot);
 }
 
-inline bool isWebAssemblyToJSCallee(const JSCell* cell)
+inline bool isWebAssemblyModule(const JSCell* cell)
 {
-    return cell->type() == WebAssemblyToJSCalleeType;
+    return cell->type() == WebAssemblyModuleType;
 }
 
 } // namespace JSC

@@ -33,7 +33,7 @@ class RenderTextControl;
 class TextControlInnerTextElement;
 class VisiblePosition;
 
-enum class AutoFillButtonType : uint8_t { None, Credentials, Contacts, StrongPassword };
+enum class AutoFillButtonType : uint8_t { None, Credentials, Contacts, StrongPassword, CreditCard };
 enum TextFieldSelectionDirection { SelectionHasNoDirection, SelectionHasForwardDirection, SelectionHasBackwardDirection };
 enum TextFieldEventBehavior { DispatchNoEvent, DispatchChangeEvent, DispatchInputAndChangeEvent };
 
@@ -62,11 +62,14 @@ public:
     virtual HTMLElement* placeholderElement() const = 0;
     void updatePlaceholderVisibility();
 
+    WEBCORE_EXPORT void setCanShowPlaceholder(bool);
+    bool canShowPlaceholder() const { return m_canShowPlaceholder; }
+
     int indexForVisiblePosition(const VisiblePosition&) const;
     WEBCORE_EXPORT VisiblePosition visiblePositionForIndex(int index) const;
     WEBCORE_EXPORT int selectionStart() const;
     WEBCORE_EXPORT int selectionEnd() const;
-    WEBCORE_EXPORT const AtomicString& selectionDirection() const;
+    WEBCORE_EXPORT const AtomString& selectionDirection() const;
     WEBCORE_EXPORT void setSelectionStart(int);
     WEBCORE_EXPORT void setSelectionEnd(int);
     WEBCORE_EXPORT void setSelectionDirection(const String&);
@@ -93,21 +96,23 @@ public:
     String directionForFormData() const;
 
     void setTextAsOfLastFormControlChangeEvent(const String& text) { m_textAsOfLastFormControlChangeEvent = text; }
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     WEBCORE_EXPORT void hidePlaceholder();
     WEBCORE_EXPORT void showPlaceholderIfNecessary();
 #endif
+
+    WEBCORE_EXPORT virtual bool isInnerTextElementEditable() const;
 
 protected:
     HTMLTextFormControlElement(const QualifiedName&, Document&, HTMLFormElement*);
     bool isPlaceholderEmpty() const;
     virtual void updatePlaceholderText() = 0;
 
-    void parseAttribute(const QualifiedName&, const AtomicString&) override;
+    void parseAttribute(const QualifiedName&, const AtomString&) override;
 
     void disabledStateChanged() override;
     void readOnlyStateChanged() override;
-    virtual bool isInnerTextElementEditable() const;
+
     void updateInnerTextElementEditability();
 
     void cacheSelection(int start, int end, TextFieldSelectionDirection direction)
@@ -158,6 +163,7 @@ private:
     unsigned m_cachedSelectionDirection : 2;
     unsigned m_lastChangeWasUserEdit : 1;
     unsigned m_isPlaceholderVisible : 1;
+    unsigned m_canShowPlaceholder : 1;
 
     String m_textAsOfLastFormControlChangeEvent;
 

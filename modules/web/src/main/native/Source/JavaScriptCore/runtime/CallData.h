@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2018 Apple Inc. All rights reserved.
+ * Copyright (C) 2008-2019 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -33,9 +33,9 @@
 
 namespace JSC {
 
+class CallFrame;
 class ArgList;
 class Exception;
-class ExecState;
 class FunctionExecutable;
 class JSObject;
 class JSScope;
@@ -64,10 +64,14 @@ enum class ProfilingReason {
     Other
 };
 
-JS_EXPORT_PRIVATE JSValue call(ExecState*, JSValue functionObject, CallType, const CallData&, JSValue thisValue, const ArgList&);
-JS_EXPORT_PRIVATE JSValue call(ExecState*, JSValue functionObject, CallType, const CallData&, JSValue thisValue, const ArgList&, NakedPtr<Exception>& returnedException);
+// Convenience wrapper so you don't need to deal with CallData and CallType unless you are going to use them.
+JS_EXPORT_PRIVATE JSValue call(JSGlobalObject*, JSValue functionObject, const ArgList&, const char* errorMessage);
+JS_EXPORT_PRIVATE JSValue call(JSGlobalObject*, JSValue functionObject, JSValue thisValue, const ArgList&, const char* errorMessage);
 
-JS_EXPORT_PRIVATE JSValue profiledCall(ExecState*, ProfilingReason, JSValue functionObject, CallType, const CallData&, JSValue thisValue, const ArgList&);
-JS_EXPORT_PRIVATE JSValue profiledCall(ExecState*, ProfilingReason, JSValue functionObject, CallType, const CallData&, JSValue thisValue, const ArgList&, NakedPtr<Exception>& returnedException);
+JS_EXPORT_PRIVATE JSValue call(JSGlobalObject*, JSValue functionObject, CallType, const CallData&, JSValue thisValue, const ArgList&);
+JS_EXPORT_PRIVATE JSValue call(JSGlobalObject*, JSValue functionObject, CallType, const CallData&, JSValue thisValue, const ArgList&, NakedPtr<Exception>& returnedException);
+
+JS_EXPORT_PRIVATE JSValue profiledCall(JSGlobalObject*, ProfilingReason, JSValue functionObject, CallType, const CallData&, JSValue thisValue, const ArgList&);
+JS_EXPORT_PRIVATE JSValue profiledCall(JSGlobalObject*, ProfilingReason, JSValue functionObject, CallType, const CallData&, JSValue thisValue, const ArgList&, NakedPtr<Exception>& returnedException);
 
 } // namespace JSC

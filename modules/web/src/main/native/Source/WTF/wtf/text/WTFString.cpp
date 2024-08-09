@@ -1,6 +1,6 @@
 /*
  * (C) 1999 Lars Knoll (knoll@kde.org)
- * Copyright (C) 2004-2017 Apple Inc. All rights reserved.
+ * Copyright (C) 2004-2019 Apple Inc. All rights reserved.
  * Copyright (C) 2007-2009 Torch Mobile, Inc.
  *
  * This library is free software; you can redistribute it and/or
@@ -20,20 +20,22 @@
  */
 
 #include "config.h"
-#include "WTFString.h"
+#include <wtf/text/WTFString.h>
 
-#include "IntegerToStringConversion.h"
 #include <stdarg.h>
 #include <wtf/ASCIICType.h>
 #include <wtf/DataLog.h>
 #include <wtf/HexNumber.h>
 #include <wtf/MathExtras.h>
 #include <wtf/NeverDestroyed.h>
-#include <wtf/text/CString.h>
 #include <wtf/Vector.h>
 #include <wtf/dtoa.h>
+#include <wtf/text/CString.h>
+#include <wtf/text/IntegerToStringConversion.h>
+#include <wtf/text/StringBuilder.h>
+#include <wtf/text/StringToIntegerConversion.h>
 #include <wtf/unicode/CharacterNames.h>
-#include <wtf/unicode/UTF8.h>
+#include <wtf/unicode/UTF8Conversion.h>
 
 namespace WTF {
 
@@ -98,7 +100,7 @@ void String::append(const String& otherString)
 
     auto length = m_impl->length();
     auto otherLength = otherString.m_impl->length();
-    if (otherLength > std::numeric_limits<unsigned>::max() - length)
+    if (otherLength > MaxLength - length)
         CRASH();
 
     if (m_impl->is8Bit() && otherString.m_impl->is8Bit()) {
@@ -128,7 +130,7 @@ void String::append(LChar character)
         append(static_cast<UChar>(character));
         return;
     }
-    if (m_impl->length() >= std::numeric_limits<unsigned>::max())
+    if (m_impl->length() >= MaxLength)
         CRASH();
     LChar* data;
     auto newImpl = StringImpl::createUninitialized(m_impl->length() + 1, data);
@@ -145,11 +147,11 @@ void String::append(UChar character)
         m_impl = StringImpl::create(&character, 1);
         return;
     }
-    if (character <= 0xFF && is8Bit()) {
+    if (isLatin1(character) && is8Bit()) {
         append(static_cast<LChar>(character));
         return;
     }
-    if (m_impl->length() >= std::numeric_limits<unsigned>::max())
+    if (m_impl->length() >= MaxLength)
         CRASH();
     UChar* data;
     auto newImpl = StringImpl::createUninitialized(m_impl->length() + 1, data);
@@ -182,7 +184,7 @@ void String::insert(const String& string, unsigned position)
         return;
     }
 
-    if (lengthToInsert > std::numeric_limits<unsigned>::max() - length())
+    if (lengthToInsert > MaxLength - length())
         CRASH();
 
     if (is8Bit() && string.is8Bit()) {
@@ -221,7 +223,7 @@ void String::append(const LChar* charactersToAppend, unsigned lengthToAppend)
     unsigned strLength = m_impl->length();
 
     if (m_impl->is8Bit()) {
-        if (lengthToAppend > std::numeric_limits<unsigned>::max() - strLength)
+        if (lengthToAppend > MaxLength - strLength)
             CRASH();
         LChar* data;
         auto newImpl = StringImpl::createUninitialized(strLength + lengthToAppend, data);
@@ -231,7 +233,7 @@ void String::append(const LChar* charactersToAppend, unsigned lengthToAppend)
         return;
     }
 
-    if (lengthToAppend > std::numeric_limits<unsigned>::max() - strLength)
+    if (lengthToAppend > MaxLength - strLength)
         CRASH();
     UChar* data;
     auto newImpl = StringImpl::createUninitialized(length() + lengthToAppend, data);
@@ -257,7 +259,7 @@ void String::append(const UChar* charactersToAppend, unsigned lengthToAppend)
     unsigned strLength = m_impl->length();
 
     ASSERT(charactersToAppend);
-    if (lengthToAppend > std::numeric_limits<unsigned>::max() - strLength)
+    if (lengthToAppend > MaxLength - strLength)
         CRASH();
     UChar* data;
     auto newImpl = StringImpl::createUninitialized(strLength + lengthToAppend, data);
@@ -355,13 +357,13 @@ String String::convertToUppercaseWithoutLocale() const
     return m_impl ? m_impl->convertToUppercaseWithoutLocale() : String { };
 }
 
-String String::convertToLowercaseWithLocale(const AtomicString& localeIdentifier) const
+String String::convertToLowercaseWithLocale(const AtomString& localeIdentifier) const
 {
     // FIXME: Should this function, and the many others like it, be inlined?
     return m_impl ? m_impl->convertToLowercaseWithLocale(localeIdentifier) : String { };
 }
 
-String String::convertToUppercaseWithLocale(const AtomicString& localeIdentifier) const
+String String::convertToUppercaseWithLocale(const AtomString& localeIdentifier) const
 {
     // FIXME: Should this function, and the many others like it, be inlined?
     return m_impl ? m_impl->convertToUppercaseWithLocale(localeIdentifier) : String { };
@@ -448,72 +450,12 @@ Vector<UChar> String::charactersWithNullTermination() const
     return result;
 }
 
-WTF_ATTRIBUTE_PRINTF(1, 0) static String createWithFormatAndArguments(const char *format, va_list args)
-{
-    va_list argsCopy;
-    va_copy(argsCopy, args);
-
-#if COMPILER(CLANG)
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wformat-nonliteral"
-#endif
-
-#if USE(CF) && !OS(WINDOWS)
-    if (strstr(format, "%@")) {
-        auto cfFormat = adoptCF(CFStringCreateWithCString(kCFAllocatorDefault, format, kCFStringEncodingUTF8));
-        auto result = adoptCF(CFStringCreateWithFormatAndArguments(kCFAllocatorDefault, nullptr, cfFormat.get(), args));
-        va_end(argsCopy);
-        return result.get();
-    }
-#endif
-
-    // Do the format once to get the length.
-#if COMPILER(MSVC)
-    int result = _vscprintf(format, args);
-#else
-    char ch;
-    int result = vsnprintf(&ch, 1, format, args);
-#endif
-
-    if (!result) {
-        va_end(argsCopy);
-        return emptyString();
-    }
-    if (result < 0) {
-        va_end(argsCopy);
-        return String();
-    }
-
-    Vector<char, 256> buffer;
-    unsigned len = result;
-    buffer.grow(len + 1);
-
-    // Now do the formatting again, guaranteed to fit.
-    vsnprintf(buffer.data(), buffer.size(), format, argsCopy);
-    va_end(argsCopy);
-
-#if COMPILER(CLANG)
-#pragma clang diagnostic pop
-#endif
-
-    return StringImpl::create(reinterpret_cast<const LChar*>(buffer.data()), len);
-}
-
-String String::format(const char *format, ...)
-{
-    va_list args;
-    va_start(args, format);
-    String result = createWithFormatAndArguments(format, args);
-    va_end(args);
-    return result;
-}
-
 String String::number(int number)
 {
     return numberToStringSigned<String>(number);
 }
 
-String String::number(unsigned int number)
+String String::number(unsigned number)
 {
     return numberToStringUnsigned<String>(number);
 }
@@ -538,22 +480,34 @@ String String::number(unsigned long long number)
     return numberToStringUnsigned<String>(number);
 }
 
-String String::number(double number, unsigned precision, TrailingZerosTruncatingPolicy trailingZerosTruncatingPolicy)
+String String::numberToStringFixedPrecision(float number, unsigned precision, TrailingZerosTruncatingPolicy trailingZerosTruncatingPolicy)
 {
     NumberToStringBuffer buffer;
-    return String(numberToFixedPrecisionString(number, precision, buffer, trailingZerosTruncatingPolicy == TruncateTrailingZeros));
+    return numberToFixedPrecisionString(number, precision, buffer, trailingZerosTruncatingPolicy == TruncateTrailingZeros);
 }
 
-String String::numberToStringECMAScript(double number)
+String String::numberToStringFixedPrecision(double number, unsigned precision, TrailingZerosTruncatingPolicy trailingZerosTruncatingPolicy)
 {
     NumberToStringBuffer buffer;
-    return String(numberToString(number, buffer));
+    return numberToFixedPrecisionString(number, precision, buffer, trailingZerosTruncatingPolicy == TruncateTrailingZeros);
+}
+
+String String::number(float number)
+{
+    NumberToStringBuffer buffer;
+    return numberToString(number, buffer);
+}
+
+String String::number(double number)
+{
+    NumberToStringBuffer buffer;
+    return numberToString(number, buffer);
 }
 
 String String::numberToStringFixedWidth(double number, unsigned decimalPlaces)
 {
     NumberToStringBuffer buffer;
-    return String(numberToFixedWidthString(number, decimalPlaces, buffer));
+    return numberToFixedWidthString(number, decimalPlaces, buffer);
 }
 
 int String::toIntStrict(bool* ok, int base) const
@@ -695,9 +649,9 @@ String String::isolatedCopy() &&
 
 bool String::isSafeToSendToAnotherThread() const
 {
-    // AtomicStrings are not safe to send between threads as ~StringImpl()
-    // will try to remove them from the wrong AtomicStringTable.
-    return isEmpty() || (m_impl->hasOneRef() && !m_impl->isAtomic());
+    // AtomStrings are not safe to send between threads, as ~StringImpl()
+    // will try to remove them from the wrong AtomStringTable.
+    return isEmpty() || (m_impl->hasOneRef() && !m_impl->isAtom());
 }
 
 template<bool allowEmptyEntries>
@@ -833,7 +787,7 @@ CString String::latin1() const
 
     for (unsigned i = 0; i < length; ++i) {
         UChar ch = characters[i];
-        characterBuffer[i] = ch > 0xff ? '?' : ch;
+        characterBuffer[i] = !isLatin1(ch) ? '?' : ch;
     }
 
     return result;
@@ -889,7 +843,7 @@ String String::make16BitFrom8BitSource(const LChar* source, size_t length)
 
 String String::fromUTF8(const LChar* stringStart, size_t length)
 {
-    if (length > std::numeric_limits<unsigned>::max())
+    if (length > MaxLength)
         CRASH();
 
     if (!stringStart)
@@ -906,7 +860,7 @@ String String::fromUTF8(const LChar* stringStart, size_t length)
 
     UChar* bufferCurrent = bufferStart;
     const char* stringCurrent = reinterpret_cast<const char*>(stringStart);
-    if (convertUTF8ToUTF16(&stringCurrent, reinterpret_cast<const char *>(stringStart + length), &bufferCurrent, bufferCurrent + buffer.size()) != conversionOK)
+    if (!convertUTF8ToUTF16(stringCurrent, reinterpret_cast<const char *>(stringStart + length), &bufferCurrent, bufferCurrent + buffer.size()))
         return String();
 
     unsigned utf16Length = bufferCurrent - bufferStart;
@@ -935,98 +889,6 @@ String String::fromUTF8WithLatin1Fallback(const LChar* string, size_t size)
 }
 
 // String Operations
-
-static bool isCharacterAllowedInBase(UChar c, int base)
-{
-    if (c > 0x7F)
-        return false;
-    if (isASCIIDigit(c))
-        return c - '0' < base;
-    if (isASCIIAlpha(c)) {
-        if (base > 36)
-            base = 36;
-        return (c >= 'a' && c < 'a' + base - 10)
-            || (c >= 'A' && c < 'A' + base - 10);
-    }
-    return false;
-}
-
-template<typename IntegralType, typename CharacterType>
-static inline IntegralType toIntegralType(const CharacterType* data, size_t length, bool* ok, int base)
-{
-    static const IntegralType integralMax = std::numeric_limits<IntegralType>::max();
-    static const bool isSigned = std::numeric_limits<IntegralType>::is_signed;
-    const IntegralType maxMultiplier = integralMax / base;
-
-    IntegralType value = 0;
-    bool isOk = false;
-    bool isNegative = false;
-
-    if (!data)
-        goto bye;
-
-    // skip leading whitespace
-    while (length && isSpaceOrNewline(*data)) {
-        --length;
-        ++data;
-    }
-
-    if (isSigned && length && *data == '-') {
-        --length;
-        ++data;
-        isNegative = true;
-    } else if (length && *data == '+') {
-        --length;
-        ++data;
-    }
-
-    if (!length || !isCharacterAllowedInBase(*data, base))
-        goto bye;
-
-    while (length && isCharacterAllowedInBase(*data, base)) {
-        --length;
-        IntegralType digitValue;
-        auto c = *data;
-        if (isASCIIDigit(c))
-            digitValue = c - '0';
-        else if (c >= 'a')
-            digitValue = c - 'a' + 10;
-        else
-            digitValue = c - 'A' + 10;
-
-        if (value > maxMultiplier || (value == maxMultiplier && digitValue > (integralMax % base) + isNegative))
-            goto bye;
-
-        value = base * value + digitValue;
-        ++data;
-    }
-
-#if COMPILER(MSVC)
-#pragma warning(push, 0)
-#pragma warning(disable:4146)
-#endif
-
-    if (isNegative)
-        value = -value;
-
-#if COMPILER(MSVC)
-#pragma warning(pop)
-#endif
-
-    // skip trailing space
-    while (length && isSpaceOrNewline(*data)) {
-        --length;
-        ++data;
-    }
-
-    if (!length)
-        isOk = true;
-bye:
-    if (ok)
-        *ok = isOk;
-    return isOk ? value : 0;
-}
-
 template<typename CharacterType>
 static unsigned lengthOfCharactersAsInteger(const CharacterType* data, size_t length)
 {
@@ -1217,6 +1079,12 @@ const String& emptyString()
     return emptyString;
 }
 
+const String& nullString()
+{
+    static NeverDestroyed<String> nullString;
+    return nullString;
+}
+
 } // namespace WTF
 
 #ifndef NDEBUG
@@ -1242,7 +1110,7 @@ Vector<char> asciiDebug(StringImpl* impl)
     if (!impl)
         return asciiDebug(String("[null]"_s).impl());
 
-    Vector<char> buffer;
+    StringBuilder buffer;
     for (unsigned i = 0; i < impl->length(); ++i) {
         UChar ch = (*impl)[i];
         if (isASCIIPrintable(ch)) {
@@ -1252,11 +1120,13 @@ Vector<char> asciiDebug(StringImpl* impl)
         } else {
             buffer.append('\\');
             buffer.append('u');
-            appendUnsignedAsHexFixedSize(ch, buffer, 4);
+            buffer.append(hex(ch, 4));
         }
     }
-    buffer.append('\0');
-    return buffer;
+    CString narrowString = buffer.toString().ascii();
+    Vector<char> result;
+    result.append(reinterpret_cast<const char*>(narrowString.data()), narrowString.length() + 1);
+    return result;
 }
 
 Vector<char> asciiDebug(String& string)

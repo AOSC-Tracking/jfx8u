@@ -32,6 +32,7 @@
 
 #pragma once
 
+#include "HTMLInputElement.h"
 #include "HTMLTextFormControlElement.h"
 #include "RenderPtr.h"
 #include "StepRange.h"
@@ -40,7 +41,7 @@
 #include <wtf/RefCounted.h>
 #include <wtf/RefPtr.h>
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
 #include "DateComponents.h"
 #endif
 
@@ -55,7 +56,6 @@ class Event;
 class FileList;
 class HTMLElement;
 class HTMLFormElement;
-class HTMLInputElement;
 class Icon;
 class KeyboardEvent;
 class MouseEvent;
@@ -73,7 +73,7 @@ class InputType : public RefCounted<InputType> {
     WTF_MAKE_FAST_ALLOCATED;
 
 public:
-    static Ref<InputType> create(HTMLInputElement&, const AtomicString&);
+    static Ref<InputType> create(HTMLInputElement&, const AtomString&);
     static Ref<InputType> createText(HTMLInputElement&);
     virtual ~InputType();
 
@@ -81,7 +81,7 @@ public:
 
     static bool themeSupportsDataListUI(InputType*);
 
-    virtual const AtomicString& formControlType() const = 0;
+    virtual const AtomString& formControlType() const = 0;
 
     // Type query functions.
 
@@ -101,6 +101,7 @@ public:
     virtual bool isFileUpload() const;
     virtual bool isHiddenType() const;
     virtual bool isImageButton() const;
+    virtual bool isInteractiveContent() const;
     virtual bool supportLabels() const;
     virtual bool isMonthField() const;
     virtual bool isNumberField() const;
@@ -182,7 +183,10 @@ public:
     virtual void willDispatchClick(InputElementClickState&);
     virtual void didDispatchClick(Event&, const InputElementClickState&);
     virtual void handleDOMActivateEvent(Event&);
-    virtual void handleKeydownEvent(KeyboardEvent&);
+
+    enum ShouldCallBaseEventHandler { No, Yes };
+    virtual ShouldCallBaseEventHandler handleKeydownEvent(KeyboardEvent&);
+
     virtual void handleKeypressEvent(KeyboardEvent&);
     virtual void handleKeyupEvent(KeyboardEvent&);
     virtual void handleBeforeTextInsertedEvent(BeforeTextInsertedEvent&);
@@ -270,6 +274,7 @@ public:
     virtual bool supportsSelectionAPI() const;
     virtual Color valueAsColor() const;
     virtual void selectColor(StringView);
+    virtual Vector<Color> suggestedColors() const;
 
     // Parses the specified string for the type, and return
     // the Decimal value for the parsing result if the parsing
@@ -297,14 +302,14 @@ public:
 
 #if ENABLE(DATALIST_ELEMENT)
     virtual void listAttributeTargetChanged();
-    virtual std::optional<Decimal> findClosestTickMarkValue(const Decimal&);
+    virtual Optional<Decimal> findClosestTickMarkValue(const Decimal&);
 #endif
 
 #if ENABLE(DRAG_SUPPORT)
     virtual bool receiveDroppedFiles(const DragData&);
 #endif
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     virtual DateComponents::Type dateType() const;
 #endif
     virtual String displayString() const;

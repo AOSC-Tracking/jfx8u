@@ -19,8 +19,7 @@
  *
  */
 
-#ifndef IntegerToStringConversion_h
-#define IntegerToStringConversion_h
+#pragma once
 
 #include <iterator>
 #include <wtf/text/LChar.h>
@@ -66,6 +65,7 @@ inline typename IntegerToStringConversionTrait<T>::ReturnType numberToStringUnsi
 template<typename CharacterType, typename UnsignedIntegerType, PositiveOrNegativeNumber NumberType>
 static void writeNumberToBufferImpl(UnsignedIntegerType number, CharacterType* destination)
 {
+    static_assert(!std::is_same_v<bool, std::remove_cv_t<UnsignedIntegerType>>, "'bool' not supported");
     LChar buf[sizeof(UnsignedIntegerType) * 3 + 1];
     LChar* end = std::end(buf);
     LChar* p = end;
@@ -127,5 +127,3 @@ inline unsigned lengthOfNumberAsStringUnsigned(UnsignedIntegerType number)
 }
 
 } // namespace WTF
-
-#endif // IntegerToStringConversion_h

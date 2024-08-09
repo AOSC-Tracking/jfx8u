@@ -30,7 +30,7 @@
 #include <wtf/MonotonicTime.h>
 #include <wtf/RefCounted.h>
 #include <wtf/RefPtr.h>
-#include <wtf/text/AtomicString.h>
+#include <wtf/text/AtomString.h>
 
 #if PLATFORM(COCOA) || USE(CFURLCONNECTION)
 #include <wtf/RetainPtr.h>
@@ -77,7 +77,6 @@ namespace WebCore {
 class AuthenticationChallenge;
 class Credential;
 class Frame;
-class URL;
 class NetworkingContext;
 class ProtectionSpace;
 class ResourceError;
@@ -87,6 +86,7 @@ class NetworkLoadMetrics;
 class ResourceRequest;
 class ResourceResponse;
 class SharedBuffer;
+class SynchronousLoaderMessageQueue;
 class Timer;
 
 #if USE(CURL)
@@ -124,7 +124,7 @@ public:
 
 #if PLATFORM(COCOA)
     WEBCORE_EXPORT NSURLConnection *connection() const;
-    id makeDelegate(bool, WTF::MessageQueue<WTF::Function<void()>>*);
+    id makeDelegate(bool, RefPtr<SynchronousLoaderMessageQueue>&&);
     id delegate();
     void releaseDelegate();
 #endif
@@ -154,10 +154,6 @@ public:
 #if OS(WINDOWS) && USE(CURL)
     static void setHostAllowsAnyHTTPSCertificate(const String&);
     static void setClientCertificateInfo(const String&, const String&, const String&);
-#endif
-
-#if OS(WINDOWS) && USE(CURL) && USE(CF)
-    static void setClientCertificate(const String& host, CFDataRef);
 #endif
 
     bool shouldContentSniff() const;
@@ -205,10 +201,10 @@ public:
 #endif
 
     typedef Ref<ResourceHandle> (*BuiltinConstructor)(const ResourceRequest& request, ResourceHandleClient* client);
-    static void registerBuiltinConstructor(const AtomicString& protocol, BuiltinConstructor);
+    static void registerBuiltinConstructor(const AtomString& protocol, BuiltinConstructor);
 
     typedef void (*BuiltinSynchronousLoader)(NetworkingContext*, const ResourceRequest&, StoredCredentialsPolicy, ResourceError&, ResourceResponse&, Vector<char>& data);
-    static void registerBuiltinSynchronousLoader(const AtomicString& protocol, BuiltinSynchronousLoader);
+    static void registerBuiltinSynchronousLoader(const AtomString& protocol, BuiltinSynchronousLoader);
 
 protected:
     ResourceHandle(NetworkingContext*, const ResourceRequest&, ResourceHandleClient*, bool defersLoading, bool shouldContentSniff, bool shouldContentEncodingSniff);
@@ -237,14 +233,14 @@ private:
 #endif
 
 #if USE(CFURLCONNECTION)
-    void createCFURLConnection(bool shouldUseCredentialStorage, bool shouldContentSniff, bool shouldContentEncodingSniff, WTF::MessageQueue<WTF::Function<void()>>*, CFDictionaryRef clientProperties);
+    void createCFURLConnection(bool shouldUseCredentialStorage, bool shouldContentSniff, bool shouldContentEncodingSniff, RefPtr<SynchronousLoaderMessageQueue>&&, CFDictionaryRef clientProperties);
 #endif
 
 #if PLATFORM(MAC)
     void createNSURLConnection(id delegate, bool shouldUseCredentialStorage, bool shouldContentSniff, bool shouldContentEncodingSniff, SchedulingBehavior);
 #endif
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     void createNSURLConnection(id delegate, bool shouldUseCredentialStorage, bool shouldContentSniff, bool shouldContentEncodingSniff, SchedulingBehavior, NSDictionary *connectionProperties);
 #endif
 
@@ -259,12 +255,12 @@ private:
     };
 
     void addCacheValidationHeaders(ResourceRequest&);
-    Ref<CurlRequest> createCurlRequest(ResourceRequest&, RequestStatus = RequestStatus::NewRequest);
+    Ref<CurlRequest> createCurlRequest(ResourceRequest&&, RequestStatus = RequestStatus::NewRequest);
 
     bool shouldRedirectAsGET(const ResourceRequest&, bool crossOrigin);
 
-    std::optional<std::pair<String, String>> getCredential(ResourceRequest&, bool);
-    void restartRequestWithCredential(const String& user, const String& password);
+    Optional<Credential> getCredential(const ResourceRequest&, bool);
+    void restartRequestWithCredential(const ProtectionSpace&, const Credential&);
 
     void handleDataURL();
 #endif

@@ -27,21 +27,29 @@
 #include "CSSAnimation.h"
 
 #include "Animation.h"
+#include "AnimationEvent.h"
 #include "Element.h"
+#include "InspectorInstrumentation.h"
+#include "RenderStyle.h"
+#include <wtf/IsoMallocInlines.h>
 
 namespace WebCore {
 
-Ref<CSSAnimation> CSSAnimation::create(Element& target, const Animation& backingAnimation, const RenderStyle* oldStyle, const RenderStyle& newStyle)
+WTF_MAKE_ISO_ALLOCATED_IMPL(CSSAnimation);
+
+Ref<CSSAnimation> CSSAnimation::create(Element& owningElement, const Animation& backingAnimation, const RenderStyle* oldStyle, const RenderStyle& newStyle)
 {
-    auto result = adoptRef(*new CSSAnimation(target, backingAnimation, newStyle));
-    result->initialize(target, oldStyle, newStyle);
+    auto result = adoptRef(*new CSSAnimation(owningElement, backingAnimation));
+    result->initialize(oldStyle, newStyle);
+
+    InspectorInstrumentation::didCreateWebAnimation(result.get());
+
     return result;
 }
 
-CSSAnimation::CSSAnimation(Element& element, const Animation& backingAnimation, const RenderStyle& unanimatedStyle)
+CSSAnimation::CSSAnimation(Element& element, const Animation& backingAnimation)
     : DeclarativeAnimation(element, backingAnimation)
     , m_animationName(backingAnimation.name())
-    , m_unanimatedStyle(RenderStyle::clonePtr(unanimatedStyle))
 {
 }
 
@@ -55,43 +63,47 @@ void CSSAnimation::syncPropertiesWithBackingAnimation()
     suspendEffectInvalidation();
 
     auto& animation = backingAnimation();
-    auto* timing = effect()->timing();
+    auto* animationEffect = effect();
+
+    auto previousTiming = animationEffect->getComputedTiming();
 
     switch (animation.fillMode()) {
     case AnimationFillMode::None:
-        timing->setFill(FillMode::None);
+        animationEffect->setFill(FillMode::None);
         break;
     case AnimationFillMode::Backwards:
-        timing->setFill(FillMode::Backwards);
+        animationEffect->setFill(FillMode::Backwards);
         break;
     case AnimationFillMode::Forwards:
-        timing->setFill(FillMode::Forwards);
+        animationEffect->setFill(FillMode::Forwards);
         break;
     case AnimationFillMode::Both:
-        timing->setFill(FillMode::Both);
+        animationEffect->setFill(FillMode::Both);
         break;
     }
 
     switch (animation.direction()) {
     case Animation::AnimationDirectionNormal:
-        timing->setDirection(PlaybackDirection::Normal);
+        animationEffect->setDirection(PlaybackDirection::Normal);
         break;
     case Animation::AnimationDirectionAlternate:
-        timing->setDirection(PlaybackDirection::Alternate);
+        animationEffect->setDirection(PlaybackDirection::Alternate);
         break;
     case Animation::AnimationDirectionReverse:
-        timing->setDirection(PlaybackDirection::Reverse);
+        animationEffect->setDirection(PlaybackDirection::Reverse);
         break;
     case Animation::AnimationDirectionAlternateReverse:
-        timing->setDirection(PlaybackDirection::AlternateReverse);
+        animationEffect->setDirection(PlaybackDirection::AlternateReverse);
         break;
     }
 
     auto iterationCount = animation.iterationCount();
-    timing->setIterations(iterationCount == Animation::IterationCountInfinite ? std::numeric_limits<double>::infinity() : iterationCount);
+    animationEffect->setIterations(iterationCount == Animation::IterationCountInfinite ? std::numeric_limits<double>::infinity() : iterationCount);
 
-    timing->setDelay(Seconds(animation.delay()));
-    timing->setIterationDuration(Seconds(animation.duration()));
+    animationEffect->setDelay(Seconds(animation.delay()));
+    animationEffect->setIterationDuration(Seconds(animation.duration()));
+    animationEffect->updateStaticTimingProperties();
+    effectTimingDidChange(previousTiming);
 
     // Synchronize the play state
     if (animation.playState() == AnimationPlayState::Playing && playState() == WebAnimation::PlayState::Paused) {
@@ -103,81 +115,21 @@ void CSSAnimation::syncPropertiesWithBackingAnimation()
     unsuspendEffectInvalidation();
 }
 
-std::optional<double> CSSAnimation::bindingsStartTime() const
-{
-    flushPendingStyleChanges();
-    return DeclarativeAnimation::bindingsStartTime();
-}
-
-void CSSAnimation::setBindingsStartTime(std::optional<double> startTime)
-{
-    flushPendingStyleChanges();
-    return DeclarativeAnimation::setBindingsStartTime(startTime);
-}
-
-std::optional<double> CSSAnimation::bindingsCurrentTime() const
-{
-    flushPendingStyleChanges();
-    auto currentTime = DeclarativeAnimation::bindingsCurrentTime();
-    if (currentTime) {
-        if (auto* animationEffect = effect())
-            return std::max(0.0, std::min(currentTime.value(), animationEffect->timing()->activeDuration().milliseconds()));
-    }
-    return currentTime;
-}
-
-ExceptionOr<void> CSSAnimation::setBindingsCurrentTime(std::optional<double> currentTime)
-{
-    flushPendingStyleChanges();
-    return DeclarativeAnimation::setBindingsCurrentTime(currentTime);
-}
-
-WebAnimation::PlayState CSSAnimation::bindingsPlayState() const
-{
-    flushPendingStyleChanges();
-    return DeclarativeAnimation::bindingsPlayState();
-}
-
-bool CSSAnimation::bindingsPending() const
-{
-    flushPendingStyleChanges();
-    return DeclarativeAnimation::bindingsPending();
-}
-
-WebAnimation::ReadyPromise& CSSAnimation::bindingsReady()
-{
-    flushPendingStyleChanges();
-    return DeclarativeAnimation::bindingsReady();
-}
-
-WebAnimation::FinishedPromise& CSSAnimation::bindingsFinished()
-{
-    flushPendingStyleChanges();
-    return DeclarativeAnimation::bindingsFinished();
-}
-
 ExceptionOr<void> CSSAnimation::bindingsPlay()
 {
-    flushPendingStyleChanges();
     m_stickyPaused = false;
     return DeclarativeAnimation::bindingsPlay();
 }
 
 ExceptionOr<void> CSSAnimation::bindingsPause()
 {
-    flushPendingStyleChanges();
     m_stickyPaused = true;
     return DeclarativeAnimation::bindingsPause();
 }
 
-void CSSAnimation::flushPendingStyleChanges() const
+Ref<AnimationEventBase> CSSAnimation::createEvent(const AtomString& eventType, double elapsedTime, const String& pseudoId, Optional<Seconds> timelineTime)
 {
-    if (auto* animationEffect = effect()) {
-        if (is<KeyframeEffectReadOnly>(animationEffect)) {
-            if (auto* target = downcast<KeyframeEffectReadOnly>(animationEffect)->target())
-                target->document().updateStyleIfNeeded();
-        }
-    }
+    return AnimationEvent::create(eventType, m_animationName, elapsedTime, pseudoId, timelineTime, this);
 }
 
 } // namespace WebCore

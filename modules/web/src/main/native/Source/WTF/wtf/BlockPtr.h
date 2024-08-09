@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2018 Apple Inc. All rights reserved.
+ * Copyright (C) 2016-2019 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -26,12 +26,16 @@
 #pragma once
 
 #include <Block.h>
+#include <objc/runtime.h>
 #include <utility>
 #include <wtf/Assertions.h>
 #include <wtf/StdLibExtras.h>
 
-#if CPU(ARM64E)
-#include <WebKitAdditions/BlockQualifiers.h>
+#if __has_include(<ptrauth.h>)
+#include <ptrauth.h>
+#define WTF_COPY_FUNCTION_POINTER_QUALIFIER __ptrauth_block_copy_helper
+#define WTF_DISPOSE_FUNCTION_POINTER_QUALIFIER __ptrauth_block_destroy_helper
+#define WTF_INVOKE_FUNCTION_POINTER_QUALIFIER __ptrauth_block_invocation_pointer
 #else
 #define WTF_COPY_FUNCTION_POINTER_QUALIFIER
 #define WTF_DISPOSE_FUNCTION_POINTER_QUALIFIER
@@ -39,8 +43,6 @@
 #endif
 
 namespace WTF {
-
-extern "C" void* _NSConcreteMallocBlock[32];
 
 template<typename> class BlockPtr;
 
@@ -82,7 +84,7 @@ public:
         };
 
         Block* block = static_cast<Block*>(malloc(sizeof(Block)));
-        block->isa = _NSConcreteMallocBlock;
+        block->isa = objc_getClass("__NSMallocBlock__");
 
         enum {
             BLOCK_NEEDS_FREE = (1 << 24),
@@ -189,6 +191,24 @@ template<typename R, typename... Args>
 inline BlockPtr<R (Args...)> makeBlockPtr(R (^block)(Args...))
 {
     return BlockPtr<R (Args...)>(block);
+}
+
+template<typename F, typename Class, typename R, typename... Args>
+inline auto makeBlockPtr(F&& function, R (Class::*)(Args...) const)
+{
+    return BlockPtr<R (Args...)>::fromCallable(std::forward<F>(function));
+}
+
+template<typename F, typename Class, typename R, typename... Args>
+inline auto makeBlockPtr(F&& function, R (Class::*)(Args...))
+{
+    return BlockPtr<R (Args...)>::fromCallable(std::forward<F>(function));
+}
+
+template<typename F>
+inline auto makeBlockPtr(F&& function)
+{
+    return makeBlockPtr(std::forward<F>(function), &F::operator());
 }
 
 }

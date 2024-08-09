@@ -34,7 +34,9 @@
 #include "FloatPoint3D.h"
 #include "FloatRect.h"
 #include "FloatSize.h"
-#include "TextureMapperAnimation.h"
+#include "NicosiaAnimatedBackingStoreClient.h"
+#include "NicosiaAnimation.h"
+#include "NicosiaSceneIntegration.h"
 #include "TransformationMatrix.h"
 #include <wtf/Function.h>
 #include <wtf/Lock.h>
@@ -50,7 +52,22 @@ public:
     virtual bool isCompositionLayer() const { return false; }
     virtual bool isContentLayer() const { return false; }
 
-    uint64_t id() const { return m_id; }
+    using LayerID = uint64_t;
+    LayerID id() const { return m_id; }
+
+    void setSceneIntegration(RefPtr<SceneIntegration>&& sceneIntegration)
+    {
+        LockHolder locker(m_state.lock);
+        m_state.sceneIntegration = WTFMove(sceneIntegration);
+    }
+
+    std::unique_ptr<SceneIntegration::UpdateScope> createUpdateScope()
+    {
+        LockHolder locker(m_state.lock);
+        if (m_state.sceneIntegration)
+            return m_state.sceneIntegration->createUpdateScope();
+        return nullptr;
+    }
 
 protected:
     explicit PlatformLayer(uint64_t);
@@ -59,6 +76,7 @@ protected:
 
     struct {
         Lock lock;
+        RefPtr<SceneIntegration> sceneIntegration;
     } m_state;
 };
 
@@ -94,6 +112,7 @@ public:
                     bool positionChanged : 1;
                     bool anchorPointChanged : 1;
                     bool sizeChanged : 1;
+                    bool boundsOriginChanged : 1;
                     bool transformChanged : 1;
                     bool childrenTransformChanged : 1;
                     bool contentsRectChanged : 1;
@@ -109,6 +128,7 @@ public:
                     bool contentLayerChanged : 1;
                     bool backingStoreChanged : 1;
                     bool imageBackingChanged : 1;
+                    bool animatedBackingStoreClientChanged : 1;
                     bool repaintCounterChanged : 1;
                     bool debugBorderChanged : 1;
                 };
@@ -138,6 +158,7 @@ public:
         WebCore::FloatPoint position;
         WebCore::FloatPoint3D anchorPoint;
         WebCore::FloatSize size;
+        WebCore::FloatPoint boundsOrigin;
 
         WebCore::TransformationMatrix transform;
         WebCore::TransformationMatrix childrenTransform;
@@ -152,7 +173,7 @@ public:
         WebCore::FilterOperations filters;
         // FIXME: Despite the name, this implementation is not
         // TextureMapper-specific. Should be renamed when necessary.
-        WebCore::TextureMapperAnimations animations;
+        Animations animations;
 
         Vector<RefPtr<CompositionLayer>> children;
         RefPtr<CompositionLayer> replica;
@@ -161,6 +182,7 @@ public:
         RefPtr<ContentLayer> contentLayer;
         RefPtr<BackingStore> backingStore;
         RefPtr<ImageBacking> imageBacking;
+        RefPtr<AnimatedBackingStoreClient> animatedBackingStoreClient;
 
         struct RepaintCounter {
             unsigned count { 0 };
@@ -180,6 +202,92 @@ public:
         functor(m_state.pending);
     }
 
+    template<typename T>
+    void flushState(const T& functor)
+    {
+        LockHolder locker(PlatformLayer::m_state.lock);
+        auto& pending = m_state.pending;
+        auto& staging = m_state.staging;
+
+        staging.delta.value |= pending.delta.value;
+
+        if (pending.delta.positionChanged)
+            staging.position = pending.position;
+        if (pending.delta.anchorPointChanged)
+            staging.anchorPoint = pending.anchorPoint;
+        if (pending.delta.sizeChanged)
+            staging.size = pending.size;
+        if (pending.delta.boundsOriginChanged)
+            staging.boundsOrigin = pending.boundsOrigin;
+
+        if (pending.delta.transformChanged)
+            staging.transform = pending.transform;
+        if (pending.delta.childrenTransformChanged)
+            staging.childrenTransform = pending.childrenTransform;
+
+        if (pending.delta.contentsRectChanged)
+            staging.contentsRect = pending.contentsRect;
+        if (pending.delta.contentsTilingChanged) {
+            staging.contentsTilePhase = pending.contentsTilePhase;
+            staging.contentsTileSize = pending.contentsTileSize;
+        }
+
+        if (pending.delta.opacityChanged)
+            staging.opacity = pending.opacity;
+        if (pending.delta.solidColorChanged)
+            staging.solidColor = pending.solidColor;
+
+        if (pending.delta.filtersChanged)
+            staging.filters = pending.filters;
+        if (pending.delta.animationsChanged)
+            staging.animations = pending.animations;
+
+        if (pending.delta.childrenChanged)
+            staging.children = pending.children;
+        if (pending.delta.maskChanged)
+            staging.mask = pending.mask;
+        if (pending.delta.replicaChanged)
+            staging.replica = pending.replica;
+
+        if (pending.delta.flagsChanged)
+            staging.flags.value = pending.flags.value;
+
+        if (pending.delta.repaintCounterChanged)
+            staging.repaintCounter = pending.repaintCounter;
+        if (pending.delta.debugBorderChanged)
+            staging.debugBorder = pending.debugBorder;
+
+        if (pending.delta.backingStoreChanged)
+            staging.backingStore = pending.backingStore;
+        if (pending.delta.contentLayerChanged)
+            staging.contentLayer = pending.contentLayer;
+        if (pending.delta.imageBackingChanged)
+            staging.imageBacking = pending.imageBacking;
+        if (pending.delta.animatedBackingStoreClientChanged)
+            staging.animatedBackingStoreClient = pending.animatedBackingStoreClient;
+
+        pending.delta = { };
+
+        functor(staging);
+    }
+
+    template<typename T>
+    void commitState(const T& functor)
+    {
+        LockHolder locker(PlatformLayer::m_state.lock);
+        m_state.committed = m_state.staging;
+        m_state.staging.delta = { };
+
+        functor(m_state.committed);
+    }
+
+    template<typename T>
+    void accessCommitted(const T& functor)
+    {
+        LockHolder locker(PlatformLayer::m_state.lock);
+        functor(m_state.committed);
+    }
+
 private:
     CompositionLayer(uint64_t, const Impl::Factory&);
 
@@ -187,6 +295,8 @@ private:
 
     struct {
         LayerState pending;
+        LayerState staging;
+        LayerState committed;
     } m_state;
 };
 

@@ -31,11 +31,11 @@
 
 #include "OriginAccessEntry.h"
 #include "SecurityOrigin.h"
-#include "URL.h"
 #include <memory>
 #include <wtf/HashMap.h>
 #include <wtf/MainThread.h>
 #include <wtf/NeverDestroyed.h>
+#include <wtf/URL.h>
 #include <wtf/text/StringHash.h>
 
 namespace WebCore {
@@ -142,7 +142,13 @@ bool SecurityPolicy::shouldInheritSecurityOriginFromOwner(const URL& url)
     //
     // Note: We generalize this to invalid URLs because we treat such URLs as about:blank.
     //
-    return url.isEmpty() || equalIgnoringASCIICase(url.string(), blankURL()) || equalLettersIgnoringASCIICase(url.string(), "about:srcdoc");
+    return url.isEmpty() || equalIgnoringASCIICase(url.string(), WTF::blankURL()) || equalLettersIgnoringASCIICase(url.string(), "about:srcdoc");
+}
+
+bool SecurityPolicy::isBaseURLSchemeAllowed(const URL& url)
+{
+    // See <https://github.com/whatwg/html/issues/2249>.
+    return !url.protocolIsData() && !WTF::protocolIsJavaScript(url);
 }
 
 void SecurityPolicy::setLocalLoadPolicy(LocalLoadPolicy policy)
@@ -189,7 +195,7 @@ void SecurityPolicy::addOriginAccessWhitelistEntry(const SecurityOrigin& sourceO
     Locker<Lock> locker(originAccessMapLock);
     OriginAccessMap::AddResult result = originAccessMap().add(sourceString, nullptr);
     if (result.isNewEntry)
-        result.iterator->value = std::make_unique<OriginAccessWhiteList>();
+        result.iterator->value = makeUnique<OriginAccessWhiteList>();
 
     OriginAccessWhiteList* list = result.iterator->value.get();
     list->append(OriginAccessEntry(destinationProtocol, destinationDomain, allowDestinationSubdomains ? OriginAccessEntry::AllowSubdomains : OriginAccessEntry::DisallowSubdomains, OriginAccessEntry::TreatIPAddressAsIPAddress));

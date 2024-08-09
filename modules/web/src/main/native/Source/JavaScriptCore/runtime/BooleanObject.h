@@ -30,7 +30,13 @@ protected:
     JS_EXPORT_PRIVATE void finishCreation(VM&);
 
 public:
-    typedef JSWrapperObject Base;
+    using Base = JSWrapperObject;
+
+    template<typename, SubspaceAccess mode>
+    static IsoSubspace* subspaceFor(VM& vm)
+    {
+        return vm.booleanObjectSpace<mode>();
+    }
 
     static BooleanObject* create(VM& vm, Structure* structure)
     {

@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2015 Andy VanWagoner (andy@vanwagoner.family)
- * Copyright (C) 2018 Apple Inc. All rights reserved.
+ * Copyright (C) 2018-2019 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -29,6 +29,7 @@
 #if ENABLE(INTL)
 
 #include "InternalFunction.h"
+#include "IntlObject.h"
 
 namespace JSC {
 
@@ -38,30 +39,22 @@ class IntlNumberFormatPrototype;
 class IntlNumberFormatConstructor final : public InternalFunction {
 public:
     typedef InternalFunction Base;
-    static const unsigned StructureFlags = Base::StructureFlags | HasStaticPropertyTable;
+    static constexpr unsigned StructureFlags = Base::StructureFlags | HasStaticPropertyTable;
 
-    template<typename CellType>
-    static IsoSubspace* subspaceFor(VM& vm)
-    {
-        return &vm.intlNumberFormatConstructorSpace;
-    }
-
-    static IntlNumberFormatConstructor* create(VM&, Structure*, IntlNumberFormatPrototype*, Structure*);
+    static IntlNumberFormatConstructor* create(VM&, Structure*, IntlNumberFormatPrototype*);
     static Structure* createStructure(VM&, JSGlobalObject*, JSValue);
 
     DECLARE_INFO;
 
-    Structure* numberFormatStructure() const { return m_numberFormatStructure.get(); }
+    Structure* numberFormatStructure(VM&) const { return globalObject()->numberFormatStructure(); }
 
 protected:
-    void finishCreation(VM&, IntlNumberFormatPrototype*, Structure*);
+    void finishCreation(VM&, IntlNumberFormatPrototype*);
 
 private:
     IntlNumberFormatConstructor(VM&, Structure*);
-    static void visitChildren(JSCell*, SlotVisitor&);
-
-    WriteBarrier<Structure> m_numberFormatStructure;
 };
+STATIC_ASSERT_ISO_SUBSPACE_SHARABLE(IntlNumberFormatConstructor, InternalFunction);
 
 } // namespace JSC
 

@@ -53,7 +53,6 @@ class HitTestResult;
 class InlineBox;
 class Path;
 class Position;
-class PseudoStyleRequest;
 class RenderBoxModelObject;
 class RenderInline;
 class RenderBlock;
@@ -69,13 +68,13 @@ class SelectionRangeData;
 class TransformState;
 class VisiblePosition;
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
 class SelectionRect;
 #endif
 
 struct PaintInfo;
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
 const int caretWidth = 2; // This value should be kept in sync with UIKit. See <rdar://problem/15580601>.
 #else
 const int caretWidth = 1;
@@ -83,23 +82,11 @@ const int caretWidth = 1;
 
 enum class ShouldAllowCrossOriginScrolling { No, Yes };
 
-#if ENABLE(DASHBOARD_SUPPORT)
-struct AnnotatedRegionValue {
-    bool operator==(const AnnotatedRegionValue& o) const
-    {
-        return type == o.type && bounds == o.bounds && clip == o.clip && label == o.label;
-    }
-    bool operator!=(const AnnotatedRegionValue& o) const
-    {
-        return !(*this == o);
-    }
+struct ScrollRectToVisibleOptions;
 
-    LayoutRect bounds;
-    String label;
-    LayoutRect clip;
-    int type;
-};
-#endif
+namespace Style {
+class PseudoElementRequest;
+}
 
 // Base class for all rendering tree objects.
 class RenderObject : public CachedImageClient, public CanMakeWeakPtr<RenderObject> {
@@ -152,17 +139,18 @@ public:
     };
 
     typedef BlockContentHeightType (*HeightTypeTraverseNextInclusionFunction)(const RenderObject&);
-    RenderObject* traverseNext(const RenderObject* stayWithin, HeightTypeTraverseNextInclusionFunction, int& currentDepth,  int& newFixedDepth) const;
+    RenderObject* traverseNext(const RenderObject* stayWithin, HeightTypeTraverseNextInclusionFunction, int& currentDepth, int& newFixedDepth) const;
 #endif
 
     WEBCORE_EXPORT RenderLayer* enclosingLayer() const;
 
     // Scrolling is a RenderBox concept, however some code just cares about recursively scrolling our enclosing ScrollableArea(s).
-    WEBCORE_EXPORT bool scrollRectToVisible(SelectionRevealMode, const LayoutRect& absoluteRect, bool insideFixed, const ScrollAlignment& alignX = ScrollAlignment::alignCenterIfNeeded, const ScrollAlignment& alignY = ScrollAlignment::alignCenterIfNeeded, ShouldAllowCrossOriginScrolling = ShouldAllowCrossOriginScrolling::No);
+    WEBCORE_EXPORT bool scrollRectToVisible(const LayoutRect& absoluteRect, bool insideFixed, const ScrollRectToVisibleOptions&);
 
     // Convenience function for getting to the nearest enclosing box of a RenderObject.
     WEBCORE_EXPORT RenderBox& enclosingBox() const;
     RenderBoxModelObject& enclosingBoxModelObject() const;
+    const RenderBox* enclosingScrollableContainerForSnapping() const;
 
     // Function to return our enclosing flow thread if we are contained inside one. This
     // function follows the containing block chain.
@@ -174,7 +162,10 @@ public:
         return locateEnclosingFragmentedFlow();
     }
 
-#ifndef NDEBUG
+    WEBCORE_EXPORT bool useDarkAppearance() const;
+    OptionSet<StyleColor::Options> styleColorOptions() const;
+
+#if ASSERT_ENABLED
     void setHasAXObject(bool flag) { m_hasAXObject = flag; }
     bool hasAXObject() const { return m_hasAXObject; }
 
@@ -187,7 +178,7 @@ public:
         RenderObject* m_renderObject;
         bool m_preexistingForbidden;
     };
-#endif
+#endif // ASSERT_ENABLED
 
     // Obtains the nearest enclosing block (including this block) that contributes a first-line style to our inline
     // children.
@@ -563,11 +554,6 @@ public:
     // repaint and do not need a relayout
     virtual void updateFromElement() { }
 
-#if ENABLE(DASHBOARD_SUPPORT)
-    virtual void addAnnotatedRegions(Vector<AnnotatedRegionValue>&);
-    void collectAnnotatedRegions(Vector<AnnotatedRegionValue>&);
-#endif
-
     bool isComposited() const;
 
     bool hitTest(const HitTestRequest&, HitTestResult&, const HitTestLocation& locationInContainer, const LayoutPoint& accumulatedOffset, HitTestFilter = HitTestAll);
@@ -605,7 +591,7 @@ public:
     // Return the offset from an object up the container() chain. Asserts that none of the intermediate objects have transforms.
     LayoutSize offsetFromAncestorContainer(RenderElement&) const;
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     virtual void collectSelectionRects(Vector<SelectionRect>&, unsigned startOffset = 0, unsigned endOffset = std::numeric_limits<unsigned>::max());
     virtual void absoluteQuadsForSelection(Vector<FloatQuad>& quads) const { absoluteQuads(quads); }
 #endif
@@ -669,23 +655,39 @@ public:
 
     // Given a rect in the object's coordinate space, compute a rect suitable for repainting
     // that rect in view coordinates.
-    LayoutRect computeAbsoluteRepaintRect(const LayoutRect& r, bool fixed = false) const
+    LayoutRect computeAbsoluteRepaintRect(const LayoutRect& r) const
     {
-        return computeRectForRepaint(r, nullptr, { fixed, false });
+        return computeRectForRepaint(r, nullptr);
     }
     // Given a rect in the object's coordinate space, compute a rect suitable for repainting
     // that rect in the coordinate space of repaintContainer.
-    struct RepaintContext {
-        RepaintContext(bool hasPositionFixedDescendant = false, bool dirtyRectIsFlipped = false)
+    LayoutRect computeRectForRepaint(const LayoutRect&, const RenderLayerModelObject* repaintContainer) const;
+    FloatRect computeFloatRectForRepaint(const FloatRect&, const RenderLayerModelObject* repaintContainer) const;
+
+    // Given a rect in the object's coordinate space, compute the location in container space where this rect is visible,
+    // when clipping and scrolling as specified by the context. When using edge-inclusive intersection, return WTF::nullopt
+    // rather than an empty rect if the rect is completely clipped out in container space.
+    enum class VisibleRectContextOption {
+        UseEdgeInclusiveIntersection = 1 << 0,
+        ApplyCompositedClips = 1 << 1,
+        ApplyCompositedContainerScrolls  = 1 << 2,
+        ApplyContainerClip = 1 << 3,
+    };
+    struct VisibleRectContext {
+        VisibleRectContext(bool hasPositionFixedDescendant = false, bool dirtyRectIsFlipped = false, OptionSet<VisibleRectContextOption> options = { })
             : m_hasPositionFixedDescendant(hasPositionFixedDescendant)
             , m_dirtyRectIsFlipped(dirtyRectIsFlipped)
+            , m_options(options)
             {
             }
         bool m_hasPositionFixedDescendant;
         bool m_dirtyRectIsFlipped;
+        OptionSet<VisibleRectContextOption> m_options;
     };
-    virtual LayoutRect computeRectForRepaint(const LayoutRect&, const RenderLayerModelObject* repaintContainer, RepaintContext = { }) const;
-    virtual FloatRect computeFloatRectForRepaint(const FloatRect&, const RenderLayerModelObject* repaintContainer, bool fixed = false) const;
+    virtual Optional<LayoutRect> computeVisibleRectInContainer(const LayoutRect&, const RenderLayerModelObject* repaintContainer, VisibleRectContext) const;
+    virtual Optional<FloatRect> computeFloatVisibleRectInContainer(const FloatRect&, const RenderLayerModelObject* repaintContainer, VisibleRectContext) const;
+
+    WEBCORE_EXPORT bool hasNonEmptyVisibleRectRespectingParentFrames() const;
 
     virtual unsigned int length() const { return 1; }
 
@@ -724,7 +726,7 @@ public:
      */
     virtual LayoutRect localCaretRect(InlineBox*, unsigned caretOffset, LayoutUnit* extraWidthToEndOfLine = nullptr);
 
-    // When performing a global document tear-down, or when going into the page cache, the renderer of the document is cleared.
+    // When performing a global document tear-down, or when going into the back/forward cache, the renderer of the document is cleared.
     bool renderTreeBeingDestroyed() const;
 
     void destroy();
@@ -803,8 +805,15 @@ protected:
 
     static FragmentedFlowState computedFragmentedFlowState(const RenderObject&);
 
+    static bool shouldApplyCompositedContainerScrollsForRepaint();
+
+    static VisibleRectContext visibleRectContextForRepaint()
+    {
+        return VisibleRectContext(false, false, { VisibleRectContextOption::ApplyContainerClip, VisibleRectContextOption::ApplyCompositedContainerScrolls });
+    }
+
 private:
-#ifndef NDEBUG
+#if ASSERT_ENABLED
     bool isSetNeedsLayoutForbidden() const { return m_setNeedsLayoutForbidden; }
     void setNeedsLayoutIsForbidden(bool flag) { m_setNeedsLayoutForbidden = flag; }
 #endif
@@ -824,7 +833,7 @@ private:
     bool hasRareData() const { return m_bitfields.hasRareData(); }
     void setHasRareData(bool b) { m_bitfields.setHasRareData(b); }
 
-#ifndef NDEBUG
+#if ASSERT_ENABLED
     void checkBlockPositionedObjectsNeedLayout();
 #endif
 
@@ -834,7 +843,7 @@ private:
     RenderObject* m_previous;
     RenderObject* m_next;
 
-#ifndef NDEBUG
+#if ASSERT_ENABLED
     bool m_hasAXObject             : 1;
     bool m_setNeedsLayoutForbidden : 1;
 #endif
@@ -956,6 +965,7 @@ private:
 
     // FIXME: This should be RenderElementRareData.
     class RenderObjectRareData {
+        WTF_MAKE_FAST_ALLOCATED;
     public:
         RenderObjectRareData()
             : m_isDragging(false)
@@ -1098,9 +1108,12 @@ inline bool RenderObject::needsSimplifiedNormalFlowLayoutOnly() const
         && !m_bitfields.posChildNeedsLayout() && !m_bitfields.needsPositionedMovementLayout();
 }
 
+inline void Node::setRenderer(RenderObject* renderer) { m_rendererWithStyleFlags.setPointer(renderer); }
+
 #if ENABLE(TREE_DEBUGGING)
 void printRenderTreeForLiveDocuments();
 void printLayerTreeForLiveDocuments();
+void printGraphicsLayerTreeForLiveDocuments();
 #endif
 
 } // namespace WebCore

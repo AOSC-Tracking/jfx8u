@@ -25,7 +25,6 @@
 #include "ControlStates.h"
 #include "Document.h"
 #include "FileList.h"
-#include "FileSystem.h"
 #include "FloatConversion.h"
 #include "FloatRoundedRect.h"
 #include "FocusController.h"
@@ -41,10 +40,13 @@
 #include "PaintInfo.h"
 #include "RenderStyle.h"
 #include "RenderView.h"
+#include "RuntimeEnabledFeatures.h"
 #include "SpinButtonElement.h"
 #include "StringTruncator.h"
 #include "TextControlInnerElements.h"
+#include <wtf/FileSystem.h>
 #include <wtf/NeverDestroyed.h>
+#include <wtf/text/StringConcatenateNumbers.h>
 
 #if ENABLE(METER_ELEMENT)
 #include "HTMLMeterElement.h"
@@ -76,7 +78,7 @@ RenderTheme::RenderTheme()
 {
 }
 
-void RenderTheme::adjustStyle(StyleResolver& styleResolver, RenderStyle& style, const Element* element, bool UAHasAppearance, const BorderData& border, const FillLayer& background, const Color& backgroundColor)
+void RenderTheme::adjustStyle(RenderStyle& style, const Element* element, const RenderStyle* userAgentAppearanceStyle)
 {
     // Force inline and table display styles to be inline-block (except for table- which is block)
     ControlPart part = style.appearance();
@@ -85,17 +87,17 @@ void RenderTheme::adjustStyle(StyleResolver& styleResolver, RenderStyle& style, 
         || style.display() == DisplayType::TableRow || style.display() == DisplayType::TableColumnGroup || style.display() == DisplayType::TableColumn
         || style.display() == DisplayType::TableCell || style.display() == DisplayType::TableCaption)
         style.setDisplay(DisplayType::InlineBlock);
-    else if (style.display() == DisplayType::Compact || style.display() == DisplayType::ListItem || style.display() == DisplayType::Table)
+    else if (style.display() == DisplayType::ListItem || style.display() == DisplayType::Table)
         style.setDisplay(DisplayType::Block);
 
-    if (UAHasAppearance && isControlStyled(style, border, background, backgroundColor)) {
+    if (userAgentAppearanceStyle && isControlStyled(style, *userAgentAppearanceStyle)) {
         switch (part) {
         case MenulistPart:
             style.setAppearance(MenulistButtonPart);
             part = MenulistButtonPart;
             break;
         case TextFieldPart:
-            adjustTextFieldStyle(styleResolver, style, element);
+            adjustTextFieldStyle(style, element);
             FALLTHROUGH;
         default:
             style.setAppearance(NoControlPart);
@@ -198,9 +200,9 @@ void RenderTheme::adjustStyle(StyleResolver& styleResolver, RenderStyle& style, 
     switch (style.appearance()) {
 #if !USE(NEW_THEME)
     case CheckboxPart:
-        return adjustCheckboxStyle(styleResolver, style, element);
+        return adjustCheckboxStyle(style, element);
     case RadioPart:
-        return adjustRadioStyle(styleResolver, style, element);
+        return adjustRadioStyle(style, element);
     case PushButtonPart:
     case SquareButtonPart:
 #if ENABLE(INPUT_TYPE_COLOR)
@@ -208,18 +210,18 @@ void RenderTheme::adjustStyle(StyleResolver& styleResolver, RenderStyle& style, 
 #endif
     case DefaultButtonPart:
     case ButtonPart:
-        return adjustButtonStyle(styleResolver, style, element);
+        return adjustButtonStyle(style, element);
     case InnerSpinButtonPart:
-        return adjustInnerSpinButtonStyle(styleResolver, style, element);
+        return adjustInnerSpinButtonStyle(style, element);
 #endif
     case TextFieldPart:
-        return adjustTextFieldStyle(styleResolver, style, element);
+        return adjustTextFieldStyle(style, element);
     case TextAreaPart:
-        return adjustTextAreaStyle(styleResolver, style, element);
+        return adjustTextAreaStyle(style, element);
     case MenulistPart:
-        return adjustMenuListStyle(styleResolver, style, element);
+        return adjustMenuListStyle(style, element);
     case MenulistButtonPart:
-        return adjustMenuListButtonStyle(styleResolver, style, element);
+        return adjustMenuListButtonStyle(style, element);
     case MediaPlayButtonPart:
     case MediaCurrentTimePart:
     case MediaTimeRemainingPart:
@@ -227,54 +229,54 @@ void RenderTheme::adjustStyle(StyleResolver& styleResolver, RenderStyle& style, 
     case MediaExitFullscreenButtonPart:
     case MediaMuteButtonPart:
     case MediaVolumeSliderContainerPart:
-        return adjustMediaControlStyle(styleResolver, style, element);
+        return adjustMediaControlStyle(style, element);
     case MediaSliderPart:
     case MediaVolumeSliderPart:
     case MediaFullScreenVolumeSliderPart:
     case SliderHorizontalPart:
     case SliderVerticalPart:
-        return adjustSliderTrackStyle(styleResolver, style, element);
+        return adjustSliderTrackStyle(style, element);
     case SliderThumbHorizontalPart:
     case SliderThumbVerticalPart:
-        return adjustSliderThumbStyle(styleResolver, style, element);
+        return adjustSliderThumbStyle(style, element);
     case SearchFieldPart:
-        return adjustSearchFieldStyle(styleResolver, style, element);
+        return adjustSearchFieldStyle(style, element);
     case SearchFieldCancelButtonPart:
-        return adjustSearchFieldCancelButtonStyle(styleResolver, style, element);
+        return adjustSearchFieldCancelButtonStyle(style, element);
     case SearchFieldDecorationPart:
-        return adjustSearchFieldDecorationPartStyle(styleResolver, style, element);
+        return adjustSearchFieldDecorationPartStyle(style, element);
     case SearchFieldResultsDecorationPart:
-        return adjustSearchFieldResultsDecorationPartStyle(styleResolver, style, element);
+        return adjustSearchFieldResultsDecorationPartStyle(style, element);
     case SearchFieldResultsButtonPart:
-        return adjustSearchFieldResultsButtonStyle(styleResolver, style, element);
+        return adjustSearchFieldResultsButtonStyle(style, element);
     case ProgressBarPart:
-        return adjustProgressBarStyle(styleResolver, style, element);
+        return adjustProgressBarStyle(style, element);
 #if ENABLE(METER_ELEMENT)
     case MeterPart:
     case RelevancyLevelIndicatorPart:
     case ContinuousCapacityLevelIndicatorPart:
     case DiscreteCapacityLevelIndicatorPart:
     case RatingLevelIndicatorPart:
-        return adjustMeterStyle(styleResolver, style, element);
+        return adjustMeterStyle(style, element);
 #endif
 #if ENABLE(SERVICE_CONTROLS)
     case ImageControlsButtonPart:
         break;
 #endif
     case CapsLockIndicatorPart:
-        return adjustCapsLockIndicatorStyle(styleResolver, style, element);
+        return adjustCapsLockIndicatorStyle(style, element);
 #if ENABLE(APPLE_PAY)
     case ApplePayButtonPart:
-        return adjustApplePayButtonStyle(styleResolver, style, element);
+        return adjustApplePayButtonStyle(style, element);
 #endif
 #if ENABLE(ATTACHMENT_ELEMENT)
     case AttachmentPart:
     case BorderlessAttachmentPart:
-        return adjustAttachmentStyle(styleResolver, style, element);
+        return adjustAttachmentStyle(style, element);
 #endif
 #if ENABLE(DATALIST_ELEMENT)
     case ListButtonPart:
-        return adjustListButtonStyle(styleResolver, style, element);
+        return adjustListButtonStyle(style, element);
 #endif
     default:
         break;
@@ -317,7 +319,7 @@ bool RenderTheme::paint(const RenderBox& box, ControlStates& controlStates, cons
     case ButtonPart:
     case InnerSpinButtonPart:
         updateControlStatesForRenderer(box, controlStates);
-        Theme::singleton().paint(part, controlStates, paintInfo.context(), devicePixelSnappedRect, box.style().effectiveZoom(), &box.view().frameView(), deviceScaleFactor, pageScaleFactor, box.page().useSystemAppearance(), box.page().useDarkAppearance());
+        Theme::singleton().paint(part, controlStates, paintInfo.context(), devicePixelSnappedRect, box.style().effectiveZoom(), &box.view().frameView(), deviceScaleFactor, pageScaleFactor, box.document().useSystemAppearance(), box.useDarkAppearance());
         return false;
     default:
         break;
@@ -447,7 +449,7 @@ bool RenderTheme::paintBorderOnly(const RenderBox& box, const PaintInfo& paintIn
     if (paintInfo.context().paintingDisabled())
         return false;
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     UNUSED_PARAM(rect);
     return box.style().appearance() != NoControlPart;
 #else
@@ -522,10 +524,10 @@ bool RenderTheme::paintDecorations(const RenderBox& box, const PaintInfo& paintI
     case PushButtonPart:
         return paintPushButtonDecorations(box, paintInfo, integralSnappedRect);
     case SquareButtonPart:
+        return paintSquareButtonDecorations(box, paintInfo, integralSnappedRect);
 #if ENABLE(INPUT_TYPE_COLOR)
     case ColorWellPart:
 #endif
-        return paintSquareButtonDecorations(box, paintInfo, integralSnappedRect);
     case ButtonPart:
         return paintButtonDecorations(box, paintInfo, integralSnappedRect);
     case MenulistPart:
@@ -567,18 +569,14 @@ String RenderTheme::formatMediaControlsTime(float time) const
 {
     if (!std::isfinite(time))
         time = 0;
-    int seconds = (int)fabsf(time);
+    // FIXME: Seems like it would be better to use std::lround here.
+    int seconds = static_cast<int>(std::abs(time));
     int hours = seconds / (60 * 60);
     int minutes = (seconds / 60) % 60;
     seconds %= 60;
-    if (hours) {
-        if (hours > 9)
-            return String::format("%s%02d:%02d:%02d", (time < 0 ? "-" : ""), hours, minutes, seconds);
-
-        return String::format("%s%01d:%02d:%02d", (time < 0 ? "-" : ""), hours, minutes, seconds);
-    }
-
-    return String::format("%s%02d:%02d", (time < 0 ? "-" : ""), minutes, seconds);
+    if (hours)
+        return makeString((time < 0 ? "-" : ""), hours, ':', pad('0', 2, minutes), ':', pad('0', 2, seconds));
+    return makeString((time < 0 ? "-" : ""), pad('0', 2, minutes), ':', pad('0', 2, seconds));
 }
 
 String RenderTheme::formatMediaControlsCurrentTime(float currentTime, float /*duration*/) const
@@ -597,7 +595,7 @@ LayoutPoint RenderTheme::volumeSliderOffsetFromMuteButton(const RenderBox& muteB
     FloatPoint absPoint = muteButtonBox.localToAbsolute(FloatPoint(muteButtonBox.offsetLeft(), y), IsFixed | UseTransforms);
     if (absPoint.y() < 0)
         y = muteButtonBox.height();
-    return LayoutPoint(0, y);
+    return LayoutPoint(0_lu, y);
 }
 
 #endif
@@ -732,7 +730,7 @@ bool RenderTheme::isControlContainer(ControlPart appearance) const
     return appearance != CheckboxPart && appearance != RadioPart;
 }
 
-bool RenderTheme::isControlStyled(const RenderStyle& style, const BorderData& border, const FillLayer& background, const Color& backgroundColor) const
+bool RenderTheme::isControlStyled(const RenderStyle& style, const RenderStyle& userAgentStyle) const
 {
     switch (style.appearance()) {
     case PushButtonPart:
@@ -754,9 +752,9 @@ bool RenderTheme::isControlStyled(const RenderStyle& style, const BorderData& bo
     case TextFieldPart:
     case TextAreaPart:
         // Test the style to see if the UA border and background match.
-        return style.border() != border
-            || style.backgroundLayers() != background
-            || !style.backgroundColorEqualsToColorIgnoringVisited(backgroundColor);
+        return style.border() != userAgentStyle.border()
+            || style.backgroundLayers() != userAgentStyle.backgroundLayers()
+            || !style.backgroundColorEqualsToColorIgnoringVisited(userAgentStyle.backgroundColor());
     default:
         return false;
     }
@@ -928,7 +926,7 @@ bool RenderTheme::isDefault(const RenderObject& o) const
 
 #if !USE(NEW_THEME)
 
-void RenderTheme::adjustCheckboxStyle(StyleResolver&, RenderStyle& style, const Element*) const
+void RenderTheme::adjustCheckboxStyle(RenderStyle& style, const Element*) const
 {
     // A summary of the rules for checkbox designed to match WinIE:
     // width/height - honored (WinIE actually scales its control for small widths, but lets it overflow for small heights.)
@@ -945,7 +943,7 @@ void RenderTheme::adjustCheckboxStyle(StyleResolver&, RenderStyle& style, const 
     style.setBoxShadow(nullptr);
 }
 
-void RenderTheme::adjustRadioStyle(StyleResolver&, RenderStyle& style, const Element*) const
+void RenderTheme::adjustRadioStyle(RenderStyle& style, const Element*) const
 {
     // A summary of the rules for checkbox designed to match WinIE:
     // width/height - honored (WinIE actually scales its control for small widths, but lets it overflow for small heights.)
@@ -962,7 +960,7 @@ void RenderTheme::adjustRadioStyle(StyleResolver&, RenderStyle& style, const Ele
     style.setBoxShadow(nullptr);
 }
 
-void RenderTheme::adjustButtonStyle(StyleResolver&, RenderStyle& style, const Element*) const
+void RenderTheme::adjustButtonStyle(RenderStyle& style, const Element*) const
 {
     // Most platforms will completely honor all CSS, and so we have no need to
     // adjust the style at all by default. We will still allow the theme a crack
@@ -970,26 +968,26 @@ void RenderTheme::adjustButtonStyle(StyleResolver&, RenderStyle& style, const El
     setButtonSize(style);
 }
 
-void RenderTheme::adjustInnerSpinButtonStyle(StyleResolver&, RenderStyle&, const Element*) const
+void RenderTheme::adjustInnerSpinButtonStyle(RenderStyle&, const Element*) const
 {
 }
 #endif
 
-void RenderTheme::adjustTextFieldStyle(StyleResolver&, RenderStyle&, const Element*) const
+void RenderTheme::adjustTextFieldStyle(RenderStyle&, const Element*) const
 {
 }
 
-void RenderTheme::adjustTextAreaStyle(StyleResolver&, RenderStyle&, const Element*) const
+void RenderTheme::adjustTextAreaStyle(RenderStyle&, const Element*) const
 {
 }
 
-void RenderTheme::adjustMenuListStyle(StyleResolver&, RenderStyle&, const Element*) const
+void RenderTheme::adjustMenuListStyle(RenderStyle&, const Element*) const
 {
 }
 
 #if ENABLE(METER_ELEMENT)
 
-void RenderTheme::adjustMeterStyle(StyleResolver&, RenderStyle& style, const Element*) const
+void RenderTheme::adjustMeterStyle(RenderStyle& style, const Element*) const
 {
     style.setBoxShadow(nullptr);
 }
@@ -1011,7 +1009,7 @@ bool RenderTheme::paintMeter(const RenderObject&, const PaintInfo&, const IntRec
 
 #endif // METER_ELEMENT
 
-void RenderTheme::adjustCapsLockIndicatorStyle(StyleResolver&, RenderStyle&, const Element*) const
+void RenderTheme::adjustCapsLockIndicatorStyle(RenderStyle&, const Element*) const
 {
 }
 
@@ -1022,7 +1020,7 @@ bool RenderTheme::paintCapsLockIndicator(const RenderObject&, const PaintInfo&, 
 
 #if ENABLE(ATTACHMENT_ELEMENT)
 
-void RenderTheme::adjustAttachmentStyle(StyleResolver&, RenderStyle&, const Element*) const
+void RenderTheme::adjustAttachmentStyle(RenderStyle&, const Element*) const
 {
 }
 
@@ -1033,9 +1031,25 @@ bool RenderTheme::paintAttachment(const RenderObject&, const PaintInfo&, const I
 
 #endif
 
+#if ENABLE(INPUT_TYPE_COLOR)
+
+String RenderTheme::colorInputStyleSheet() const
+{
+    ASSERT(RuntimeEnabledFeatures::sharedFeatures().inputTypeColorEnabled());
+    return "input[type=\"color\"] { -webkit-appearance: color-well; width: 44px; height: 23px; outline: none; } "_s;
+}
+
+#endif // ENABLE(INPUT_TYPE_COLOR)
+
 #if ENABLE(DATALIST_ELEMENT)
 
-void RenderTheme::adjustListButtonStyle(StyleResolver&, RenderStyle&, const Element*) const
+String RenderTheme::dataListStyleSheet() const
+{
+    ASSERT(RuntimeEnabledFeatures::sharedFeatures().dataListElementEnabled());
+    return "datalist { display: none; }"_s;
+}
+
+void RenderTheme::adjustListButtonStyle(RenderStyle&, const Element*) const
 {
 }
 
@@ -1136,7 +1150,7 @@ Seconds RenderTheme::animationDurationForProgressBar(RenderProgress&) const
     return 0_s;
 }
 
-void RenderTheme::adjustProgressBarStyle(StyleResolver&, RenderStyle&, const Element*) const
+void RenderTheme::adjustProgressBarStyle(RenderStyle&, const Element*) const
 {
 }
 
@@ -1155,19 +1169,19 @@ bool RenderTheme::shouldHaveCapsLockIndicator(const HTMLInputElement&) const
     return false;
 }
 
-void RenderTheme::adjustMenuListButtonStyle(StyleResolver&, RenderStyle&, const Element*) const
+void RenderTheme::adjustMenuListButtonStyle(RenderStyle&, const Element*) const
 {
 }
 
-void RenderTheme::adjustMediaControlStyle(StyleResolver&, RenderStyle&, const Element*) const
+void RenderTheme::adjustMediaControlStyle(RenderStyle&, const Element*) const
 {
 }
 
-void RenderTheme::adjustSliderTrackStyle(StyleResolver&, RenderStyle&, const Element*) const
+void RenderTheme::adjustSliderTrackStyle(RenderStyle&, const Element*) const
 {
 }
 
-void RenderTheme::adjustSliderThumbStyle(StyleResolver&, RenderStyle& style, const Element* element) const
+void RenderTheme::adjustSliderThumbStyle(RenderStyle& style, const Element* element) const
 {
     adjustSliderThumbSize(style, element);
 }
@@ -1176,36 +1190,46 @@ void RenderTheme::adjustSliderThumbSize(RenderStyle&, const Element*) const
 {
 }
 
-void RenderTheme::adjustSearchFieldStyle(StyleResolver&, RenderStyle&, const Element*) const
+void RenderTheme::adjustSearchFieldStyle(RenderStyle&, const Element*) const
 {
 }
 
-void RenderTheme::adjustSearchFieldCancelButtonStyle(StyleResolver&, RenderStyle&, const Element*) const
+void RenderTheme::adjustSearchFieldCancelButtonStyle(RenderStyle&, const Element*) const
 {
 }
 
-void RenderTheme::adjustSearchFieldDecorationPartStyle(StyleResolver&, RenderStyle&, const Element*) const
+void RenderTheme::adjustSearchFieldDecorationPartStyle(RenderStyle&, const Element*) const
 {
 }
 
-void RenderTheme::adjustSearchFieldResultsDecorationPartStyle(StyleResolver&, RenderStyle&, const Element*) const
+void RenderTheme::adjustSearchFieldResultsDecorationPartStyle(RenderStyle&, const Element*) const
 {
 }
 
-void RenderTheme::adjustSearchFieldResultsButtonStyle(StyleResolver&, RenderStyle&, const Element*) const
+void RenderTheme::adjustSearchFieldResultsButtonStyle(RenderStyle&, const Element*) const
 {
 }
 
 void RenderTheme::purgeCaches()
 {
-    m_colorCache = ColorCache();
+    m_colorCacheMap.clear();
 }
 
 void RenderTheme::platformColorsDidChange()
 {
-    m_colorCache = ColorCache();
+    m_colorCacheMap.clear();
 
     Page::updateStyleForAllPagesAfterGlobalChangeInEnvironment();
+}
+
+auto RenderTheme::colorCache(OptionSet<StyleColor::Options> options) const -> ColorCache&
+{
+    auto optionsIgnoringVisitedLink = options;
+    optionsIgnoringVisitedLink.remove(StyleColor::Options::ForVisitedLink);
+
+    return m_colorCacheMap.ensure(optionsIgnoringVisitedLink.toRaw(), [] {
+        return ColorCache();
+    }).iterator->value;
 }
 
 FontCascadeDescription& RenderTheme::cachedSystemFontDescription(CSSValueID systemFontID) const
@@ -1261,73 +1285,72 @@ Color RenderTheme::systemColor(CSSValueID cssValueId, OptionSet<StyleColor::Opti
 {
     switch (cssValueId) {
     case CSSValueWebkitLink:
-        return options.contains(StyleColor::Options::ForVisitedLink) ? 0xFF551A8B : 0xFF0000EE;
+        return options.contains(StyleColor::Options::ForVisitedLink) ? SimpleColor { 0xFF551A8B } : SimpleColor { 0xFF0000EE };
     case CSSValueWebkitActivelink:
-        return 0xFFFF0000;
+        return SimpleColor { 0xFFFF0000 };
     case CSSValueActiveborder:
-        return 0xFFFFFFFF;
+        return Color::white;
     case CSSValueActivebuttontext:
-        return 0xFF000000;
+        return Color::black;
     case CSSValueActivecaption:
-        return 0xFFCCCCCC;
+        return SimpleColor { 0xFFCCCCCC };
     case CSSValueAppworkspace:
-        return 0xFFFFFFFF;
+        return Color::white;
     case CSSValueBackground:
-        return 0xFF6363CE;
+        return SimpleColor { 0xFF6363CE };
     case CSSValueButtonface:
-        return 0xFFC0C0C0;
+        return Color::lightGray;
     case CSSValueButtonhighlight:
-        return 0xFFDDDDDD;
+        return SimpleColor { 0xFFDDDDDD };
     case CSSValueButtonshadow:
-        return 0xFF888888;
+        return SimpleColor { 0xFF888888 };
     case CSSValueButtontext:
-        return 0xFF000000;
+        return Color::black;
     case CSSValueCaptiontext:
-        return 0xFF000000;
+        return Color::black;
     case CSSValueGraytext:
-        return 0xFF808080;
+        return SimpleColor { 0xFF808080 };
     case CSSValueHighlight:
-        return 0xFFB5D5FF;
+        return SimpleColor { 0xFFB5D5FF };
     case CSSValueHighlighttext:
-        return 0xFF000000;
+        return Color::black;
     case CSSValueInactiveborder:
-        return 0xFFFFFFFF;
+        return Color::white;
     case CSSValueInactivecaption:
-        return 0xFFFFFFFF;
+        return Color::white;
     case CSSValueInactivecaptiontext:
-        return 0xFF7F7F7F;
+        return SimpleColor { 0xFF7F7F7F };
     case CSSValueInfobackground:
-        return 0xFFFBFCC5;
+        return SimpleColor { 0xFFFBFCC5 };
     case CSSValueInfotext:
-        return 0xFF000000;
+        return Color::black;
     case CSSValueMenu:
-        return 0xFFC0C0C0;
+        return Color::lightGray;
     case CSSValueMenutext:
-        return 0xFF000000;
+        return Color::black;
     case CSSValueScrollbar:
-        return 0xFFFFFFFF;
+        return Color::white;
     case CSSValueText:
-        return 0xFF000000;
+        return Color::black;
     case CSSValueThreeddarkshadow:
-        return 0xFF666666;
+        return SimpleColor { 0xFF666666 };
     case CSSValueThreedface:
-        return 0xFFC0C0C0;
+        return Color::lightGray;
     case CSSValueThreedhighlight:
-        return 0xFFDDDDDD;
+        return SimpleColor { 0xFFDDDDDD };
     case CSSValueThreedlightshadow:
-        return 0xFFC0C0C0;
+        return Color::lightGray;
     case CSSValueThreedshadow:
-        return 0xFF888888;
+        return SimpleColor { 0xFF888888 };
     case CSSValueWindow:
-        return 0xFFFFFFFF;
+        return Color::white;
     case CSSValueWindowframe:
-        return 0xFFCCCCCC;
+        return SimpleColor { 0xFFCCCCCC };
     case CSSValueWindowtext:
-        return 0xFF000000;
+        return Color::black;
     default:
-        break;
+        return { };
     }
-    return Color();
 }
 
 Color RenderTheme::activeTextSearchHighlightColor(OptionSet<StyleColor::Options> options) const
@@ -1394,9 +1417,15 @@ void RenderTheme::setCustomFocusRingColor(const Color& color)
     customFocusRingColor() = color;
 }
 
-Color RenderTheme::focusRingColor(OptionSet<StyleColor::Options> options)
+Color RenderTheme::focusRingColor(OptionSet<StyleColor::Options> options) const
 {
-    return customFocusRingColor().isValid() ? customFocusRingColor() : RenderTheme::singleton().platformFocusRingColor(options);
+    if (customFocusRingColor().isValid())
+        return customFocusRingColor();
+
+    auto& cache = colorCache(options);
+    if (!cache.systemFocusRingColor.isValid())
+        cache.systemFocusRingColor = platformFocusRingColor(options);
+    return cache.systemFocusRingColor;
 }
 
 String RenderTheme::fileListDefaultLabel(bool multipleFilesAllowed) const
@@ -1453,9 +1482,5 @@ Color RenderTheme::platformTapHighlightColor() const
 }
 
 #endif
-
-void RenderTheme::drawLineForDocumentMarker(const RenderText&, GraphicsContext&, const FloatPoint&, float, DocumentMarkerLineStyle)
-{
-}
 
 } // namespace WebCore

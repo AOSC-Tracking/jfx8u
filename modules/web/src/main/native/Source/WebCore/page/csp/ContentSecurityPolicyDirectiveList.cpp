@@ -123,7 +123,7 @@ ContentSecurityPolicyDirectiveList::ContentSecurityPolicyDirectiveList(ContentSe
 
 std::unique_ptr<ContentSecurityPolicyDirectiveList> ContentSecurityPolicyDirectiveList::create(ContentSecurityPolicy& policy, const String& header, ContentSecurityPolicyHeaderType type, ContentSecurityPolicy::PolicyFrom from)
 {
-    auto directives = std::make_unique<ContentSecurityPolicyDirectiveList>(policy, type);
+    auto directives = makeUnique<ContentSecurityPolicyDirectiveList>(policy, type);
     directives->parse(header, from);
 
     if (!checkEval(directives->operativeDirective(directives->m_scriptSrc.get()))) {
@@ -240,7 +240,7 @@ const ContentSecurityPolicyDirective* ContentSecurityPolicyDirectiveList::violat
 
 const ContentSecurityPolicyDirective* ContentSecurityPolicyDirectiveList::violatedDirectiveForFrame(const URL& url, bool didReceiveRedirectResponse) const
 {
-    if (url.isBlankURL())
+    if (url.protocolIsAbout())
         return nullptr;
 
     // We must enforce the frame-src directive (if specified) before enforcing the child-src directive for a nested browsing
@@ -293,7 +293,7 @@ const ContentSecurityPolicyDirective* ContentSecurityPolicyDirectiveList::violat
 
 const ContentSecurityPolicyDirective* ContentSecurityPolicyDirectiveList::violatedDirectiveForObjectSource(const URL& url, bool didReceiveRedirectResponse, ContentSecurityPolicySourceListDirective::ShouldAllowEmptyURLIfSourceListIsNotNone shouldAllowEmptyURLIfSourceListEmpty) const
 {
-    if (url.isBlankURL())
+    if (url.protocolIsAbout())
         return nullptr;
     ContentSecurityPolicySourceListDirective* operativeDirective = this->operativeDirective(m_objectSrc.get());
     if (checkSource(operativeDirective, url, didReceiveRedirectResponse, shouldAllowEmptyURLIfSourceListEmpty))
@@ -452,7 +452,7 @@ void ContentSecurityPolicyDirectiveList::setCSPDirective(const String& name, con
         m_policy.reportDuplicateDirective(name);
         return;
     }
-    directive = std::make_unique<CSPDirectiveType>(*this, name, value);
+    directive = makeUnique<CSPDirectiveType>(*this, name, value);
 }
 
 void ContentSecurityPolicyDirectiveList::applySandboxPolicy(const String& name, const String& sandboxPolicy)

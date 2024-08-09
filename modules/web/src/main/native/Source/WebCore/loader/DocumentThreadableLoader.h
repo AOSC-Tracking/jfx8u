@@ -102,8 +102,6 @@ namespace WebCore {
         bool isAllowedRedirect(const URL&);
         bool isAllowedByContentSecurityPolicy(const URL&, ContentSecurityPolicy::RedirectResponseReceived);
 
-        bool isXMLHttpRequest() const final;
-
         SecurityOrigin& securityOrigin() const;
         const ContentSecurityPolicy& contentSecurityPolicy() const;
 
@@ -115,7 +113,7 @@ namespace WebCore {
         void reportRedirectionWithBadScheme(const URL&);
         void reportContentSecurityPolicyError(const URL&);
         void reportCrossOriginResourceSharingError(const URL&);
-        void reportIntegrityMetadataError(const URL&);
+        void reportIntegrityMetadataError(const CachedResource&, const String& expectedMetadata);
         void logErrorAndFail(const ResourceError&);
 
         bool shouldSetHTTPHeadersToKeep() const;
@@ -132,12 +130,12 @@ namespace WebCore {
         bool m_async;
         bool m_delayCallbacksForIntegrityCheck;
         std::unique_ptr<ContentSecurityPolicy> m_contentSecurityPolicy;
-        std::optional<CrossOriginPreflightChecker> m_preflightChecker;
-        std::optional<HTTPHeaderMap> m_originalHeaders;
+        Optional<CrossOriginPreflightChecker> m_preflightChecker;
+        Optional<HTTPHeaderMap> m_originalHeaders;
 
         ShouldLogError m_shouldLogError;
 #if ENABLE(SERVICE_WORKER)
-        std::optional<ResourceRequest> m_bypassingPreflightForServiceWorkerRequest;
+        Optional<ResourceRequest> m_bypassingPreflightForServiceWorkerRequest;
 #endif
     };
 

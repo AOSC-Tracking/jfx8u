@@ -72,14 +72,14 @@ IDBFactory::IDBFactory(IDBClient::IDBConnectionProxy& connectionProxy)
 
 IDBFactory::~IDBFactory() = default;
 
-ExceptionOr<Ref<IDBOpenDBRequest>> IDBFactory::open(ScriptExecutionContext& context, const String& name, std::optional<uint64_t> version)
+ExceptionOr<Ref<IDBOpenDBRequest>> IDBFactory::open(ScriptExecutionContext& context, const String& name, Optional<uint64_t> version)
 {
     LOG(IndexedDB, "IDBFactory::open");
 
     if (version && !version.value())
         return Exception { TypeError, "IDBFactory.open() called with a version of 0"_s };
 
-    return openInternal(context, name, version.value_or(0));
+    return openInternal(context, name, version.valueOr(0));
 }
 
 ExceptionOr<Ref<IDBOpenDBRequest>> IDBFactory::openInternal(ScriptExecutionContext& context, const String& name, uint64_t version)
@@ -120,12 +120,14 @@ ExceptionOr<Ref<IDBOpenDBRequest>> IDBFactory::deleteDatabase(ScriptExecutionCon
     return m_connectionProxy->deleteDatabase(context, databaseIdentifier);
 }
 
-ExceptionOr<short> IDBFactory::cmp(ExecState& execState, JSValue firstValue, JSValue secondValue)
+ExceptionOr<short> IDBFactory::cmp(JSGlobalObject& execState, JSValue firstValue, JSValue secondValue)
 {
     auto first = scriptValueToIDBKey(execState, firstValue);
-    auto second = scriptValueToIDBKey(execState, secondValue);
+    if (!first->isValid())
+        return Exception { DataError, "Failed to execute 'cmp' on 'IDBFactory': The parameter is not a valid key."_s };
 
-    if (!first->isValid() || !second->isValid())
+    auto second = scriptValueToIDBKey(execState, secondValue);
+    if (!second->isValid())
         return Exception { DataError, "Failed to execute 'cmp' on 'IDBFactory': The parameter is not a valid key."_s };
 
     return first->compare(second.get());

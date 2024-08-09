@@ -31,14 +31,15 @@
 #include "HTTPHeaderNames.h"
 #include "HTTPParsers.h"
 #include "MemoryCache.h"
+#include "ParsedContentType.h"
 #include "SharedBuffer.h"
 #include "StyleSheetContents.h"
 #include "TextResourceDecoder.h"
 
 namespace WebCore {
 
-CachedCSSStyleSheet::CachedCSSStyleSheet(CachedResourceRequest&& request, PAL::SessionID sessionID)
-    : CachedResource(WTFMove(request), Type::CSSStyleSheet, sessionID)
+CachedCSSStyleSheet::CachedCSSStyleSheet(CachedResourceRequest&& request, const PAL::SessionID& sessionID, const CookieJar* cookieJar)
+    : CachedResource(WTFMove(request), Type::CSSStyleSheet, sessionID, cookieJar)
     , m_decoder(TextResourceDecoder::create("text/css", request.charset()))
 {
 }
@@ -151,7 +152,7 @@ bool CachedCSSStyleSheet::canUseSheet(MIMETypeCheckHint mimeTypeCheckHint, bool*
     // This code defaults to allowing the stylesheet for non-HTTP protocols so
     // folks can use standards mode for local HTML documents.
     String mimeType = responseMIMEType();
-    bool typeOK = mimeType.isEmpty() || equalLettersIgnoringASCIICase(mimeType, "text/css") || equalLettersIgnoringASCIICase(mimeType, "application/x-unknown-content-type");
+    bool typeOK = mimeType.isEmpty() || equalLettersIgnoringASCIICase(mimeType, "text/css") || equalLettersIgnoringASCIICase(mimeType, "application/x-unknown-content-type") || !isValidContentType(mimeType);
     if (hasValidMIMEType)
         *hasValidMIMEType = typeOK;
     return typeOK;

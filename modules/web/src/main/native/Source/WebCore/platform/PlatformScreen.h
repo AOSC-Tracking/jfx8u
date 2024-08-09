@@ -43,7 +43,7 @@ typedef struct _NSPoint NSPoint;
 #endif
 #endif
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
 OBJC_CLASS UIScreen;
 #endif
 
@@ -75,6 +75,12 @@ FloatRect screenAvailableRect(Widget*);
 
 WEBCORE_EXPORT bool screenSupportsExtendedColor(Widget* = nullptr);
 
+#if PLATFORM(MAC) || PLATFORM(IOS_FAMILY)
+bool screenSupportsHighDynamicRange(Widget* = nullptr);
+#else
+constexpr bool screenSupportsHighDynamicRange(Widget* = nullptr) { return false; }
+#endif
+
 #if USE(CG)
 WEBCORE_EXPORT CGColorSpaceRef screenColorSpace(Widget* = nullptr);
 #endif
@@ -99,18 +105,18 @@ NSPoint flipScreenPoint(const NSPoint&, NSScreen *);
 WEBCORE_EXPORT ScreenProperties collectScreenProperties();
 WEBCORE_EXPORT void setScreenProperties(const ScreenProperties&);
 
+WEBCORE_EXPORT PlatformDisplayID primaryScreenDisplayID();
+
 uint32_t primaryOpenGLDisplayMask();
 uint32_t displayMaskForDisplay(PlatformDisplayID);
 
-#if __MAC_OS_X_VERSION_MIN_REQUIRED >= 101300
 IORegistryGPUID primaryGPUID();
 IORegistryGPUID gpuIDForDisplay(PlatformDisplayID);
 IORegistryGPUID gpuIDForDisplayMask(uint32_t);
-#endif
 
 #endif // !PLATFORM(MAC)
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
 
 float screenPPIFactor();
 WEBCORE_EXPORT FloatSize screenSize();
@@ -118,6 +124,16 @@ WEBCORE_EXPORT FloatSize availableScreenSize();
 WEBCORE_EXPORT FloatSize overrideScreenSize();
 WEBCORE_EXPORT float screenScaleFactor(UIScreen * = nullptr);
 
+#endif
+
+#if ENABLE(TOUCH_EVENTS)
+#if PLATFORM(GTK) || PLATFORM(WPE)
+bool screenHasTouchDevice();
+bool screenIsTouchPrimaryInputDevice();
+#else
+constexpr bool screenHasTouchDevice() { return true; }
+constexpr bool screenIsTouchPrimaryInputDevice() { return true; }
+#endif
 #endif
 
 } // namespace WebCore

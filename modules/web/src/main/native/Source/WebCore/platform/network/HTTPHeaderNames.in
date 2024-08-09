@@ -51,7 +51,6 @@ Content-Range
 Cookie
 Cookie2
 Cross-Origin-Resource-Policy
-Cross-Origin-Window-Policy
 Date
 DNT
 Default-Style
@@ -85,6 +84,7 @@ Sec-WebSocket-Key
 Sec-WebSocket-Protocol
 Sec-WebSocket-Version
 Server-Timing
+Service-Worker
 Service-Worker-Allowed
 Set-Cookie
 Set-Cookie2
@@ -105,6 +105,7 @@ X-SourceMap
 X-WebKit-CSP
 X-WebKit-CSP-Report-Only
 X-XSS-Protection
+X-Temp-Tablet
 
 // These headers are specific to GStreamer.
 Icy-MetaInt

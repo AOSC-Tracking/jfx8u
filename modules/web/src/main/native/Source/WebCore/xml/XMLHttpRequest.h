@@ -26,7 +26,8 @@
 #include "FormData.h"
 #include "ResourceResponse.h"
 #include "ThreadableLoaderClient.h"
-#include "URL.h"
+#include "UserGestureIndicator.h"
+#include <wtf/URL.h>
 #include "XMLHttpRequestEventTarget.h"
 #include "XMLHttpRequestProgressEventThrottle.h"
 #include <wtf/Variant.h>
@@ -50,7 +51,7 @@ class XMLHttpRequestUpload;
 struct OwnedString;
 
 class XMLHttpRequest final : public ActiveDOMObject, public RefCounted<XMLHttpRequest>, private ThreadableLoaderClient, public XMLHttpRequestEventTarget {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_ISO_ALLOCATED(XMLHttpRequest);
 public:
     static Ref<XMLHttpRequest> create(ScriptExecutionContext&);
     WEBCORE_EXPORT ~XMLHttpRequest();
@@ -80,7 +81,7 @@ public:
     ExceptionOr<void> open(const String& method, const String& url);
     ExceptionOr<void> open(const String& method, const URL&, bool async);
     ExceptionOr<void> open(const String& method, const String&, bool async, const String& user, const String& password);
-    ExceptionOr<void> send(std::optional<SendTypes>&&);
+    ExceptionOr<void> send(Optional<SendTypes>&&);
     void abort();
     ExceptionOr<void> setRequestHeader(const String& name, const String& value);
     ExceptionOr<void> overrideMimeType(const String& override);
@@ -125,12 +126,17 @@ public:
     using RefCounted<XMLHttpRequest>::ref;
     using RefCounted<XMLHttpRequest>::deref;
 
+    size_t memoryCost() const;
+
+    WEBCORE_EXPORT void setMaximumIntervalForUserGestureForwarding(double);
+
 private:
     explicit XMLHttpRequest(ScriptExecutionContext&);
 
+    TextEncoding finalResponseCharset() const;
+
     // ActiveDOMObject
     void contextDestroyed() override;
-    bool canSuspendForDocumentSuspension() const override;
     void suspend(ReasonForSuspension) override;
     void resume() override;
     void stop() override;
@@ -142,10 +148,6 @@ private:
     Document* document() const;
     SecurityOrigin* securityOrigin() const;
 
-#if ENABLE(DASHBOARD_SUPPORT)
-    bool usesDashboardBackwardCompatibilityMode() const;
-#endif
-
     // ThreadableLoaderClient
     void didSendData(unsigned long long bytesSent, unsigned long long totalBytesToBeSent) override;
     void didReceiveResponse(unsigned long identifier, const ResourceResponse&) override;
@@ -155,7 +157,7 @@ private:
 
     bool responseIsXML() const;
 
-    std::optional<ExceptionOr<void>> prepareToSend();
+    Optional<ExceptionOr<void>> prepareToSend();
     ExceptionOr<void> send(Document&);
     ExceptionOr<void> send(const String& = { });
     ExceptionOr<void> send(Blob&);
@@ -166,7 +168,6 @@ private:
 
     void changeState(State);
     void callReadyStateChangeListener();
-    void dropProtection();
 
     // Returns false when cancelling the loader within internalAbort() triggers an event whose callback creates a new loader.
     // In that case, the function calling internalAbort should exit.
@@ -182,9 +183,11 @@ private:
     void networkError();
     void abortError();
 
-    void dispatchErrorEvents(const AtomicString&);
+    void dispatchErrorEvents(const AtomString&);
 
-    void resumeTimerFired();
+    using EventTarget::dispatchEvent;
+    void dispatchEvent(Event&) override;
+
     Ref<TextResourceDecoder> createDecoder() const;
 
     void networkErrorTimerFired();
@@ -198,9 +201,8 @@ private:
     unsigned m_uploadComplete : 1;
     unsigned m_wasAbortedByClient : 1;
     unsigned m_responseCacheIsValid : 1;
-    unsigned m_dispatchErrorOnResuming : 1;
-    unsigned m_readyState : 3;
-    unsigned m_responseType : 3;
+    unsigned m_readyState : 3; // State
+    unsigned m_responseType : 3; // ResponseType
 
     unsigned m_timeoutMilliseconds { 0 };
 
@@ -233,13 +235,14 @@ private:
 
     mutable String m_allResponseHeaders;
 
-    Timer m_resumeTimer;
     Timer m_networkErrorTimer;
     Timer m_timeoutTimer;
 
     MonotonicTime m_sendingTime;
 
-    std::optional<ExceptionCode> m_exceptionCode;
+    Optional<ExceptionCode> m_exceptionCode;
+    RefPtr<UserGestureToken> m_userGestureToken;
+    Seconds m_maximumIntervalForUserGestureForwarding;
 };
 
 inline auto XMLHttpRequest::responseType() const -> ResponseType

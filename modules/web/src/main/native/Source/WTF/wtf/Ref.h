@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2018 Apple Inc. All rights reserved.
+ * Copyright (C) 2013-2019 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -23,8 +23,7 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef WTF_Ref_h
-#define WTF_Ref_h
+#pragma once
 
 #include <wtf/Assertions.h>
 #include <wtf/DumbPtrTraits.h>
@@ -46,9 +45,10 @@ inline void adopted(const void*) { }
 template<typename T, typename PtrTraits> class Ref;
 template<typename T, typename PtrTraits = DumbPtrTraits<T>> Ref<T, PtrTraits> adoptRef(T&);
 
-template<typename T, typename PtrTraits>
+template<typename T, typename Traits>
 class Ref {
 public:
+    using PtrTraits = Traits;
     static constexpr bool isRef = true;
 
     ~Ref()
@@ -95,9 +95,8 @@ public:
     template<typename X, typename Y> void swap(Ref<X, Y>&);
 
     // Hash table deleted values, which are only constructed and never copied or destroyed.
-    Ref(HashTableDeletedValueType) : m_ptr(hashTableDeletedValue()) { }
-    bool isHashTableDeletedValue() const { return m_ptr == hashTableDeletedValue(); }
-    static T* hashTableDeletedValue() { return reinterpret_cast<T*>(-1); }
+    Ref(HashTableDeletedValueType) : m_ptr(PtrTraits::hashTableDeletedValue()) { }
+    bool isHashTableDeletedValue() const { return PtrTraits::isHashTableDeletedValue(m_ptr); }
 
     Ref(HashTableEmptyValueType) : m_ptr(hashTableEmptyValue()) { }
     bool isHashTableEmptyValue() const { return m_ptr == hashTableEmptyValue(); }
@@ -240,7 +239,7 @@ struct GetPtrHelper<Ref<T, U>> {
 
 template <typename T, typename U>
 struct IsSmartPtr<Ref<T, U>> {
-    static const bool value = true;
+    static constexpr bool value = true;
 };
 
 template<typename T, typename U>
@@ -268,17 +267,9 @@ inline bool is(const Ref<ArgType, PtrTraits>& source)
     return is<ExpectedType>(source.get());
 }
 
-template<typename Poison, typename T> struct PoisonedPtrTraits;
-
-template<typename Poison, typename T>
-using PoisonedRef = Ref<T, PoisonedPtrTraits<Poison, T>>;
-
 } // namespace WTF
 
-using WTF::PoisonedRef;
 using WTF::Ref;
 using WTF::adoptRef;
 using WTF::makeRef;
 using WTF::static_reference_cast;
-
-#endif // WTF_Ref_h

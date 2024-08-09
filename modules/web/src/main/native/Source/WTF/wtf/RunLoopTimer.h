@@ -26,8 +26,7 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef RunLoopTimer_h
-#define RunLoopTimer_h
+#pragma once
 
 #include <wtf/SchedulePair.h>
 #include <wtf/Seconds.h>
@@ -39,6 +38,7 @@ namespace WTF {
 
 class WTF_EXPORT_PRIVATE RunLoopTimerBase {
     WTF_MAKE_NONCOPYABLE(RunLoopTimerBase);
+    WTF_MAKE_FAST_ALLOCATED;
 public:
     RunLoopTimerBase() { }
     WTF_EXPORT_PRIVATE virtual ~RunLoopTimerBase();
@@ -80,5 +80,3 @@ private:
 } // namespace WTF
 
 using WTF::RunLoopTimer;
-
-#endif

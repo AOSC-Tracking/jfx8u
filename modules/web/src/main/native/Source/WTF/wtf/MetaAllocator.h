@@ -26,8 +26,7 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef WTF_MetaAllocator_h
-#define WTF_MetaAllocator_h
+#pragma once
 
 #include <wtf/Assertions.h>
 #include <wtf/HashMap.h>
@@ -83,6 +82,7 @@ public:
 
     // Atomic method for getting allocator statistics.
     struct Statistics {
+        WTF_MAKE_STRUCT_FAST_ALLOCATED;
         size_t bytesAllocated;
         size_t bytesReserved;
         size_t bytesCommitted;
@@ -114,10 +114,10 @@ protected:
     virtual FreeSpacePtr allocateNewSpace(size_t& numPages) = 0;
 
     // Commit a page.
-    virtual void notifyNeedPage(void* page) = 0;
+    virtual void notifyNeedPage(void* page, size_t) = 0;
 
     // Uncommit a page.
-    virtual void notifyPageIsFree(void* page) = 0;
+    virtual void notifyPageIsFree(void* page, size_t) = 0;
 
     // NOTE: none of the above methods are called during allocator
     // destruction, in part because a MetaAllocator cannot die so long
@@ -180,8 +180,8 @@ private:
     WTF_EXPORT_PRIVATE void freeFreeSpaceNode(FreeSpaceNode*);
 
     size_t m_allocationGranule;
-    unsigned m_logAllocationGranule;
     size_t m_pageSize;
+    unsigned m_logAllocationGranule;
     unsigned m_logPageSize;
 
     Tree m_freeSpaceSizeMap;
@@ -208,6 +208,3 @@ private:
 };
 
 } // namespace WTF
-
-#endif // WTF_MetaAllocator_h
-

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2018 Apple Inc. All rights reserved.
+ * Copyright (C) 2013-2020 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -31,10 +31,13 @@
 #include "DFGGraph.h"
 #include "DFGPromotedHeapLocation.h"
 #include "JSCInlines.h"
+#include "JSImmutableButterfly.h"
 
 namespace JSC { namespace DFG {
 
 const char Node::HashSetTemplateInstantiationString[] = "::JSC::DFG::Node*";
+
+DEFINE_ALLOCATOR_WITH_HEAP_IDENTIFIER(DFGNode);
 
 bool MultiPutByOffsetData::writesStructures() const
 {
@@ -72,7 +75,8 @@ bool Node::hasVariableAccessData(Graph& graph)
         return graph.m_form != SSA;
     case GetLocal:
     case SetLocal:
-    case SetArgument:
+    case SetArgumentDefinitely:
+    case SetArgumentMaybe:
     case Flush:
     case PhantomLocal:
         return true;
@@ -223,6 +227,17 @@ void Node::convertToLazyJSConstant(Graph& graph, LazyJSValue value)
     children.reset();
 }
 
+void Node::convertToNewArrayBuffer(FrozenValue* immutableButterfly)
+{
+    setOpAndDefaultFlags(NewArrayBuffer);
+    NewArrayBufferData data { };
+    data.indexingMode = immutableButterfly->cast<JSImmutableButterfly*>()->indexingMode();
+    data.vectorLengthHint = immutableButterfly->cast<JSImmutableButterfly*>()->toButterfly()->vectorLength();
+    children.reset();
+    m_opInfo = immutableButterfly;
+    m_opInfo2 = data.asQuadWord;
+}
+
 void Node::convertToDirectCall(FrozenValue* executable)
 {
     NodeType newOp = LastNodeType;
@@ -334,7 +349,7 @@ void printInternal(PrintStream& out, Node* node)
         out.print("-");
         return;
     }
-    out.print("@", node->index());
+    out.print("D@", node->index());
     if (node->hasDoubleResult())
         out.print("<Double>");
     else if (node->hasInt52Result())

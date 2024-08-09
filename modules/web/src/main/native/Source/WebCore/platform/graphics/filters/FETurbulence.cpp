@@ -154,7 +154,7 @@ void FETurbulence::initPaint(PaintingData& paintingData)
                 gradient[0] = static_cast<float>((paintingData.random() % (2 * s_blockSize)) - s_blockSize) / s_blockSize;
                 gradient[1] = static_cast<float>((paintingData.random() % (2 * s_blockSize)) - s_blockSize) / s_blockSize;
             } while (!gradient[0] && !gradient[1]);
-            normalizationFactor = sqrtf(gradient[0] * gradient[0] + gradient[1] * gradient[1]);
+            normalizationFactor = std::hypot(gradient[0], gradient[1]);
             gradient[0] /= normalizationFactor;
             gradient[1] /= normalizationFactor;
         }
@@ -373,7 +373,7 @@ void FETurbulence::fillRegion(Uint8ClampedArray& pixelArray, const PaintingData&
     filterRegion.scale(filter().filterScale());
     FloatPoint point(0, filterRegion.y() + startY);
     int indexOfPixelChannel = startY * (filterRegion.width() << 2);
-    AffineTransform inverseTransfrom = filter().absoluteTransform().inverse().value_or(AffineTransform());
+    AffineTransform inverseTransfrom = filter().absoluteTransform().inverse().valueOr(AffineTransform());
 
     for (int y = startY; y < endY; ++y) {
         point.setY(point.y() + 1);

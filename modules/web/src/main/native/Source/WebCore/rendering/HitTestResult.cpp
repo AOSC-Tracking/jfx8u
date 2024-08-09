@@ -96,7 +96,7 @@ HitTestResult::HitTestResult(const HitTestResult& other)
     , m_isOverWidget(other.isOverWidget())
 {
     // Only copy the NodeSet in case of list hit test.
-    m_listBasedTestResult = other.m_listBasedTestResult ? std::make_unique<NodeSet>(*other.m_listBasedTestResult) : nullptr;
+    m_listBasedTestResult = other.m_listBasedTestResult ? makeUnique<NodeSet>(*other.m_listBasedTestResult) : nullptr;
 }
 
 HitTestResult::~HitTestResult() = default;
@@ -113,7 +113,7 @@ HitTestResult& HitTestResult::operator=(const HitTestResult& other)
     m_isOverWidget = other.isOverWidget();
 
     // Only copy the NodeSet in case of list hit test.
-    m_listBasedTestResult = other.m_listBasedTestResult ? std::make_unique<NodeSet>(*other.m_listBasedTestResult) : nullptr;
+    m_listBasedTestResult = other.m_listBasedTestResult ? makeUnique<NodeSet>(*other.m_listBasedTestResult) : nullptr;
 
     return *this;
 }
@@ -177,13 +177,13 @@ Frame* HitTestResult::innerNodeFrame() const
 Frame* HitTestResult::targetFrame() const
 {
     if (!m_innerURLElement)
-        return 0;
+        return nullptr;
 
     Frame* frame = m_innerURLElement->document().frame();
     if (!frame)
-        return 0;
+        return nullptr;
 
-    return frame->tree().find(m_innerURLElement->target());
+    return frame->tree().find(m_innerURLElement->target(), *frame);
 }
 
 bool HitTestResult::isSelected() const
@@ -349,7 +349,7 @@ URL HitTestResult::absoluteImageURL() const
     if (!(m_innerNonSharedNode->renderer() && m_innerNonSharedNode->renderer()->isImage()))
         return URL();
 
-    AtomicString urlString;
+    AtomString urlString;
     if (is<HTMLEmbedElement>(*m_innerNonSharedNode)
         || is<HTMLImageElement>(*m_innerNonSharedNode)
         || is<HTMLInputElement>(*m_innerNonSharedNode)
@@ -682,7 +682,7 @@ void HitTestResult::append(const HitTestResult& other, const HitTestRequest& req
 
     if (other.m_listBasedTestResult) {
         NodeSet& set = mutableListBasedTestResult();
-        for (auto node : *other.m_listBasedTestResult)
+        for (const auto& node : *other.m_listBasedTestResult)
             set.add(node.get());
     }
 }
@@ -690,14 +690,14 @@ void HitTestResult::append(const HitTestResult& other, const HitTestRequest& req
 const HitTestResult::NodeSet& HitTestResult::listBasedTestResult() const
 {
     if (!m_listBasedTestResult)
-        m_listBasedTestResult = std::make_unique<NodeSet>();
+        m_listBasedTestResult = makeUnique<NodeSet>();
     return *m_listBasedTestResult;
 }
 
 HitTestResult::NodeSet& HitTestResult::mutableListBasedTestResult()
 {
     if (!m_listBasedTestResult)
-        m_listBasedTestResult = std::make_unique<NodeSet>();
+        m_listBasedTestResult = makeUnique<NodeSet>();
     return *m_listBasedTestResult;
 }
 

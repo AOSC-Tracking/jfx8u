@@ -40,7 +40,7 @@
 
 namespace WebCore {
 
-CachedResourceRequest::CachedResourceRequest(ResourceRequest&& resourceRequest, const ResourceLoaderOptions& options, std::optional<ResourceLoadPriority> priority, String&& charset)
+CachedResourceRequest::CachedResourceRequest(ResourceRequest&& resourceRequest, const ResourceLoaderOptions& options, Optional<ResourceLoadPriority> priority, String&& charset)
     : m_resourceRequest(WTFMove(resourceRequest))
     , m_charset(WTFMove(charset))
     , m_options(options)
@@ -67,41 +67,22 @@ void CachedResourceRequest::setInitiator(Element& element)
     m_initiatorElement = &element;
 }
 
-void CachedResourceRequest::setInitiator(const AtomicString& name)
+void CachedResourceRequest::setInitiator(const AtomString& name)
 {
     ASSERT(!m_initiatorElement);
     ASSERT(m_initiatorName.isEmpty());
     m_initiatorName = name;
 }
 
-const AtomicString& CachedResourceRequest::initiatorName() const
+const AtomString& CachedResourceRequest::initiatorName() const
 {
     if (m_initiatorElement)
         return m_initiatorElement->localName();
     if (!m_initiatorName.isEmpty())
         return m_initiatorName;
 
-    static NeverDestroyed<AtomicString> defaultName("other", AtomicString::ConstructFromLiteral);
+    static NeverDestroyed<AtomString> defaultName("other", AtomString::ConstructFromLiteral);
     return defaultName;
-}
-
-void CachedResourceRequest::setAsPotentiallyCrossOrigin(const String& mode, Document& document)
-{
-    ASSERT(m_options.mode == FetchOptions::Mode::NoCors);
-
-    m_origin = &document.securityOrigin();
-
-    if (mode.isNull())
-        return;
-
-    m_options.mode = FetchOptions::Mode::Cors;
-
-    FetchOptions::Credentials credentials = equalLettersIgnoringASCIICase(mode, "omit")
-        ? FetchOptions::Credentials::Omit : equalLettersIgnoringASCIICase(mode, "use-credentials")
-        ? FetchOptions::Credentials::Include : FetchOptions::Credentials::SameOrigin;
-    m_options.credentials = credentials;
-    m_options.storedCredentialsPolicy = credentials == FetchOptions::Credentials::Include ? StoredCredentialsPolicy::Use : StoredCredentialsPolicy::DoNotUse;
-    updateRequestForAccessControl(m_resourceRequest, document.securityOrigin(), m_options.storedCredentialsPolicy);
 }
 
 void CachedResourceRequest::updateForAccessControl(Document& document)
@@ -226,9 +207,9 @@ void CachedResourceRequest::removeFragmentIdentifierIfNeeded()
 
 #if ENABLE(CONTENT_EXTENSIONS)
 
-void CachedResourceRequest::applyBlockedStatus(const ContentExtensions::BlockedStatus& blockedStatus, Page* page)
+void CachedResourceRequest::applyResults(ContentRuleListResults&& results, Page* page)
 {
-    ContentExtensions::applyBlockedStatusToRequest(blockedStatus, page, m_resourceRequest);
+    ContentExtensions::applyResultsToRequest(WTFMove(results), page, m_resourceRequest);
 }
 
 #endif
@@ -300,7 +281,7 @@ void CachedResourceRequest::setSelectedServiceWorkerRegistrationIdentifierIfNeed
     m_options.serviceWorkerRegistrationIdentifier = identifier;
 }
 
-void CachedResourceRequest::setNavigationServiceWorkerRegistrationData(const std::optional<ServiceWorkerRegistrationData>& data)
+void CachedResourceRequest::setNavigationServiceWorkerRegistrationData(const Optional<ServiceWorkerRegistrationData>& data)
 {
     if (!data || !data->activeWorker) {
         m_options.serviceWorkersMode = ServiceWorkersMode::None;

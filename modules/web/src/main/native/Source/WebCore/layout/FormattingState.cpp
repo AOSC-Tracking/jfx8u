@@ -28,6 +28,8 @@
 
 #if ENABLE(LAYOUT_FORMATTING_CONTEXT)
 
+#include "DisplayBox.h"
+#include "FloatingState.h"
 #include <wtf/IsoMallocInlines.h>
 
 namespace WebCore {
@@ -35,8 +37,8 @@ namespace Layout {
 
 WTF_MAKE_ISO_ALLOCATED_IMPL(FormattingState);
 
-FormattingState::FormattingState(Ref<FloatingState>&& floatingState, Type type, const LayoutContext& layoutContext)
-    : m_layoutContext(layoutContext)
+FormattingState::FormattingState(Ref<FloatingState>&& floatingState, Type type, LayoutState& layoutState)
+    : m_layoutState(layoutState)
     , m_floatingState(WTFMove(floatingState))
     , m_type(type)
 {
@@ -44,6 +46,13 @@ FormattingState::FormattingState(Ref<FloatingState>&& floatingState, Type type, 
 
 FormattingState::~FormattingState()
 {
+}
+
+Display::Box& FormattingState::displayBox(const Box& layoutBox)
+{
+    // Should never need to mutate a display box outside of the formatting context.
+    ASSERT(&layoutState().establishedFormattingState(layoutBox.formattingContextRoot()) == this);
+    return layoutState().ensureDisplayBoxForLayoutBox(layoutBox);
 }
 
 }

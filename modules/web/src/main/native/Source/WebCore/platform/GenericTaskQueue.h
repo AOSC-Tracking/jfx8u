@@ -30,51 +30,64 @@
 #include <wtf/Function.h>
 #include <wtf/WeakPtr.h>
 
+namespace WTF {
+class Lock;
+};
+
 namespace WebCore {
 
 template <typename T>
 class TaskDispatcher {
 public:
-    TaskDispatcher(T& context)
+    explicit TaskDispatcher(T* context)
         : m_context(context)
     {
     }
 
-    void postTask(WTF::Function<void()>&& f)
+    void postTask(Function<void()>&& function)
     {
-        m_context.postTask(WTFMove(f));
+        ASSERT(m_context);
+        m_context->enqueueTaskForDispatcher(WTFMove(function));
     }
 
 private:
-    T& m_context;
+    T* m_context;
 };
 
 template<>
 class TaskDispatcher<Timer> : public CanMakeWeakPtr<TaskDispatcher<Timer>> {
 public:
     TaskDispatcher();
-    void postTask(WTF::Function<void()>&&);
+    void postTask(Function<void()>&&);
 
 private:
     static Timer& sharedTimer();
+    static WTF::Lock& sharedLock();
     static void sharedTimerFired();
     static Deque<WeakPtr<TaskDispatcher<Timer>>>& pendingDispatchers();
 
     void dispatchOneTask();
 
-    Deque<WTF::Function<void()>> m_pendingTasks;
+    Deque<Function<void()>> m_pendingTasks;
 };
 
 template <typename T>
 class GenericTaskQueue : public CanMakeWeakPtr<GenericTaskQueue<T>> {
+    WTF_MAKE_FAST_ALLOCATED;
 public:
     GenericTaskQueue()
         : m_dispatcher()
     {
     }
 
-    GenericTaskQueue(T& t)
+    explicit GenericTaskQueue(T& t)
+        : m_dispatcher(&t)
+    {
+    }
+
+    explicit GenericTaskQueue(T* t)
         : m_dispatcher(t)
+        , m_isClosed(!t)
     {
     }
 
@@ -106,7 +119,9 @@ public:
         CanMakeWeakPtr<GenericTaskQueue<T>>::weakPtrFactory().revokeAll();
         m_pendingTasks = 0;
     }
+
     bool hasPendingTasks() const { return m_pendingTasks; }
+    bool isClosed() const { return m_isClosed; }
 
 private:
     TaskDispatcher<T> m_dispatcher;

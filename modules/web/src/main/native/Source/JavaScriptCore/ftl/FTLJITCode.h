@@ -60,13 +60,14 @@ public:
 
     RegisterSet liveRegistersToPreserveAtExceptionHandlingCallSite(CodeBlock*, CallSiteIndex) override;
 
-    std::optional<CodeOrigin> findPC(CodeBlock*, void* pc) override;
+    Optional<CodeOrigin> findPC(CodeBlock*, void* pc) override;
 
     CodeRef<JSEntryPtrTag> b3Code() const { return m_b3Code; }
 
     JITCode* ftl() override;
     DFG::CommonData* dfgCommon() override;
     static ptrdiff_t commonDataOffset() { return OBJECT_OFFSETOF(JITCode, common); }
+    void shrinkToFit(const ConcurrentJSLocker&) override;
 
     DFG::CommonData common;
     SegmentedVector<OSRExit, 8> osrExit;
@@ -82,4 +83,4 @@ private:
 
 } } // namespace JSC::FTL
 
-#endif // ENABLE(FLT_JIT)
+#endif // ENABLE(FTL_JIT)

@@ -36,8 +36,8 @@ namespace Layout {
 
 WTF_MAKE_ISO_ALLOCATED_IMPL(Container);
 
-Container::Container(std::optional<ElementAttributes> attributes, RenderStyle&& style, BaseTypeFlags baseTypeFlags)
-    : Box(attributes, WTFMove(style), baseTypeFlags | ContainerFlag)
+Container::Container(Optional<ElementAttributes> attributes, RenderStyle&& style, BaseTypeFlags baseTypeFlags)
+    : Box(attributes, { }, WTFMove(style), baseTypeFlags | ContainerFlag)
 {
 }
 
@@ -91,12 +91,17 @@ void Container::setLastChild(Box& childBox)
     m_lastChild = &childBox;
 }
 
-void Container::addOutOfFlowDescendant(const Box& outOfFlowBox)
+void Container::appendChild(Box& childBox)
 {
-    // Since we layout the out-of-flow boxes at the end of the formatting context layout,
-    // it's okay to store them at the formatting context root level -as opposed to the containing block level.
-    ASSERT(establishesFormattingContext());
-    m_outOfFlowDescendants.append(makeWeakPtr(const_cast<Box&>(outOfFlowBox)));
+    childBox.setParent(*this);
+
+    if (m_lastChild) {
+        m_lastChild->setNextSibling(childBox);
+        childBox.setPreviousSibling(*m_lastChild);
+    } else
+        m_firstChild = &childBox;
+
+    m_lastChild = &childBox;
 }
 
 }

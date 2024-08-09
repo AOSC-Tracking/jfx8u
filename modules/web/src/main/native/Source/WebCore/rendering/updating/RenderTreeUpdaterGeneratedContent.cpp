@@ -34,6 +34,7 @@
 #include "RenderImage.h"
 #include "RenderQuote.h"
 #include "RenderTreeUpdater.h"
+#include "RenderView.h"
 #include "StyleTreeResolver.h"
 
 namespace WebCore {
@@ -89,7 +90,7 @@ static void updateStyleForContentRenderers(RenderElement& pseudoRenderer, const 
     }
 }
 
-void RenderTreeUpdater::GeneratedContent::updatePseudoElement(Element& current, const std::optional<Style::ElementUpdate>& update, PseudoId pseudoId)
+void RenderTreeUpdater::GeneratedContent::updatePseudoElement(Element& current, const Optional<Style::ElementUpdate>& update, PseudoId pseudoId)
 {
     PseudoElement* pseudoElement = pseudoId == PseudoId::Before ? current.beforePseudoElement() : current.afterPseudoElement();
 
@@ -154,7 +155,7 @@ void RenderTreeUpdater::GeneratedContent::updatePseudoElement(Element& current, 
     m_updater.m_builder.updateAfterDescendants(*pseudoElementRenderer);
 }
 
-bool RenderTreeUpdater::GeneratedContent::needsPseudoElement(const std::optional<Style::ElementUpdate>& update)
+bool RenderTreeUpdater::GeneratedContent::needsPseudoElement(const Optional<Style::ElementUpdate>& update)
 {
     if (!update)
         return false;

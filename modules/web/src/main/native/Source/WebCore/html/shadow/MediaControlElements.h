@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008, 2009, 2010, 2011 Apple Inc. All rights reserved.
+ * Copyright (C) 2008-2019 Apple Inc. All rights reserved.
  * Copyright (C) 2012 Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -33,6 +33,7 @@
 
 #include "MediaControlElementTypes.h"
 #include "TextTrackRepresentation.h"
+#include <wtf/LoggerHelper.h>
 
 namespace WebCore {
 
@@ -50,7 +51,7 @@ public:
     void makeOpaque();
     void makeTransparent();
 
-#if !PLATFORM(IOS)
+#if !PLATFORM(IOS_FAMILY)
     bool willRespondToMouseMoveEvents() override { return true; }
     bool willRespondToMouseClickEvents() override { return true; }
 #endif
@@ -124,7 +125,7 @@ class MediaControlVolumeSliderContainerElement final : public MediaControlDivEle
 public:
     static Ref<MediaControlVolumeSliderContainerElement> create(Document&);
 
-#if !PLATFORM(IOS)
+#if !PLATFORM(IOS_FAMILY)
     bool willRespondToMouseMoveEvents() override { return true; }
 #endif
 
@@ -159,7 +160,7 @@ class MediaControlPanelMuteButtonElement final : public MediaControlMuteButtonEl
 public:
     static Ref<MediaControlPanelMuteButtonElement> create(Document&, MediaControls*);
 
-#if !PLATFORM(IOS)
+#if !PLATFORM(IOS_FAMILY)
     bool willRespondToMouseMoveEvents() override { return true; }
 #endif
 
@@ -190,7 +191,7 @@ class MediaControlPlayButtonElement final : public MediaControlInputElement {
 public:
     static Ref<MediaControlPlayButtonElement> create(Document&);
 
-#if !PLATFORM(IOS)
+#if !PLATFORM(IOS_FAMILY)
     bool willRespondToMouseClickEvents() override { return true; }
 #endif
 
@@ -250,7 +251,7 @@ class MediaControlRewindButtonElement final : public MediaControlInputElement {
 public:
     static Ref<MediaControlRewindButtonElement> create(Document&);
 
-#if !PLATFORM(IOS)
+#if !PLATFORM(IOS_FAMILY)
     bool willRespondToMouseClickEvents() override { return true; }
 #endif
 
@@ -267,7 +268,7 @@ class MediaControlReturnToRealtimeButtonElement final : public MediaControlInput
 public:
     static Ref<MediaControlReturnToRealtimeButtonElement> create(Document&);
 
-#if !PLATFORM(IOS)
+#if !PLATFORM(IOS_FAMILY)
     bool willRespondToMouseClickEvents() override { return true; }
 #endif
 
@@ -284,7 +285,7 @@ class MediaControlToggleClosedCaptionsButtonElement final : public MediaControlI
 public:
     static Ref<MediaControlToggleClosedCaptionsButtonElement> create(Document&, MediaControls*);
 
-#if !PLATFORM(IOS)
+#if !PLATFORM(IOS_FAMILY)
     bool willRespondToMouseClickEvents() override { return true; }
 #endif
 
@@ -307,7 +308,7 @@ class MediaControlClosedCaptionsContainerElement final : public MediaControlDivE
 public:
     static Ref<MediaControlClosedCaptionsContainerElement> create(Document&);
 
-#if !PLATFORM(IOS)
+#if !PLATFORM(IOS_FAMILY)
     bool willRespondToMouseClickEvents() override { return true; }
 #endif
 
@@ -322,7 +323,7 @@ class MediaControlClosedCaptionsTrackListElement final : public MediaControlDivE
 public:
     static Ref<MediaControlClosedCaptionsTrackListElement> create(Document&, MediaControls*);
 
-#if !PLATFORM(IOS)
+#if !PLATFORM(IOS_FAMILY)
     bool willRespondToMouseClickEvents() override { return true; }
 #endif
 
@@ -351,7 +352,7 @@ class MediaControlTimelineElement final : public MediaControlInputElement {
 public:
     static Ref<MediaControlTimelineElement> create(Document&, MediaControls*);
 
-#if !PLATFORM(IOS)
+#if !PLATFORM(IOS_FAMILY)
     bool willRespondToMouseClickEvents() override;
 #endif
 
@@ -373,7 +374,7 @@ class MediaControlFullscreenButtonElement final : public MediaControlInputElemen
 public:
     static Ref<MediaControlFullscreenButtonElement> create(Document&);
 
-#if !PLATFORM(IOS)
+#if !PLATFORM(IOS_FAMILY)
     bool willRespondToMouseClickEvents() override { return true; }
 #endif
 
@@ -413,7 +414,7 @@ class MediaControlFullscreenVolumeMinButtonElement final : public MediaControlIn
 public:
     static Ref<MediaControlFullscreenVolumeMinButtonElement> create(Document&);
 
-#if !PLATFORM(IOS)
+#if !PLATFORM(IOS_FAMILY)
     bool willRespondToMouseClickEvents() override { return true; }
 #endif
 
@@ -429,7 +430,7 @@ class MediaControlFullscreenVolumeMaxButtonElement final : public MediaControlIn
 public:
     static Ref<MediaControlFullscreenVolumeMaxButtonElement> create(Document&);
 
-#if !PLATFORM(IOS)
+#if !PLATFORM(IOS_FAMILY)
     bool willRespondToMouseClickEvents() override { return true; }
 #endif
 
@@ -466,13 +467,23 @@ private:
 
 #if ENABLE(VIDEO_TRACK)
 
-class MediaControlTextTrackContainerElement final : public MediaControlDivElement, public TextTrackRepresentationClient {
+class VTTCue;
+
+class MediaControlTextTrackContainerElement final
+    : public MediaControlDivElement
+    , public TextTrackRepresentationClient
+#if !RELEASE_LOG_DISABLED
+    , private LoggerHelper
+#endif
+{
     WTF_MAKE_ISO_ALLOCATED(MediaControlTextTrackContainerElement);
 public:
     static Ref<MediaControlTextTrackContainerElement> create(Document&);
 
+    enum class ForceUpdate { Yes, No };
+    void updateSizes(ForceUpdate force = ForceUpdate::No);
+
     void updateDisplay();
-    void updateSizes(bool forceUpdate = false);
     void enteredFullscreen();
     void exitedFullscreen();
 
@@ -480,6 +491,14 @@ private:
     void updateTimerFired();
     void updateActiveCuesFontSize();
     void updateTextStrokeStyle();
+    void processActiveVTTCue(VTTCue&);
+
+#if !RELEASE_LOG_DISABLED
+    const Logger& logger() const final;
+    const void* logIdentifier() const final;
+    WTFLogChannel& logChannel() const final;
+    const char* logClassName() const final { return "MediaControlTextTrackContainerElement"; }
+#endif
 
     explicit MediaControlTextTrackContainerElement(Document&);
 

@@ -67,13 +67,8 @@ void ReferenceFilterOperation::loadExternalDocumentIfNeeded(CachedResourceLoader
         return;
     if (!SVGURIReference::isExternalURIReference(m_url, *cachedResourceLoader.document()))
         return;
-    m_cachedSVGDocumentReference = std::make_unique<CachedSVGDocumentReference>(m_url);
+    m_cachedSVGDocumentReference = makeUnique<CachedSVGDocumentReference>(m_url);
     m_cachedSVGDocumentReference->load(cachedResourceLoader, options);
-}
-
-void ReferenceFilterOperation::setFilterEffect(RefPtr<FilterEffect>&& filterEffect)
-{
-    m_filterEffect = WTFMove(filterEffect);
 }
 
 RefPtr<FilterOperation> BasicColorMatrixFilterOperation::blend(const FilterOperation* from, double progress, bool blendToPassthrough)

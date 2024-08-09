@@ -53,7 +53,7 @@ COMPILE_ASSERT(sizeof(SVGInlineTextBox) == sizeof(ExpectedSVGInlineTextBoxSize),
 
 SVGInlineTextBox::SVGInlineTextBox(RenderSVGInlineText& renderer)
     : InlineTextBox(renderer)
-    , m_paintingResourceMode(OptionSet<RenderSVGResourceMode>(RenderSVGResourceMode::ApplyToDefault).toRaw())
+    , m_paintingResourceMode(OptionSet<RenderSVGResourceMode>().toRaw())
     , m_startsNewTextChunk(false)
 {
 }
@@ -123,7 +123,7 @@ FloatRect SVGInlineTextBox::selectionRectForTextFragment(const SVGTextFragment& 
 
     textOrigin.move(0, -scaledFontMetrics.floatAscent());
 
-    LayoutRect selectionRect = LayoutRect(textOrigin, LayoutSize(0, fragment.height * scalingFactor));
+    LayoutRect selectionRect { textOrigin, LayoutSize(0, LayoutUnit(fragment.height * scalingFactor)) };
     TextRun run = constructTextRun(style, fragment);
     scaledFont.adjustSelectionRectForText(run, selectionRect, startPosition, endPosition);
     FloatRect snappedSelectionRect = snapRectToDevicePixelsWithWritingDirection(selectionRect, renderer().document().deviceScaleFactor(), run.ltr());
@@ -202,9 +202,7 @@ void SVGInlineTextBox::paintSelectionBackground(PaintInfo& paintInfo)
 
     auto& style = parentRenderer.style();
 
-    unsigned startPosition;
-    unsigned endPosition;
-    std::tie(startPosition, endPosition) = selectionStartEnd();
+    auto [startPosition, endPosition] = selectionStartEnd();
 
     unsigned fragmentStartPosition = 0;
     unsigned fragmentEndPosition = 0;
@@ -227,7 +225,7 @@ void SVGInlineTextBox::paintSelectionBackground(PaintInfo& paintInfo)
         paintInfo.context().setFillColor(backgroundColor);
         paintInfo.context().fillRect(selectionRectForTextFragment(fragment, fragmentStartPosition, fragmentEndPosition, style), backgroundColor);
 
-        setPaintingResourceMode(RenderSVGResourceMode::ApplyToDefault);
+        setPaintingResourceMode({ });
     }
 
     ASSERT(!m_paintingResource);
@@ -326,7 +324,7 @@ void SVGInlineTextBox::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffse
         if (decorations & TextDecoration::LineThrough)
             paintDecoration(paintInfo.context(), TextDecoration::LineThrough, fragment);
 
-        setPaintingResourceMode(RenderSVGResourceMode::ApplyToDefault);
+        setPaintingResourceMode({ });
     }
 
     // Finally, paint the outline if any.
@@ -339,7 +337,7 @@ void SVGInlineTextBox::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffse
 bool SVGInlineTextBox::acquirePaintingResource(GraphicsContext*& context, float scalingFactor, RenderBoxModelObject& renderer, const RenderStyle& style)
 {
     ASSERT(scalingFactor);
-    ASSERT(paintingResourceMode() != RenderSVGResourceMode::ApplyToDefault);
+    ASSERT(!paintingResourceMode().isEmpty());
 
     Color fallbackColor;
     if (paintingResourceMode().contains(RenderSVGResourceMode::ApplyToFill))
@@ -502,7 +500,7 @@ void SVGInlineTextBox::paintDecoration(GraphicsContext& context, OptionSet<TextD
 void SVGInlineTextBox::paintDecorationWithStyle(GraphicsContext& context, OptionSet<TextDecoration> decoration, const SVGTextFragment& fragment, RenderBoxModelObject& decorationRenderer)
 {
     ASSERT(!m_paintingResource);
-    ASSERT(paintingResourceMode() != RenderSVGResourceMode::ApplyToDefault);
+    ASSERT(!paintingResourceMode().isEmpty());
 
     auto& decorationStyle = decorationRenderer.style();
 

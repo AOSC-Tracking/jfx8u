@@ -29,10 +29,11 @@
 #define ResourceRequestBase_h
 
 #include "FormData.h"
+#include "FrameLoaderTypes.h"
 #include "HTTPHeaderMap.h"
 #include "IntRect.h"
-#include "URL.h"
 #include "ResourceLoadPriority.h"
+#include <wtf/URL.h>
 
 namespace WebCore {
 
@@ -57,7 +58,7 @@ class ResourceResponse;
 class ResourceRequestBase {
     WTF_MAKE_FAST_ALLOCATED;
 public:
-    ResourceRequest isolatedCopy() const;
+    WEBCORE_EXPORT ResourceRequest isolatedCopy() const;
     WEBCORE_EXPORT void setAsIsolatedCopy(const ResourceRequest&);
 
     WEBCORE_EXPORT bool isNull() const;
@@ -73,7 +74,7 @@ public:
     WEBCORE_EXPORT ResourceRequestCachePolicy cachePolicy() const;
     WEBCORE_EXPORT void setCachePolicy(ResourceRequestCachePolicy cachePolicy);
 
-    double timeoutInterval() const; // May return 0 when using platform default.
+    WEBCORE_EXPORT double timeoutInterval() const; // May return 0 when using platform default.
     void setTimeoutInterval(double timeoutInterval);
 
     WEBCORE_EXPORT const URL& firstPartyForCookies() const;
@@ -140,10 +141,13 @@ public:
 
     void clearHTTPAcceptEncoding();
 
+    WEBCORE_EXPORT void clearPurpose();
+
     const Vector<String>& responseContentDispositionEncodingFallbackArray() const { return m_responseContentDispositionEncodingFallbackArray; }
     WEBCORE_EXPORT void setResponseContentDispositionEncodingFallbackArray(const String& encoding1, const String& encoding2 = String(), const String& encoding3 = String());
 
     WEBCORE_EXPORT FormData* httpBody() const;
+    WEBCORE_EXPORT bool hasUpload() const;
     WEBCORE_EXPORT void setHTTPBody(RefPtr<FormData>&&);
 
     bool allowCookies() const;
@@ -172,12 +176,15 @@ public:
     String initiatorIdentifier() const { return m_initiatorIdentifier; }
     void setInitiatorIdentifier(const String& identifier) { m_initiatorIdentifier = identifier; }
 
+    // Additional information for the Inspector to be able to identify the node that initiated this request.
+    const Optional<int>& inspectorInitiatorNodeIdentifier() const { return m_inspectorInitiatorNodeIdentifier; }
+    void setInspectorInitiatorNodeIdentifier(int inspectorInitiatorNodeIdentifier) { m_inspectorInitiatorNodeIdentifier = inspectorInitiatorNodeIdentifier; }
+
 #if USE(SYSTEM_PREVIEW)
     WEBCORE_EXPORT bool isSystemPreview() const;
-    WEBCORE_EXPORT void setSystemPreview(bool);
 
-    WEBCORE_EXPORT const IntRect& systemPreviewRect() const;
-    WEBCORE_EXPORT void setSystemPreviewRect(const IntRect&);
+    WEBCORE_EXPORT SystemPreviewInfo systemPreviewInfo() const;
+    WEBCORE_EXPORT void setSystemPreviewInfo(const SystemPreviewInfo&);
 #endif
 
 #if !PLATFORM(COCOA)
@@ -194,8 +201,13 @@ public:
 protected:
     // Used when ResourceRequest is initialized from a platform representation of the request
     ResourceRequestBase()
-        : m_platformRequestUpdated(true)
+        : m_allowCookies(false)
+        , m_resourceRequestUpdated(false)
+        , m_platformRequestUpdated(true)
+        , m_resourceRequestBodyUpdated(false)
         , m_platformRequestBodyUpdated(true)
+        , m_hiddenFromInspector(false)
+        , m_isTopSite(false)
     {
     }
 
@@ -206,7 +218,11 @@ protected:
         , m_cachePolicy(policy)
         , m_allowCookies(true)
         , m_resourceRequestUpdated(true)
+        , m_platformRequestUpdated(false)
         , m_resourceRequestBodyUpdated(true)
+        , m_platformRequestBodyUpdated(false)
+        , m_hiddenFromInspector(false)
+        , m_isTopSite(false)
     {
     }
 
@@ -232,16 +248,16 @@ protected:
     SameSiteDisposition m_sameSiteDisposition { SameSiteDisposition::Unspecified };
     ResourceLoadPriority m_priority { ResourceLoadPriority::Low };
     Requester m_requester { Requester::Unspecified };
-    bool m_allowCookies { false };
-    mutable bool m_resourceRequestUpdated { false };
-    mutable bool m_platformRequestUpdated { false };
-    mutable bool m_resourceRequestBodyUpdated { false };
-    mutable bool m_platformRequestBodyUpdated { false };
-    bool m_hiddenFromInspector { false };
-    bool m_isTopSite { false };
+    Optional<int> m_inspectorInitiatorNodeIdentifier;
+    bool m_allowCookies : 1;
+    mutable bool m_resourceRequestUpdated : 1;
+    mutable bool m_platformRequestUpdated : 1;
+    mutable bool m_resourceRequestBodyUpdated : 1;
+    mutable bool m_platformRequestBodyUpdated : 1;
+    bool m_hiddenFromInspector : 1;
+    bool m_isTopSite : 1;
 #if USE(SYSTEM_PREVIEW)
-    bool m_isSystemPreview { false };
-    IntRect m_systemPreviewRect;
+    Optional<SystemPreviewInfo> m_systemPreviewInfo;
 #endif
 
 private:
@@ -252,21 +268,11 @@ private:
 
 bool equalIgnoringHeaderFields(const ResourceRequestBase&, const ResourceRequestBase&);
 
-// FIXME: Find a better place for these functions.
-inline bool registrableDomainsAreEqual(const URL& a, const URL& b)
-{
-    return ResourceRequestBase::partitionName(a.host().toString()) == ResourceRequestBase::partitionName(b.host().toString());
-}
-inline bool registrableDomainsAreEqual(const URL& a, const String& registrableDomain)
-{
-    return ResourceRequestBase::partitionName(a.host().toString()) == registrableDomain;
-}
-
 inline bool operator==(const ResourceRequest& a, const ResourceRequest& b) { return ResourceRequestBase::equal(a, b); }
 inline bool operator!=(ResourceRequest& a, const ResourceRequest& b) { return !(a == b); }
 
 WEBCORE_EXPORT unsigned initializeMaximumHTTPConnectionCountPerHost();
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
 WEBCORE_EXPORT void initializeHTTPConnectionSettingsOnStartup();
 #endif
 
@@ -299,7 +305,7 @@ ALWAYS_INLINE bool ResourceRequestBase::decodeBase(Decoder& decoder)
     String firstPartyForCookies;
     if (!decoder.decode(firstPartyForCookies))
         return false;
-    m_firstPartyForCookies = URL(ParsedURLString, firstPartyForCookies);
+    m_firstPartyForCookies = URL({ }, firstPartyForCookies);
 
     if (!decoder.decode(m_httpMethod))
         return false;

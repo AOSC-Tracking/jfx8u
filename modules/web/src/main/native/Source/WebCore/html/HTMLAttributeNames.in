@@ -66,8 +66,11 @@ aria-valuenow
 aria-valuetext
 as
 async
+adcampaignid
+addestination
 autocomplete
 autofocus
+autopictureinpicture
 autoplay
 autosave
 axis
@@ -113,14 +116,18 @@ dir
 direction
 dirname
 disabled
+disablepictureinpicture
+disableremoteplayback
 disposition
 download
 draggable
 webkitdropzone
 enctype
 end
+enterkeyhint
 event
 expanded
+exportparts
 face
 filename
 focused
@@ -142,8 +149,11 @@ hreflang
 hspace
 http_equiv
 id
+imagesizes
+imagesrcset
 incremental
 indeterminate
+inputmode
 integrity
 is
 ismap
@@ -160,6 +170,7 @@ language
 leftmargin
 link
 list
+loading
 longdesc
 loop
 low
@@ -190,15 +201,7 @@ novalidate
 nowrap
 object
 onabort
-onaccessiblecontextmenu
-onaccessibleclick
-onaccessibledecrement
-onaccessibledismiss
-onaccessiblefocus
-onaccessibleincrement
-onaccessiblescrollintoview
-onaccessiblesetvalue
-onaccessibleselect
+onafterprint
 onanimationstart
 onanimationiteration
 onanimationend
@@ -210,6 +213,7 @@ onbeforecut
 onbeforeinput
 onbeforeload
 onbeforepaste
+onbeforeprint
 onbeforeunload
 onblur
 oncanplay
@@ -244,11 +248,13 @@ onkeyup
 ongesturestart
 ongesturechange
 ongestureend
+ongotpointercapture
 onlanguagechange
 onload
 onloadeddata
 onloadedmetadata
 onloadstart
+onlostpointercapture
 onmessage
 onmousedown
 onmouseenter
@@ -267,6 +273,14 @@ onpaste
 onpause
 onplay
 onplaying
+onpointerdown
+onpointermove
+onpointerup
+onpointercancel
+onpointerover
+onpointerout
+onpointerenter
+onpointerleave
 onpopstate
 onprogress
 onratechange
@@ -324,6 +338,7 @@ onwebkitwillrevealright
 onwebkitwillrevealtop
 open
 optimum
+part
 pattern
 placeholder
 playsinline
@@ -339,6 +354,7 @@ progress
 prompt
 pseudo
 readonly
+referrerpolicy
 rel
 required
 results
@@ -419,3 +435,5 @@ x-apple-data-detectors-type
 x-apple-data-detectors-result
 
 x-apple-pdf-annotation
+
+x-apple-editable-image

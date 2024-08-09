@@ -31,15 +31,21 @@
 #include <wtf/IsoMalloc.h>
 
 namespace WebCore {
-
 namespace Layout {
 
 // BlockFormattingState holds the state for a particular block formatting context tree.
 class BlockFormattingState : public FormattingState {
     WTF_MAKE_ISO_ALLOCATED(BlockFormattingState);
 public:
-    BlockFormattingState(Ref<FloatingState>&&, const LayoutContext&);
-    virtual ~BlockFormattingState();
+    BlockFormattingState(Ref<FloatingState>&&, LayoutState&);
+    ~BlockFormattingState();
+
+    void setPositiveAndNegativeVerticalMargin(const Box& layoutBox, PositiveAndNegativeVerticalMargin verticalMargin) { m_positiveAndNegativeVerticalMargin.set(&layoutBox, verticalMargin); }
+    bool hasPositiveAndNegativeVerticalMargin(const Box& layoutBox) const { return m_positiveAndNegativeVerticalMargin.contains(&layoutBox); }
+    PositiveAndNegativeVerticalMargin positiveAndNegativeVerticalMargin(const Box& layoutBox) const { return m_positiveAndNegativeVerticalMargin.get(&layoutBox); }
+
+private:
+    HashMap<const Box*, PositiveAndNegativeVerticalMargin> m_positiveAndNegativeVerticalMargin;
 };
 
 }

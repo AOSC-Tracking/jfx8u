@@ -56,13 +56,15 @@ inline CapabilityLevel canCompile(Node* node)
     case Phantom:
     case Flush:
     case PhantomLocal:
-    case SetArgument:
+    case SetArgumentDefinitely:
+    case SetArgumentMaybe:
     case Return:
-    case BitAnd:
-    case BitOr:
-    case BitXor:
-    case BitRShift:
-    case BitLShift:
+    case ArithBitNot:
+    case ArithBitAnd:
+    case ArithBitOr:
+    case ArithBitXor:
+    case ArithBitRShift:
+    case ArithBitLShift:
     case BitURShift:
     case CheckStructure:
     case CheckStructureOrEmpty:
@@ -72,9 +74,14 @@ inline CapabilityLevel canCompile(Node* node)
     case PutStructure:
     case GetButterfly:
     case NewObject:
+    case NewPromise:
+    case NewGenerator:
+    case NewAsyncGenerator:
     case NewStringObject:
+    case NewSymbol:
     case NewArray:
     case NewArrayWithSpread:
+    case NewArrayIterator:
     case Spread:
     case NewArrayBuffer:
     case NewTypedArray:
@@ -86,8 +93,21 @@ inline CapabilityLevel canCompile(Node* node)
     case GetGlobalVar:
     case GetGlobalLexicalVariable:
     case PutGlobalVariable:
+    case ValueBitAnd:
+    case ValueBitXor:
+    case ValueBitOr:
+    case ValueBitNot:
+    case ValueBitLShift:
+    case ValueBitRShift:
     case ValueNegate:
     case ValueAdd:
+    case ValueSub:
+    case ValueMul:
+    case ValueDiv:
+    case ValueMod:
+    case ValuePow:
+    case Inc:
+    case Dec:
     case StrCat:
     case ArithAdd:
     case ArithClz32:
@@ -128,9 +148,12 @@ inline CapabilityLevel canCompile(Node* node)
     case NewAsyncGeneratorFunction:
     case GetClosureVar:
     case PutClosureVar:
+    case GetInternalField:
+    case PutInternalField:
     case CreateDirectArguments:
     case CreateScopedArguments:
     case CreateClonedArguments:
+    case CreateArgumentsButterfly:
     case GetFromArguments:
     case PutToArguments:
     case GetArgument:
@@ -140,9 +163,10 @@ inline CapabilityLevel canCompile(Node* node)
     case CheckBadCell:
     case CheckNotEmpty:
     case AssertNotEmpty:
-    case CheckStringIdent:
+    case CheckIdent:
     case CheckTraps:
     case StringCharCodeAt:
+    case StringCodePointAt:
     case StringFromCharCode:
     case AllocatePropertyStorage:
     case ReallocatePropertyStorage:
@@ -169,6 +193,7 @@ inline CapabilityLevel canCompile(Node* node)
     case TailCallForwardVarargs:
     case TailCallForwardVarargsInlinedCaller:
     case ConstructForwardVarargs:
+    case VarargsLength:
     case LoadVarargs:
     case ValueToInt32:
     case Branch:
@@ -178,6 +203,8 @@ inline CapabilityLevel canCompile(Node* node)
     case Check:
     case CheckVarargs:
     case CheckArray:
+    case CheckArrayOrEmpty:
+    case CheckNeutered:
     case CountExecution:
     case SuperSamplerBegin:
     case SuperSamplerEnd:
@@ -188,11 +215,13 @@ inline CapabilityLevel canCompile(Node* node)
     case GetArgumentCountIncludingThis:
     case SetArgumentCountIncludingThis:
     case ToNumber:
+    case ToNumeric:
     case ToString:
     case ToObject:
     case CallObjectConstructor:
     case CallStringConstructor:
     case ObjectCreate:
+    case ObjectKeys:
     case MakeRope:
     case NewArrayWithSize:
     case TryGetById:
@@ -205,6 +234,7 @@ inline CapabilityLevel canCompile(Node* node)
     case MultiGetByOffset:
     case MultiPutByOffset:
     case ToPrimitive:
+    case ToPropertyKey:
     case Throw:
     case ThrowStaticError:
     case Unreachable:
@@ -227,6 +257,7 @@ inline CapabilityLevel canCompile(Node* node)
     case WeakMapSet:
     case IsEmpty:
     case IsUndefined:
+    case IsUndefinedOrNull:
     case IsBoolean:
     case IsNumber:
     case NumberIsInteger:
@@ -260,12 +291,14 @@ inline CapabilityLevel canCompile(Node* node)
     case PhantomNewGeneratorFunction:
     case PhantomNewAsyncGeneratorFunction:
     case PhantomNewAsyncFunction:
+    case PhantomNewArrayIterator:
     case PhantomCreateActivation:
     case PhantomNewRegexp:
     case PutHint:
     case CheckStructureImmediate:
     case MaterializeNewObject:
     case MaterializeCreateActivation:
+    case MaterializeNewInternalFieldObject:
     case PhantomDirectArguments:
     case PhantomCreateRest:
     case PhantomSpread:
@@ -356,13 +389,18 @@ inline CapabilityLevel canCompile(Node* node)
     case PutByValWithThis:
     case MatchStructure:
     case FilterCallLinkStatus:
-    case FilterGetByIdStatus:
+    case FilterGetByStatus:
     case FilterPutByIdStatus:
     case FilterInByIdStatus:
     case CreateThis:
+    case CreatePromise:
+    case CreateGenerator:
+    case CreateAsyncGenerator:
     case DataViewGetInt:
     case DataViewGetFloat:
     case DataViewSet:
+    case DateGetInt32OrNaN:
+    case DateGetTime:
         // These are OK.
         break;
 
@@ -389,13 +427,13 @@ inline CapabilityLevel canCompile(Node* node)
 
 CapabilityLevel canCompile(Graph& graph)
 {
-    if (graph.m_codeBlock->instructionCount() > Options::maximumFTLCandidateInstructionCount()) {
+    if (graph.m_codeBlock->bytecodeCost() > Options::maximumFTLCandidateBytecodeCost()) {
         if (verboseCapabilities())
             dataLog("FTL rejecting ", *graph.m_codeBlock, " because it's too big.\n");
         return CannotCompile;
     }
 
-    if (UNLIKELY(graph.m_codeBlock->ownerScriptExecutable()->neverFTLOptimize())) {
+    if (UNLIKELY(graph.m_codeBlock->ownerExecutable()->neverFTLOptimize())) {
         if (verboseCapabilities())
             dataLog("FTL rejecting ", *graph.m_codeBlock, " because it is marked as never FTL compile.\n");
         return CannotCompile;
@@ -445,12 +483,14 @@ CapabilityLevel canCompile(Graph& graph)
                 case StringOrStringObjectUse:
                 case SymbolUse:
                 case BigIntUse:
+                case DateObjectUse:
                 case MapObjectUse:
                 case SetObjectUse:
                 case WeakMapObjectUse:
                 case WeakSetObjectUse:
                 case DataViewObjectUse:
                 case FinalObjectUse:
+                case PromiseObjectUse:
                 case RegExpObjectUse:
                 case ProxyObjectUse:
                 case DerivedArrayUse:

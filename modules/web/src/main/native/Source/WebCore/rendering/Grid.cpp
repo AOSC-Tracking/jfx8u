@@ -157,7 +157,6 @@ void Grid::setNeedsItemsPlacement(bool needsItemsPlacement)
 
     m_grid.shrink(0);
     m_gridItemArea.clear();
-    m_hasAnyOrthogonalGridItem = false;
     m_smallestRowStart = 0;
     m_smallestColumnStart = 0;
     m_autoRepeatEmptyColumns = nullptr;
@@ -234,7 +233,7 @@ std::unique_ptr<GridArea> GridIterator::nextEmptyGridArea(unsigned fixedTrackSpa
     const unsigned endOfVaryingTrackIndex = (m_direction == ForColumns) ? m_grid.size() : m_grid[0].size();
     for (; varyingTrackIndex < endOfVaryingTrackIndex; ++varyingTrackIndex) {
         if (isEmptyAreaEnough(rowSpan, columnSpan)) {
-            std::unique_ptr<GridArea> result = std::make_unique<GridArea>(GridSpan::translatedDefiniteGridSpan(m_rowIndex, m_rowIndex + rowSpan), GridSpan::translatedDefiniteGridSpan(m_columnIndex, m_columnIndex + columnSpan));
+            std::unique_ptr<GridArea> result = makeUnique<GridArea>(GridSpan::translatedDefiniteGridSpan(m_rowIndex, m_rowIndex + rowSpan), GridSpan::translatedDefiniteGridSpan(m_columnIndex, m_columnIndex + columnSpan));
             // Advance the iterator to avoid an infinite loop where we would return the same grid area over and over.
             ++varyingTrackIndex;
             return result;
